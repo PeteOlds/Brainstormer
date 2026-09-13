@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-09-13
+### Added
+- Prompt memory (PRD §9.1): every run renders Avoid (last 10 ideas) + Explore (top-voted themes) sections from `${MEMORY_AVOID}` / `${MEMORY_EXPLORE}`; "none yet" on new prompts; recomputed per run, never stored
+
 ## [0.3.7] - 2026-09-13
 ### Fixed
 - Dropdown menu items overlapping invisibly: adjacent inline `<button>`s without `block` stacked at the same Y (hid Run 5x Burst; Refine/Competitors overlapped too) — all menu buttons now `block w-full`

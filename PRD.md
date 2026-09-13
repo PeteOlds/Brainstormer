@@ -1013,3 +1013,56 @@ Acceptance: each item works from the menu with no page reload; menu closes on se
 1. **Merge the two PRDs.** DONE (Sept 2026) — `PRD_Brainstormer.md` was stale (Next.js references) and is removed; this file is the single source of truth.
 2. **Wire `prompt_body` into generation.** `generate_idea` currently renders the canned initial template and ignores the prompt body admins write — the main input field is decorative. Fix before adding §8.5 knobs.
 3. **API-side range validation for all numeric prompt fields**, including the existing `temperature` (HTML has min/max but the API accepts anything).
+
+## 9. Idea Uniqueness & Prompt Evolution (Sept 2026)
+
+Background: the pipeline is stateless — every run renders the same template with no memory of past
+ideas, so near-duplicates recur ("CodeCraft" twice in 18 minutes). "Unique" today means only a unique
+reference code. This section specs a three-layer fix, in build order. Non-goals: auto-deleting ideas,
+and fully autonomous prompt rewriting (model-tuned instructions drift without human taste).
+
+### 9.1 Tier 1 — Prompt memory (short-term, per prompt)
+
+Each generation appends two auto-generated sections to the rendered prompt (not stored on the prompt,
+recomputed per run):
+- **Avoid:** titles (reference code + elevator pitch, truncated) of the last 10 ideas from *this* prompt.
+- **Explore:** top 3 themes by net votes across this prompt's ideas (highest `net_score`, non-discarded).
+
+Design notes:
+- Rendered in `generate_idea` after `${PROMPT_CONTEXT}`; capped length (e.g. 10 × ~120 chars) so context stays bounded. Empty states render as "none yet" (new prompts unaffected).
+- Reversible by nature: delete the section from the template to restore stateless behaviour.
+- Does not catch cross-prompt duplicates (accepted limitation; covered by §9.3).
+
+Acceptance: two consecutive runs of one prompt produce non-overlapping concepts in manual review; unit test asserts avoid/explore sections render with seeded fixtures.
+
+### 9.2 Prompt health report (data-guided manual evolution)
+
+Humans keep editing prompts; the system directs their attention. New weekly digest + Activity panel section
+per active prompt:
+- Runs (7d), ideas/run, % discarded, avg net score, avg feasibility score (where scored).
+- Flag rules: discard rate > 70% ("consider retiring or reframing"), zero ideas in 7d ("schedule starved or failing"), avg feasibility < 5 ("concepts too ambitious for the model/lane").
+- Each flag links to the prompt edit form and the prompt-filtered ideas list.
+
+Backend: aggregate endpoint (e.g. `GET /api/v1/admin/prompts/health`) computed from existing `prompt_runs`,
+`ideas`, and `secondary_action_results` — no new tables. Delivery: email optional later; v1 is the
+Activity panel section.
+
+Acceptance: a prompt with a known-bad week shows the expected flag; flags link to correct targets.
+
+### 9.3 Tier 2 — Similarity flags (embeddings)
+
+Supersedes the §6 proposal ("Duplicate / Similarity Detection") and §3 "High-Value Expansion" note with
+this concrete design:
+- Embedding model `nomic-embed-text` via local Ollama (`/api/embed`); store vector per idea at insert
+  (new `embedding` column or sidecar table; pgvector if available, else brute-force cosine in Python —
+  idea counts are small).
+- Threshold ~0.85, surfaced as a "possible duplicate of IDEA-xxxx" badge + dashboard filter. **Never
+  auto-discard or auto-retry** — false positives destroy good ideas; the admin decides.
+- Backfill existing ideas on deploy (one batched job).
+
+Acceptance: inserting a paraphrase of an existing idea raises the badge linking the original; unrelated
+ideas raise nothing; backfill completes without blocking generation.
+
+### Build order
+
+§9.1 → §9.2 → §9.3. Each layer is independently shippable; §9.1 can land without the others.

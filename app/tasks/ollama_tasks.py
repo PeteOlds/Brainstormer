@@ -9,7 +9,7 @@ from app.services.ollama_client import OllamaClient
 from app.services.prompt_templates import get_base_prompt, get_prompt_template
 from app.schemas.ollama_schemas import validate_ollama_output
 from app.extensions import db
-from app.models import PromptConfig, Idea, SecondaryActionResult
+from app.models import PromptConfig, Idea, IdeaStatus, SecondaryActionResult
 from app.utils.crypto import decrypt
 
 logger = structlog.get_logger()
@@ -51,6 +51,40 @@ def _generation_options(prompt_config) -> dict:
     if getattr(prompt_config, "seed", None) is not None:
         options["seed"] = prompt_config.seed
     return options
+
+
+def _idea_pitch(idea) -> str:
+    """One-line summary of an idea for memory sections."""
+    sc = idea.structured_content
+    if isinstance(sc, dict):
+        return (sc.get("elevator_pitch") or "").strip()
+    if isinstance(sc, str):
+        try:
+            return (json.loads(sc).get("elevator_pitch") or "").strip()
+        except (ValueError, AttributeError):
+            return ""
+    return ""
+
+
+def _prompt_memory(prompt_config, limit_avoid=10, limit_explore=3):
+    """Avoid/explore memory for a prompt (PRD §9.1).
+
+    Recomputed per run, never stored: recent titles to steer away from,
+    top-voted themes to explore. "none yet" keeps new prompts unaffected.
+    """
+    recent = (Idea.query.filter_by(prompt_config_id=prompt_config.id)
+              .order_by(Idea.created_at.desc()).limit(limit_avoid).all())
+    avoid_lines = [f"- {i.reference_code}: {_idea_pitch(i)[:120]}" for i in recent]
+    avoid = "\n".join(avoid_lines) if avoid_lines else "none yet"
+
+    top = (Idea.query.filter(Idea.prompt_config_id == prompt_config.id,
+                             Idea.status != IdeaStatus.DISCARDED)
+           .order_by(Idea.net_score.desc(), Idea.created_at.desc())
+           .limit(limit_explore).all())
+    explore_lines = [f"- {i.reference_code}: {_idea_pitch(i)[:120]}"
+                     for i in top if _idea_pitch(i)]
+    explore = "\n".join(explore_lines) if explore_lines else "none yet"
+    return avoid, explore
 
 
 def _record_failure(run_id: str | None, error) -> None:
@@ -118,8 +152,11 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
         # generates generic ideas (the body used to be silently ignored).
         from app.services.prompt_templates import PromptTemplate
         initial_prompt = PromptTemplate("initial")
+        avoid, explore = _prompt_memory(prompt_config)
         prompt_text = initial_prompt.render(
-            PROMPT_CONTEXT=prompt_config.prompt_body or "")
+            PROMPT_CONTEXT=prompt_config.prompt_body or "",
+            MEMORY_AVOID=avoid,
+            MEMORY_EXPLORE=explore)
         
         # Call Ollama with the prompt's generation params.
         response = client.generate_sync(

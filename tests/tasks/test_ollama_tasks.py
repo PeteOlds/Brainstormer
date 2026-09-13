@@ -30,6 +30,79 @@ class TestGenerationOptions:
         assert "seed" not in opts
 
 
+class TestPromptMemory:
+    def _seed_prompt(self, db, admin_email="admin_mem@test.com"):
+        from app.models import User, PromptConfig, UserRole
+        admin = User(email=admin_email, role=UserRole.ADMIN)
+        admin.set_password("admin123")
+        db.session.add(admin)
+        db.session.commit()
+        prompt = PromptConfig(
+            title="Memory", prompt_body="Theme", interval_minutes=60,
+            model_name="llama3:8b", created_by_id=admin.id)
+        db.session.add(prompt)
+        db.session.commit()
+        return prompt
+
+    def test_empty_prompt_renders_none_yet(self, celery_app):
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.tasks.ollama_tasks import _prompt_memory
+            prompt = self._seed_prompt(db)
+            avoid, explore = _prompt_memory(prompt)
+            assert avoid == "none yet"
+            assert explore == "none yet"
+
+    def test_avoid_lists_recent_explore_skips_discarded(self, celery_app):
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import Idea, IdeaStatus
+            from app.tasks.ollama_tasks import _prompt_memory
+            prompt = self._seed_prompt(db)
+            db.session.add(Idea(
+                reference_code="IDEA-M1", prompt_title="T",
+                raw_content="c", structured_content={"elevator_pitch": "Old discarded winner"},
+                status="DISCARDED", net_score=99, prompt_config_id=prompt.id))
+            db.session.add(Idea(
+                reference_code="IDEA-M2", prompt_title="T",
+                raw_content="c", structured_content={"elevator_pitch": "Fresh contender"},
+                status="NEW", net_score=3, prompt_config_id=prompt.id))
+            db.session.commit()
+            avoid, explore = _prompt_memory(prompt)
+            assert "IDEA-M1" in avoid and "IDEA-M2" in avoid
+            assert "IDEA-M2" in explore
+            assert "IDEA-M1" not in explore
+
+    def test_generate_includes_memory_sections(self, celery_app):
+        import json
+        from unittest.mock import MagicMock, patch
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import Idea
+            from app.tasks.ollama_tasks import generate_idea
+            prompt = self._seed_prompt(db, admin_email="admin_mem2@test.com")
+            db.session.add(Idea(
+                reference_code="IDEA-M3", prompt_title="T",
+                raw_content="c", structured_content={"elevator_pitch": "Prior art"},
+                prompt_config_id=prompt.id))
+            db.session.commit()
+            with patch('app.tasks.ollama_tasks.OllamaClient') as mc:
+                m = MagicMock()
+                m.generate_sync.return_value = {
+                    "response": json.dumps({
+                        "elevator_pitch": "A brand new idea pitch here",
+                        "target_audience": "Curious early adopters worldwide",
+                        "core_value_proposition": "Something genuinely different daily",
+                        "monetization_strategy": "Simple subscription plan"}),
+                    "done": True}
+                mc.return_value = m
+                generate_idea(str(prompt.id))
+                sent = m.generate_sync.call_args.kwargs["prompt"]
+            assert "### AVOID" in sent
+            assert "IDEA-M3" in sent
+            assert "### EXPLORE" in sent
+
+
 class TestReferenceCode:
     def test_increments_from_highest_code(self, celery_app):
         """Regression: ordering by random-UUID id re-issued IDEA-0005 forever.

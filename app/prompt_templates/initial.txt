@@ -3,10 +3,17 @@ You are an expert startup advisor and product strategist. Your task is to genera
 ### PROMPT CONTEXT (the theme set by the administrator — stay on theme):
 ${PROMPT_CONTEXT}
 
+### AVOID (recent ideas from this prompt — do not repeat or closely paraphrase):
+${MEMORY_AVOID}
+
+### EXPLORE (themes that resonated — variations welcome):
+${MEMORY_EXPLORE}
+
 ### INSTRUCTIONS:
 1. Generate ONE unique business idea based on the prompt context above.
-2. Output STRICTLY valid JSON matching the schema below.
-3. Be creative but practical.
+2. It must differ clearly from every idea under AVOID.
+3. Output STRICTLY valid JSON matching the schema below.
+4. Be creative but practical.
 
 ### OUTPUT JSON SCHEMA:
 {
