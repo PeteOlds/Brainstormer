@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Brainstormer{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Admin Dashboard</h1>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Users</h3>
+            <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white" id="total-users">-</p>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Ideas</h3>
+            <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white" id="total-ideas">-</p>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Prompts</h3>
+            <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white" id="total-prompts">-</p>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400">Active Prompts</h3>
+            <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white" id="active-prompts">-</p>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Quick Actions</h2>
+            <div class="space-y-3">
+                <a href="/api/v1/admin/users" class="block px-4 py-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="font-medium text-indigo-700 dark:text-indigo-300">Manage Users</h3>
+                            <p class="text-sm text-indigo-600 dark:text-indigo-400">View, create, edit, deactivate users</p>
+                        </div>
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                    </div>
+                </a>
+                <a href="/api/v1/admin/prompts" class="block px-4 py-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="font-medium text-emerald-700 dark:text-emerald-300">Manage Prompts</h3>
+                            <p class="text-sm text-emerald-600 dark:text-emerald-400">Create, edit, activate/deactivate prompts</p>
+                        </div>
+                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </div>
+                </a>
+                <a href="/api/v1/admin/activity" class="block px-4 py-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="font-medium text-violet-700 dark:text-violet-300">Activity & Performance</h3>
+                            <p class="text-sm text-violet-600 dark:text-violet-400">Run history, speeds, popular prompts</p>
+                        </div>
+                        <svg class="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                    </div>
+                </a>
+                <a href="/prompts/create" class="block px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="font-medium text-amber-700 dark:text-amber-300">Create Prompt</h3>
+                            <p class="text-sm text-amber-600 dark:text-amber-400">Create a new prompt configuration</p>
+                        </div>
+                        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">System Health</h2>
+        <div class="space-y-4">
+            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 rounded-full bg-amber-500" id="ollama-status"></div>
+                    <span class="text-sm font-medium">Ollama Service</span>
+                </div>
+                <span class="text-sm text-amber-600 dark:text-amber-400" id="ollama-status-text">Checking…</span>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 rounded-full bg-amber-500" id="db-status"></div>
+                    <span class="text-sm font-medium">Database</span>
+                </div>
+                <span class="text-sm text-amber-600 dark:text-amber-400" id="db-status-text">Checking…</span>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 rounded-full bg-amber-500" id="redis-status"></div>
+                    <span class="text-sm font-medium">Redis</span>
+                </div>
+                <span class="text-sm text-amber-600 dark:text-amber-400" id="redis-status-text">Checking…</span>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-3 h-3 rounded-full bg-amber-500" id="workers-status"></div>
+                    <span class="text-sm font-medium">Celery Workers</span>
+                </div>
+                <span class="text-sm text-amber-600 dark:text-amber-400" id="worker-count">Checking…</span>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Breakdowns: status, model, prompt (horizontal bars, click to filter) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas by Status</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Click a row to filter</p>
+            <div class="space-y-3" id="dash-status-bars">
+                <p class="text-sm text-slate-500">Loading…</p>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas by Model</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Click a row to filter</p>
+            <div class="space-y-3" id="dash-model-bars">
+                <p class="text-sm text-slate-500">Loading…</p>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6 md:col-span-2 xl:col-span-1">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas by Prompt</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Click a row to filter</p>
+            <div class="space-y-3" id="dash-prompt-bars">
+                <p class="text-sm text-slate-500">Loading…</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    // Load stats
+    try {
+        const token = localStorage.getItem('access_token');
+        const res = await fetch('/api/v1/admin/stats', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (res.ok) {
+            const data = await res.json();
+            document.getElementById('total-users').textContent = data.data.users.total;
+            document.getElementById('total-ideas').textContent = data.data.ideas.total;
+            document.getElementById('total-prompts').textContent = data.data.prompts.total;
+            document.getElementById('active-prompts').textContent = data.data.prompts.active;
+        }
+    } catch (e) {
+        console.error('Failed to load stats:', e);
+    }
+    
+    // System health: every row starts amber ("Checking…", set in markup).
+    // Green = healthy, red = broken. A total fetch failure marks all red.
+    const paint = (name, ok, okText, badText) => {
+        const dot = document.getElementById(name + '-status');
+        const label = document.getElementById(name + '-status-text');
+        if (!dot || !label) return;
+        dot.className = 'w-3 h-3 rounded-full ' + (ok ? 'bg-green-500' : 'bg-red-500');
+        label.textContent = ok ? okText : badText;
+        label.className = 'text-sm ' + (ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400');
+    };
+    const paintUnknown = (name) => {
+        const dot = document.getElementById(name + '-status');
+        const label = document.getElementById(name + '-status-text');
+        if (!dot || !label) return;
+        dot.className = 'w-3 h-3 rounded-full bg-red-500';
+        label.textContent = 'Unreachable';
+        label.className = 'text-sm text-red-600 dark:text-red-400';
+    };
+    try {
+        const token = localStorage.getItem('access_token');
+        const res = await fetch('/api/ready', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        // NOTE: /api/ready returns 503 when anything is down, but the body
+        // still carries per-service results — paint each row on its own merit.
+        const data = await res.json();
+        const checks = (data.data && data.data.checks) || {};
+        const d = (data.data && data.data) || {};
+        paint('ollama', !!checks.ollama, 'Healthy', 'Down');
+        paint('db', !!checks.database, 'Connected', 'Down');
+        paint('redis', !!checks.redis, 'Connected', 'Down');
+        const totalWorkers = (d.workers_ollama || 0) + (d.workers_default || 0);
+        const wDot = document.getElementById('workers-status');
+        const wLabel = document.getElementById('worker-count');
+        if (wDot && wLabel) {
+            const ok = totalWorkers > 0;
+            wDot.className = 'w-3 h-3 rounded-full ' + (ok ? 'bg-green-500' : 'bg-red-500');
+            wLabel.textContent = totalWorkers + (totalWorkers === 1 ? ' worker' : ' workers');
+            wLabel.className = 'text-sm ' + (ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400');
+        }
+    } catch (e) {
+        console.error('Failed to check system health:', e);
+        ['ollama', 'db', 'redis'].forEach(paintUnknown);
+        const wDot = document.getElementById('workers-status');
+        const wLabel = document.getElementById('worker-count');
+        if (wDot && wLabel) {
+            wDot.className = 'w-3 h-3 rounded-full bg-red-500';
+            wLabel.textContent = 'Unreachable';
+            wLabel.className = 'text-sm text-red-600 dark:text-red-400';
+        }
+    }
+    
+    // Breakdowns: horizontal bars rendered with vanilla JS (no Alpine
+    // scope on this page). Rows link to the filtered Ideas page.
+    const dotFor = (status) => ({
+        NEW: 'bg-blue-500', CONSIDERATION: 'bg-amber-400',
+        DISCARDED: 'bg-slate-400', SUCCESS: 'bg-emerald-500',
+        RUNNING: 'bg-blue-500', PENDING: 'bg-amber-400',
+        FAILED: 'bg-red-500',
+    }[String(status).toUpperCase()] || 'bg-slate-400');
+    const barRow = (label, sub, pct, dotCls, target) =>
+        '<div class="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 transition-colors" data-nav="' + target.replace(/"/g, '&quot;') + '">'
+        + '<div class="flex items-baseline justify-between text-sm gap-2">'
+        + '<span class="flex items-center gap-2 font-medium text-slate-900 dark:text-white truncate"><span class="w-2.5 h-2.5 rounded-full shrink-0 ' + dotCls + '"></span><span class="truncate">' + label + '</span></span>'
+        + '<span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400">' + sub + '</span>'
+        + '</div><div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">'
+        + '<div class="h-full rounded-full ' + dotCls + '" style="width: ' + pct + '%"></div>'
+        + '</div></div>';
+    const pctOf = (n, max) => Math.max(4, Math.round((n / Math.max(max, 1)) * 100));
+    async function loadBreakdowns() {
+        const token = localStorage.getItem('access_token');
+        let stats = null, activity = null;
+        try {
+            const r1 = await fetch('/api/v1/admin/stats', { headers: { 'Authorization': 'Bearer ' + token } });
+            if (r1.ok) stats = (await r1.json()).data;
+        } catch (e) { console.error('Failed to load stats for breakdowns:', e); }
+        try {
+            const r2 = await fetch('/api/v1/admin/activity/stats', { headers: { 'Authorization': 'Bearer ' + token } });
+            if (r2.ok) activity = (await r2.json()).data;
+        } catch (e) { console.error('Failed to load activity for breakdowns:', e); }
+        const empty = '<p class="text-sm text-slate-500">No data yet.</p>';
+        // Status
+        const statusEl = document.getElementById('dash-status-bars');
+        if (statusEl) {
+            const byStatus = (stats && stats.ideas && stats.ideas.by_status) || {};
+            const entries = Object.entries(byStatus);
+            if (!entries.length) { statusEl.innerHTML = empty; }
+            else {
+                const max = Math.max.apply(null, entries.map((e) => e[1]).concat([1]));
+                statusEl.innerHTML = entries.map(([s, n]) =>
+                    barRow(s.toLowerCase(), n + (n === 1 ? ' idea' : ' ideas'),
+                           pctOf(n, max), dotFor(s), '/ideas?status=' + encodeURIComponent(s))
+                ).join('');
+            }
+        }
+        // Model
+        const modelEl = document.getElementById('dash-model-bars');
+        if (modelEl) {
+            const rows = (activity && activity.ideas_by_model) || [];
+            if (!rows.length) { modelEl.innerHTML = empty; }
+            else {
+                const max = Math.max.apply(null, rows.map((m) => m.count).concat([1]));
+                modelEl.innerHTML = rows.map((m) =>
+                    barRow(m.model, m.count + (m.count === 1 ? ' idea' : ' ideas'),
+                           pctOf(m.count, max), 'bg-indigo-500',
+                           '/ideas?model=' + encodeURIComponent(m.model))
+                ).join('');
+            }
+        }
+        // Prompt
+        const promptEl = document.getElementById('dash-prompt-bars');
+        if (promptEl) {
+            const rows = (activity && activity.ideas_by_prompt) || [];
+            if (!rows.length) { promptEl.innerHTML = empty; }
+            else {
+                const max = Math.max.apply(null, rows.map((r) => r.count).concat([1]));
+                promptEl.innerHTML = rows.map((r) =>
+                    barRow(r.title, r.count + (r.count === 1 ? ' idea' : ' ideas') + ' · ' + r.net_votes + ' votes',
+                           pctOf(r.count, max), 'bg-emerald-500',
+                           '/ideas?prompt=' + encodeURIComponent(r.title))
+                ).join('');
+            }
+        }
+    }
+    loadBreakdowns();
+
+    // Single delegated click handler for breakdown rows.
+    document.addEventListener('click', (e) => {
+        const nav = e.target.closest('[data-nav]');
+        if (nav && nav.dataset.nav) window.location.href = nav.dataset.nav;
+    });
+});
+</script>
+{% endblock %}

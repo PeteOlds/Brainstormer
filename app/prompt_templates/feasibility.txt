@@ -1,0 +1,21 @@
+### BUSINESS IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### INSTRUCTIONS:
+1. Score 1-10 (10 = easiest/highest potential).
+2. Provide 1-sentence reasoning per score.
+3. Overall = average rounded to 1 decimal.
+4. Verdict: RECOMMENDED | PROCEED WITH CAUTION | HIGH RISK
+5. Output STRICTLY valid JSON.
+
+### OUTPUT JSON SCHEMA:
+{
+  "overall_score": 7.3,
+  "scores": {
+    "technical_feasibility": { "score": 8, "reasoning": "..." },
+    "market_demand": { "score": 7, "reasoning": "..." },
+    "capital_efficiency": { "score": 7, "reasoning": "..." }
+  },
+  "verdict": "RECOMMENDED"
+}

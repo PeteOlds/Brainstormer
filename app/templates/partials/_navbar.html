@@ -1,0 +1,58 @@
+<nav class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+            <div class="flex items-center">
+                <a href="/" class="flex items-center space-x-2">
+                    <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707M2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                    <span class="text-xl font-bold text-slate-900 dark:text-white">Brainstormer</span>
+                </a>
+            </div>
+<div class="hidden md:flex items-center space-x-4">
+                {% for link in nav_links %}
+                {% set active = request.endpoint == link.endpoint %}
+                <a href="{{ url_for(link.endpoint) }}" {% if active %}aria-current="page"{% endif %} class="px-3 py-2 rounded-md text-sm font-medium {% if active %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-700 dark:text-slate-300 hover:text-indigo-600{% endif %}">{{ link.label }}</a>
+                {% endfor %}
+            </div>
+            <div class="flex items-center space-x-3">
+                {% if current_user and current_user.is_authenticated %}
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = !open" class="flex items-center space-x-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                            <span class="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                                {{ current_user.name[0].upper() if current_user.name else current_user.email[0].upper() }}
+                            </span>
+                        </div>
+                        <div class="hidden md:block text-left">
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ current_user.name if current_user.name else current_user.email }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ current_user.role.value if current_user.role is defined else '' }}</p>
+                        </div>
+                    </button>
+                    <div x-show="open" @click.outside="open = false" class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
+                        {% for link in nav_links %}
+                        <a href="{{ url_for(link.endpoint) }}" class="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">{{ link.label }}</a>
+                        {% endfor %}
+                        {% if current_user.role.value == 'ADMIN' %}
+                        <hr class="my-1 border-slate-200 dark:border-slate-700">
+                        <a href="/api/v1/admin" class="block px-4 py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20">Admin Panel</a>
+                        {% endif %}
+                        <hr class="my-1 border-slate-200 dark:border-slate-700">
+                        <form action="/api/v1/logout" method="POST" class="w-full">
+                            <button type="submit" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Logout</button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <div id="guest-area" class="flex items-center space-x-3">
+                    <a href="/login" class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-700">Sign in</a>
+                    <a href="/register" class="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Sign up</a>
+                </div>
+                <div id="user-area" class="items-center space-x-3" style="display: none;">
+                    <a id="nav-admin-link" href="/api/v1/admin" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-600 hover:text-indigo-700" style="display: none;">Admin Panel</a>
+                    <span id="nav-username" class="text-sm font-medium text-slate-700 dark:text-slate-300"></span>
+                    <button id="logout-btn" type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300">Logout</button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</nav>

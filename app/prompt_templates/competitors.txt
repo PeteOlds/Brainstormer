@@ -1,0 +1,17 @@
+### BUSINESS IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### INSTRUCTIONS:
+1. Identify existing companies, legacy solutions, workarounds.
+2. Output STRICTLY valid JSON matching the schema below.
+
+### OUTPUT JSON SCHEMA:
+{
+  "direct_competitors": [
+    { "name": "string", "description": "string", "advantage_over_idea": "string" }
+  ],
+  "indirect_competitors": ["string"],
+  "differentiator": "string",
+  "barriers_to_entry": ["string"]
+}

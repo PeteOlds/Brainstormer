@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" x-data="{ darkMode: false }" :class="darkMode ? 'dark' : ''">
+<head>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- v2-fix 2026-09-04 -->
+    <!-- v3-fix 2026-09-04T15:30 -->
+    <title>{% block title %}Brainstormer{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="/static/js/alpine.min.js" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    fontFamily: { sans: ["Inter","system-ui","sans-serif"] },
+                    colors: { primary: { 50:"#eff6ff",100:"#dbeafe",500:"#3b82f6",600:"#2563eb",700:"#1d4ed8" } }
+                }
+            }
+        }
+    </script>
+    <script>
+    function getToken(){return localStorage.getItem("access_token");}
+    function authFetch(url, opts={}){
+        const tok=getToken();
+        opts.headers=opts.headers||{};
+        if(tok) opts.headers["Authorization"]="Bearer "+tok;
+        if(!opts.headers["Content-Type"] && opts.body) opts.headers["Content-Type"]="application/json";
+        return fetch(url, opts).then(r=>{
+            if(r.status===401){ localStorage.removeItem("access_token"); localStorage.removeItem("refresh_token"); if(!location.pathname.startsWith("/login") && !location.pathname.startsWith("/register")) location.href="/login"; throw new Error("Unauthorized");}
+            return r;
+        });
+    }
+    // Stream a prompt test run (SSE). Tokens arrive via onToken as Ollama
+    // generates, so long/queued runs show progress instead of a dead spinner.
+    async function streamPromptTest(payload, onToken, signal) {
+        const res = await fetch('/api/v1/prompts/test-stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+            body: JSON.stringify(payload),
+            signal: signal
+        });
+        if (res.status === 401) {
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("refresh_token");
+            window.location.href = "/login";
+            throw new Error("Unauthorized");
+        }
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || ('Test run failed (' + res.status + ')'));
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let result = '';
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const parts = buf.split('\n\n');
+            buf = parts.pop();
+            for (const part of parts) {
+                const line = part.trim();
+                if (!line.startsWith('data:')) continue;
+                const raw = line.slice(5).trim();
+                if (raw === '[DONE]') return result;
+                let obj;
+                try { obj = JSON.parse(raw); } catch (e) { continue; }
+                if (obj.error) throw new Error(obj.error);
+                if (obj.token) {
+                    result += obj.token;
+                    onToken(obj.token, result);
+                }
+            }
+        }
+        return result;
+    }
+    </script>
+    {% block head %}{% endblock %}
+    <style>[x-cloak]{display:none !important}</style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased min-h-screen flex flex-col">
+    {% include "partials/_navbar.html" %}
+    <div class="flex flex-1">
+        {% include "partials/_sidebar.html" %}
+        <main class="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% include "partials/_flashes.html" %}{% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% include "partials/_footer.html" %}
+    {% block scripts %}{% endblock %}
+
+
+<script>
+function updateNavbarFromToken() {
+    const token = localStorage.getItem('access_token');
+    const guestArea = document.getElementById('guest-area');
+    const userArea = document.getElementById('user-area');
+    const loginLinks = document.querySelectorAll('a[href="/login"], a[href="/register"]');
+    if (token) {
+        loginLinks.forEach(function(link) { link.style.display = 'none'; });
+        if (guestArea) guestArea.style.display = 'none';
+        if (userArea) {
+            userArea.style.display = 'flex';
+            try {
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+                const nameEl = document.getElementById('nav-username');
+                if (nameEl) nameEl.textContent = u.name || u.email || '';
+                const adminLink = document.getElementById('nav-admin-link');
+                if (adminLink) adminLink.style.display = (u.role === 'ADMIN') ? '' : 'none';
+            } catch (e) { /* ignore malformed stored user */ }
+        }
+    } else {
+        loginLinks.forEach(function(link) { link.style.display = ''; });
+        if (guestArea) guestArea.style.display = 'flex';
+        if (userArea) userArea.style.display = 'none';
+    }
+}
+function wireLogoutButton() {
+    const btn = document.getElementById('logout-btn');
+    if (btn && !btn.dataset.wired) {
+        btn.dataset.wired = '1';
+        btn.addEventListener('click', async () => {
+            try {
+                const tok = localStorage.getItem('access_token');
+                if (tok) await fetch('/api/v1/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok } });
+            } catch (e) { /* logout best-effort */ }
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        });
+    }
+}
+document.addEventListener('DOMContentLoaded', () => { updateNavbarFromToken(); wireLogoutButton(); });
+window.addEventListener('storage', updateNavbarFromToken);
+</script>
+</body>
+</html>

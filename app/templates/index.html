@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Welcome{% endblock %}
+{% block content %}
+  <h1>Welcome</h1>
+  <p class="sub">Scaffolded from flask-bootstrap.</p>
+
+  <div class="card">
+    <h2 style="color:#fff; margin-top:0;">Register</h2>
+    <div class="msg error" id="regMsg" style="display:none;"></div>
+    <label>Email</label>
+    <input type="email" id="regEmail" autocomplete="email">
+    <label>Password (8+ chars)</label>
+    <input type="password" id="regPassword" autocomplete="new-password">
+    <button onclick="register()">Create account</button>
+  </div>
+
+  <div class="card">
+    <h2 style="color:#fff; margin-top:0;">Login</h2>
+    <div class="msg error" id="logMsg" style="display:none;"></div>
+    <label>Email</label>
+    <input type="email" id="logEmail" autocomplete="email">
+    <label>Password</label>
+    <input type="password" id="logPassword" autocomplete="current-password">
+    <button onclick="login()">Login</button>
+  </div>
+
+<script>
+async function post(path, body) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body)
+  });
+  const json = await res.json();
+  return {res, json};
+}
+
+function showError(elId, msg) {
+  const el = document.getElementById(elId);
+  el.style.display = "block";
+  el.textContent = msg;
+}
+
+async function register() {
+  const email = document.getElementById("regEmail").value;
+  const password = document.getElementById("regPassword").value;
+  const {res, json} = await post("/api/auth/register", {email, password});
+  if (res.ok) {
+    showError("regMsg", "Account created. You can now log in.");
+    document.getElementById("regMsg").className = "msg ok";
+  } else {
+    showError("regMsg", json.message || json.error || "Registration failed.");
+    document.getElementById("regMsg").className = "msg error";
+  }
+}
+
+async function login() {
+  const email = document.getElementById("logEmail").value;
+  const password = document.getElementById("logPassword").value;
+  const {res, json} = await post("/api/auth/login", {email, password});
+  if (res.ok) {
+    showError("logMsg", "Logged in as " + json.data.user.email);
+    document.getElementById("logMsg").className = "msg ok";
+    localStorage.setItem("token", json.data.access_token);
+  } else {
+    showError("logMsg", json.message || json.error || "Login failed.");
+    document.getElementById("logMsg").className = "msg error";
+  }
+}
+</script>
+{% endblock %}

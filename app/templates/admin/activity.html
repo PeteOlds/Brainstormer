@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+
+{% block title %}Activity & Performance - Brainstormer{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="activityApp()" x-init="init()">
+    <div x-show="!modelFilter" class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <p class="flex items-center text-xs font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                <span class="relative flex h-2 w-2 mr-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                Live · auto-refreshes
+            </p>
+            <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">Activity & Performance</h1>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Runs, generation speed, and what's resonating</p>
+        </div>
+        <div class="mt-4 sm:mt-0 flex items-center space-x-3">
+            <span class="text-xs text-slate-500 dark:text-slate-400" x-show="lastUpdated">Updated <span x-text="lastUpdated"></span></span>
+            <a href="/api/v1/admin" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Admin Dashboard</a>
+        </div>
+    </div>
+
+    <!-- Headline metrics -->
+    <div x-show="loadError" class="flex items-center justify-between gap-4 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl px-5 py-3 text-sm">
+        <p class="text-red-700 dark:text-red-300">Couldn't load activity data. The numbers below may be stale.</p>
+        <button @click="load()" class="shrink-0 px-3 py-1.5 font-medium text-red-700 dark:text-red-200 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30">Retry</button>
+    </div>
+    <div x-show="!modelFilter" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <a href="/api/v1/admin/activity" aria-label="Show all runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Total runs</p>
+            <p class="mt-1 text-3xl font-bold tabular-nums text-slate-900 dark:text-white" x-text="perf.total_runs ?? '–'"></p>
+        </a>
+        <a href="/api/v1/admin/activity?run_status=SUCCESS" aria-label="Show successful runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Success rate</p>
+            <p class="mt-1 text-3xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400" x-text="perf.success_rate === null || perf.success_rate === undefined ? '–' : Math.round(perf.success_rate * 100) + '%'"></p>
+        </a>
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Avg generation</p>
+            <p class="mt-1 text-3xl font-bold tabular-nums text-slate-900 dark:text-white" x-text="fmtDuration(perf.avg_seconds)"></p>
+        </div>
+        <a href="/api/v1/admin/activity?run_status=PENDING" aria-label="Show pending runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Pending runs</p>
+            <p class="mt-1 text-3xl font-bold tabular-nums" :class="pendingCount() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'" x-text="pendingCount()"></p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">live right now</p>
+        </a>
+        <a href="/api/v1/admin/activity?run_status=FAILED" aria-label="Show failed runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
+            <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Failed runs</p>
+            <p class="mt-1 text-3xl font-bold tabular-nums" :class="(perf.by_status && perf.by_status.FAILED) ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'" x-text="(perf.by_status && perf.by_status.FAILED) || 0"></p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 truncate" x-show="perf.last_error" :title="perf.last_error">Last: <span x-text="perf.last_error"></span></p>
+        </a>
+    </div>
+
+    <!-- Active run filter (from tile links) -->
+    <div x-show="statusFilter || modelFilter" class="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl px-5 py-3 text-sm">
+        <p class="text-slate-700 dark:text-slate-300">Filtering recent runs<span x-show="statusFilter">: <strong x-text="statusFilter.toLowerCase()"></strong></span><span x-show="modelFilter"> · model <strong class="font-mono" x-text="modelFilter"></strong></span></p>
+        <button @click="clearFilters()" class="ml-auto shrink-0 px-3 py-1.5 font-medium text-indigo-700 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40">Clear</button>
+    </div>
+
+    <!-- Workers & queues strip -->
+    <div x-show="!modelFilter" class="flex flex-wrap items-center gap-x-6 gap-y-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 px-5 py-3 text-sm">
+        <span class="flex items-center">
+            <span class="h-2.5 w-2.5 rounded-full mr-2" :class="workersAlive == null ? 'bg-slate-400' : (workersAlive > 0 ? 'bg-emerald-500' : 'bg-red-500')"></span>
+            <span class="text-slate-600 dark:text-slate-400">Workers:&nbsp;</span>
+            <strong class="tabular-nums text-slate-900 dark:text-white" x-text="workersAlive == null ? 'unknown' : workersAlive"></strong>
+        </span>
+        <span class="text-slate-600 dark:text-slate-400">Queue <span class="font-mono">ollama</span>:&nbsp;<strong class="tabular-nums text-slate-900 dark:text-white" x-text="queueDepth('ollama')"></strong></span>
+        <span class="text-slate-600 dark:text-slate-400">Queue <span class="font-mono">default</span>:&nbsp;<strong class="tabular-nums text-slate-900 dark:text-white" x-text="queueDepth('default')"></strong></span>
+        <span class="text-xs text-slate-400 dark:text-slate-500">More workers won't speed up Ollama — one CPU-bound generation runs at a time</span>
+    </div>
+
+
+    <!-- Insight panels: ideas by prompt and model -->
+    <div x-show="!modelFilter" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas by Prompt</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Click a row to filter the Ideas page</p>
+                <div x-show="loading" class="py-4 text-center text-sm text-slate-500">Loading…</div>
+                <div x-show="!loading" class="space-y-3">
+                    <template x-for="p in popularity.prompts" :key="p.title">
+                        <a :href="'/ideas?prompt=' + encodeURIComponent(p.id)" class="block rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                            <div class="flex items-baseline justify-between text-sm gap-2">
+                                <span class="font-medium text-slate-900 dark:text-white truncate" x-text="p.title"></span>
+                                <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400" x-text="p.ideas + ' ideas · ' + p.net_votes + ' votes'"></span>
+                            </div>
+                            <div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                                <div class="h-full rounded-full bg-emerald-500" :style="'width: ' + barWidthCount(p.ideas)"></div>
+                            </div>
+                        </a>
+                    </template>
+                    <p x-show="!loading && (!popularity.prompts || !popularity.prompts.length)" class="text-sm text-slate-500">No prompts yet.</p>
+                </div>
+            </div><div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Ideas by Model</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4 -mt-3">Click a row to filter the Ideas page</p>
+            <div class="space-y-3">
+<template x-for="m in ideasByModel" :key="m.model">
+                        <a :href="'/ideas?model=' + encodeURIComponent(m.model)" class="block rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                            <div class="flex items-baseline justify-between text-sm">
+                                <span class="font-mono font-medium text-slate-900 dark:text-white truncate" x-text="m.model"></span>
+                                <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400" x-text="m.count + ' ideas' + (m.avg_seconds != null ? ' · ' + fmtDuration(m.avg_seconds) : '')"></span>
+                            </div>
+                            <div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                                <div class="h-full rounded-full bg-indigo-500" :style="'width: ' + barWidthModel(m.count)"></div>
+                            </div>
+                        </a>
+                </template>
+                <p x-show="!loading && (!ideasByModel || !ideasByModel.length)" class="text-sm text-slate-500">No data yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Speed + status side by side -->
+    <div x-show="!modelFilter" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas by Status</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">New, under consideration or discarded — click a row to filter the Ideas page</p>
+        <div class="space-y-3">
+            <template x-for="s in ideaStatuses" :key="s.status">
+                <a :href="'/ideas?status=' + s.status" class="block cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 transition-colors">
+                    <div class="flex items-baseline justify-between text-sm gap-2">
+                        <span class="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
+                            <span class="w-2.5 h-2.5 rounded-full" :class="dotClass(s.status)"></span>
+                            <span class="capitalize" x-text="s.status.toLowerCase()"></span>
+                        </span>
+                        <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400" x-text="s.count + (s.count === 1 ? ' idea' : ' ideas')"></span>
+                    </div>
+                    <div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                        <div class="h-full rounded-full" :class="dotClass(s.status).split(' ')[0]" :style="'width: ' + statusBarWidth(s.count, ideasByStatus)"></div>
+                    </div>
+                </a>
+            </template>
+        </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Runs by Status</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Queued, running, finished or failed — click a row to filter recent runs</p>
+        <div class="space-y-3">
+            <template x-for="s in runStatuses" :key="s.status">
+                <a :href="'/api/v1/admin/activity?run_status=' + s.status" class="block cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 transition-colors">
+                    <div class="flex items-baseline justify-between text-sm gap-2">
+                        <span class="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
+                            <span class="w-2.5 h-2.5 rounded-full" :class="dotClass(s.status)"></span>
+                            <span class="capitalize" x-text="s.status.toLowerCase()"></span>
+                        </span>
+                        <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400" x-text="s.count + (s.count === 1 ? ' run' : ' runs')"></span>
+                    </div>
+                    <div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                        <div class="h-full rounded-full" :class="dotClass(s.status).split(' ')[0]" :style="'width: ' + statusBarWidth(s.count, perf.by_status)"></div>
+                    </div>
+                </a>
+            </template>
+        </div>
+            </div>
+    </div>
+    
+    <!-- Speed by model -->
+    <div x-show="!modelFilter" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Speed by model</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Average successful generation time · click a row to filter recent runs</p>
+                <div x-show="loading" class="py-4 text-center text-sm text-slate-500">Loading…</div>
+                <div x-show="!loading" class="space-y-3">
+                    <template x-for="m in perf.per_model" :key="m.model">
+                        <a :href="'/api/v1/admin/activity?model=' + encodeURIComponent(m.model)" class="block rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                            <div class="flex items-baseline justify-between text-sm">
+                                <span class="font-mono font-medium text-slate-900 dark:text-white truncate" x-text="m.model"></span>
+                                <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400" x-text="(m.avg_seconds != null ? fmtDuration(m.avg_seconds) : '–') + ' · ' + m.runs + ' run' + (m.runs === 1 ? '' : 's')"></span>
+                            </div>
+                            <div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                                <div class="h-full rounded-full bg-indigo-500" :style="'width: ' + barWidth(m.avg_seconds)"></div>
+                            </div>
+                        </a>
+                    </template>
+                    <p x-show="!loading && (!perf.per_model || !perf.per_model.length)" class="text-sm text-slate-500">No completed runs yet.</p>
+                </div>
+            </div>
+    </div>
+
+    <!-- Per-run timings for the selected model (Speed rows land here) -->
+    <div x-show="modelFilter" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <div class="flex items-baseline justify-between gap-2">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Run timings · <span class="font-mono" x-text="modelFilter"></span></h2>
+            <button @click="clearFilters()" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Show all</button>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Successful runs, newest first — bar length is generation time</p>
+        <div x-show="!loading" class="space-y-3">
+            <template x-for="t in modelTimings" :key="t.created_at + t.prompt_title">
+                <div>
+                    <div class="flex items-baseline justify-between text-sm gap-2">
+                        <span class="font-medium text-slate-900 dark:text-white truncate" x-text="t.prompt_title"></span>
+                        <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400"><span x-text="fmtDuration(t.duration_seconds)"></span> · <span x-text="timeAgo(t.created_at)"></span></span>
+                    </div>
+                    <div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden" :title="t.prompt_title + ': ' + fmtDuration(t.duration_seconds)">
+                        <div class="h-full rounded-full bg-teal-500" :style="'width: ' + timingBarWidth(t.duration_seconds)"></div>
+                    </div>
+                </div>
+            </template>
+            <p x-show="!loading && !modelTimings.length" class="text-sm text-slate-500">No timed successful runs for this model yet.</p>
+        </div>
+    </div>
+
+    <div x-show="!modelFilter" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Activity stream -->
+        <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Recent runs</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Manual and scheduled generations, newest first</p>
+            <div x-show="loading" class="py-8 text-center text-sm text-slate-500">Loading…</div>
+<ol x-show="!loading" class="relative space-y-4 before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-px before:bg-slate-200 dark:before:bg-slate-700">
+                <template x-for="run in filteredRuns" :key="run.id">
+                    <li class="relative pl-7">
+                        <span class="absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white dark:border-slate-800" :class="dotClass(run.status)"></span>
+                        <div class="flex items-baseline justify-between gap-2">
+                            <p class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="run.prompt_title"></p>
+                            <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400" x-text="timeAgo(run.created_at)"></span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            <span x-text="run.triggered_by === 'schedule' ? 'Scheduled' : 'Manual'"></span>
+                            · <span x-text="run.status.charAt(0) + run.status.slice(1).toLowerCase()"></span>
+                            <span x-show="run.duration_seconds != null" x-text="' · ' + fmtDuration(run.duration_seconds)"></span>
+                        </p>
+                        <p x-show="run.status === 'FAILED' && run.error" class="mt-1 text-xs text-red-600 dark:text-red-400 break-words" x-text="run.error"></p>
+                    </li>
+                </template>
+                <li x-show="!loading && filteredRuns.length === 0" class="pl-7 text-sm text-slate-500" x-text="(statusFilter || modelFilter) ? 'No runs match this filter.' : 'No runs yet — press Run Now on a prompt.'"></li>
+            </ol>
+        </div>
+
+        <!-- Live now: pending runs -->
+        <div class="bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800 p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Live now</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Runs currently queued or executing</p>
+            <div x-show="loading" class="py-4 text-center text-sm text-slate-500">Loading…</div>
+            <ul x-show="!loading" class="space-y-3">
+                <template x-for="run in pendingRuns" :key="run.id">
+                    <li class="flex items-center justify-between gap-2 bg-white dark:bg-slate-800 rounded-lg border border-amber-200 dark:border-amber-800 px-4 py-3">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="run.prompt_title"></p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                <span x-text="run.action_type ? 'Follow-up action' : (run.triggered_by === 'schedule' ? 'Scheduled' : 'Manual')"></span>
+                                <span x-show="run.idea_reference" x-text="' · ' + run.idea_reference"></span>
+                            </p>
+                        </div>
+                        <span class="shrink-0 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                            <svg class="animate-spin -ml-0.5 mr-1 h-3 w-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span x-text="run.status === 'RUNNING' ? 'Running…' : 'Queued…'"></span>
+                        </span>
+                    </li>
+                </template>
+                <li x-show="!loading && pendingRuns.length === 0" class="text-sm text-slate-500">Nothing running — the queue is clear.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function activityApp() {
+    return {
+        runs: [],
+        pendingRuns: [],
+        queues: { ollama: null, default: null },
+        workersAlive: null,
+        perf: { total_runs: null, pending_count: 0, by_status: {}, success_rate: null, avg_seconds: null, per_model: [], last_error: null },
+        ideasByStatus: {},
+        modelTimings: [],
+        popularity: { prompts: [], top_ideas: [] },
+        ideasByModel: [],
+        ideasByPrompt: [],
+        loading: true,
+        loadError: false,
+        statusFilter: '',
+        modelFilter: '',
+        lastUpdated: '',
+
+        async init() {
+            if (!localStorage.getItem('access_token')) { window.location.href = '/login'; return; }
+            const params = new URLSearchParams(window.location.search);
+            this.statusFilter = (params.get('run_status') || '').toUpperCase();
+            this.modelFilter = params.get('model') || '';
+            await this.load();
+            setInterval(() => {
+                if (document.visibilityState === 'visible' && !this.loading) this.load();
+            }, 30000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && !this.loading) this.load();
+            });
+        },
+
+        async load() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams();
+                if (this.statusFilter) params.append('run_status', this.statusFilter);
+                if (this.modelFilter) params.append('model', this.modelFilter);
+                const qs = params.toString();
+                const res = await authFetch('/api/v1/admin/activity/stats' + (qs ? '?' + qs : ''));
+                if (res.status === 403) { window.location.href = '/ideas'; return; }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                const payload = data.data || data;
+                this.runs = payload.recent_runs || [];
+                this.pendingRuns = payload.pending_runs || [];
+                this.queues = payload.queues || { ollama: null, default: null };
+                this.workersAlive = (payload.workers_alive !== undefined) ? payload.workers_alive : null;
+                this.perf = payload.performance || this.perf;
+                this.popularity = payload.popularity || this.popularity;
+                this.ideasByModel = payload.ideas_by_model || [];
+                this.ideasByPrompt = payload.ideas_by_prompt || [];
+                this.ideasByStatus = payload.ideas_by_status || {};
+                this.modelTimings = payload.model_timings || [];
+                this.loadError = false;
+            } catch (e) {
+                console.error('Failed to load activity:', e);
+                this.loadError = true;
+            } finally {
+                this.loading = false;
+                this.lastUpdated = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            }
+        },
+
+        get ideaStatuses() {
+            const order = ['NEW', 'CONSIDERATION', 'DISCARDED'];
+            return order.map((s) => ({ status: s, count: (this.ideasByStatus || {})[s] || 0 }));
+        },
+
+        get runStatuses() {
+            const order = ['PENDING', 'RUNNING', 'SUCCESS', 'FAILED'];
+            return order.map((s) => ({ status: s, count: (this.perf.by_status || {})[s] || 0 }));
+        },
+
+        get filteredRuns() {
+            // Server pre-filters (run_status/model params); keep the guard
+            // so stale payloads never leak through after clearing.
+            return (this.runs || []).filter((r) => {
+                if (this.statusFilter && (r.status || '').toUpperCase() !== this.statusFilter) return false;
+                if (this.modelFilter && (r.model || '') !== this.modelFilter) return false;
+                return true;
+            });
+        },
+
+        clearFilters() {
+            this.statusFilter = '';
+            this.modelFilter = '';
+            window.history.replaceState(null, '', '/api/v1/admin/activity');
+            this.load();
+        },
+
+        dotClass(status) {
+            return {
+                'PENDING': 'bg-amber-400',
+                'RUNNING': 'bg-blue-500 animate-pulse',
+                'SUCCESS': 'bg-emerald-500',
+                'FAILED': 'bg-red-500',
+                'NEW': 'bg-sky-500',
+                'CONSIDERATION': 'bg-violet-500',
+                'DISCARDED': 'bg-slate-400',
+            }[status] || 'bg-slate-400';
+        },
+
+        fmtDuration(seconds) {
+            if (seconds === null || seconds === undefined) return '–';
+            const s = Math.round(seconds);
+            if (s < 60) return s + 's';
+            const m = Math.floor(s / 60);
+            const rest = s % 60;
+            return rest ? m + 'm ' + rest + 's' : m + 'm';
+        },
+
+        timeAgo(dateStr) {
+            if (!dateStr) return '';
+            const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+            if (isNaN(s) || s < 0) return '';
+            if (s < 60) return 'just now';
+            if (s < 3600) return Math.floor(s / 60) + 'm ago';
+            if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+            return Math.floor(s / 86400) + 'd ago';
+        },
+
+        barWidth(avgSeconds) {
+            const models = (this.perf.per_model || []).map((m) => m.avg_seconds).filter((v) => v != null);
+            const max = Math.max.apply(null, models.concat([1]));
+            if (avgSeconds == null) return '0%';
+            return Math.max(4, Math.round((avgSeconds / max) * 100)) + '%';
+        },
+
+        barWidthModel(n) {
+            const counts = (this.ideasByModel || []).map((m) => m.count);
+            const max = Math.max.apply(null, counts.concat([1]));
+            return Math.max(4, Math.round((n / max) * 100)) + '%';
+        },
+
+        queueDepth(name) {
+            const v = this.queues ? this.queues[name] : null;
+            return (v === null || v === undefined) ? '–' : v;
+        },
+
+        pendingCount() {
+            if (this.pendingRuns && this.pendingRuns.length) return this.pendingRuns.length;
+            return (this.perf && this.perf.pending_count) || 0;
+        },
+
+        barWidthCount(n) {
+            const counts = (this.popularity.prompts || []).map((p) => p.ideas);
+            const max = Math.max.apply(null, counts.concat([1]));
+            return Math.max(4, Math.round((n / max) * 100)) + '%';
+        },
+
+        timingBarWidth(seconds) {
+            const max = Math.max.apply(null, (this.modelTimings || []).map((t) => t.duration_seconds).concat([1]));
+            if (seconds == null) return '0%';
+            return Math.max(4, Math.round((seconds / max) * 100)) + '%';
+        },
+
+        statusBarWidth(n, source) {
+            const counts = Object.values(source || {});
+            const max = Math.max.apply(null, counts.concat([1]));
+            return Math.max(4, Math.round((n / max) * 100)) + '%';
+        },
+
+        statusColor(status) {
+            return {
+                SUCCESS: 'bg-emerald-500',
+                RUNNING: 'bg-blue-500',
+                PENDING: 'bg-amber-400',
+                FAILED: 'bg-red-500',
+            }[status] || 'bg-slate-400';
+        },
+    };
+}
+</script>
+{% endblock %}

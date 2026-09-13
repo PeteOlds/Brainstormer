@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}Create Prompt - Brainstormer{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8" x-data="createPromptForm()" x-init="init()">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-8">
+        <div id="form-error" x-show="error" x-text="error" class="hidden rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700" :class="{'hidden': !error}"></div>
+        <div class="mb-8">
+            <a href="{{ url_for('pages.ideas') }}" class="inline-flex items-center text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                Back to Prompts
+            </a>
+            <h1 class="mt-2 text-3xl font-bold text-slate-900 dark:text-white">Create New Prompt</h1>
+            <p class="mt-2 text-slate-600 dark:text-slate-400">Configure a new automated prompt for idea generation</p>
+        </div>
+
+        <form @submit.prevent="submitForm" class="space-y-8">
+            <div class="space-y-6 border-t border-slate-200 dark:border-slate-700 pt-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Basic Information</h2>
+                
+                <div>
+                    <label for="title" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title <span class="text-red-500">*</span></label>
+                    <input type="text" id="title" name="title" required maxlength="200"
+                           class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                           placeholder="e.g., SaaS Tools for Micro-Businesses">
+                </div>
+                
+                <div>
+                    <label for="prompt_body" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Prompt Body <span class="text-red-500">*</span></label>
+                    <textarea id="prompt_body" name="prompt_body" rows="10" required
+                              class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm"
+                              placeholder="Enter the system prompt to send to Ollama..."></textarea>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">This prompt will be sent to Ollama with JSON format enforcement.</p>
+                </div>
+            </div>
+
+            <div class="space-y-6 border-t border-slate-200 dark:border-slate-700 pt-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Schedule & Model</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="interval_minutes" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Interval <span class="text-red-500">*</span></label>
+                        <select id="interval_minutes" name="interval_minutes" x-model="intervalMinutes" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                            <option value="360">Every 6 hours</option>
+                            <option value="720">Every 12 hours</option>
+                            <option value="1440" selected>Daily</option>
+                            <option value="10080">Weekly</option>
+                            <option value="custom">Custom cron expression</option>
+                        </select>
+                    </div>
+
+                    <div x-show="intervalMinutes === 'custom'">
+                        <label for="cron_expression" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cron Expression</label>
+                        <input type="text" id="cron_expression" name="cron_expression" x-model="cronExpression" placeholder="e.g., 0 */6 * * *"
+                               class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Standard cron format. Leave empty to use interval minutes.</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="model_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Model <span class="text-red-500">*</span></label>
+                        <select id="model_name" name="model_name" x-model="modelName" :disabled="loadingModels" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                            <option value="" disabled x-show="loadingModels">Loading models...</option>
+                            <option value="" disabled x-show="!loadingModels">Select Model</option>
+                            <template x-for="model in models" :key="modelNameOf(model)">
+                                <option :value="modelNameOf(model)" x-text="modelNameOf(model) + ' ' + modelBadge(model)"></option>
+                            </template>
+                        </select>
+                        <p class="mt-1 text-xs text-red-600 dark:text-red-400" x-show="!loadingModels && models.length === 0" x-text="modelsError || 'No models available — check Ollama'"></p>
+                    </div>
+                    
+                    <div>
+                        <label for="temperature" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Temperature</label>
+                        <input type="number" id="temperature" name="temperature" min="0" max="2" step="0.1" value="0.7"
+                               class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">0.0 = deterministic, 1.0 = creative</p>
+                    </div>
+                </div>
+
+                <div class="space-y-6 border-t border-slate-200 dark:border-slate-700 pt-6">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Generation</h2>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Sampling knobs sent to Ollama on every run. Hover the ? for help.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="top_p" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Top P <span class="cursor-help text-slate-400" title="Nucleus sampling: lower = more focused, higher = more varied. Pairs with temperature. Range 0–1.">?</span></label>
+                            <input type="number" id="top_p" name="top_p" min="0" max="1" step="0.05" value="0.9"
+                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                        </div>
+                        <div>
+                            <label for="repeat_penalty" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Repeat Penalty <span class="cursor-help text-slate-400" title="Above 1 discourages repetition and rambling. Range 0–2.">?</span></label>
+                            <input type="number" id="repeat_penalty" name="repeat_penalty" min="0" max="2" step="0.1" value="1.1"
+                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                        </div>
+                        <div>
+                            <label for="num_predict" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Max Tokens <span class="cursor-help text-slate-400" title="Upper bound on tokens per run. Ideas need ~500; the rest is headroom. Range 1–4096.">?</span></label>
+                            <input type="number" id="num_predict" name="num_predict" min="1" max="4096" step="1" value="1000"
+                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                        </div>
+                        <div>
+                            <label for="seed" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Seed <span class="cursor-help text-slate-400" title="Empty = random each run. Set a number to reproduce runs.">?</span></label>
+                            <input type="number" id="seed" name="seed" min="0" step="1" placeholder="Random"
+                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Empty = random each run; set a number to reproduce runs.</p>
+                        </div>
+                        <div>
+                            <label for="keep_alive" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Keep Alive <span class="cursor-help text-slate-400" title="How long Ollama keeps the model loaded between runs (e.g. 30m, 2h, 0 = unload). Longer = faster runs, more RAM.">?</span></label>
+                            <input type="text" id="keep_alive" name="keep_alive" value="2h" maxlength="20"
+                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="is_active" class="flex items-center">
+                        <input type="checkbox" id="is_active" name="is_active" checked class="h-4 w-4 text-primary-600 border-slate-300 dark:border-slate-600 rounded focus:ring-primary-500">
+                        <span class="ml-2 block text-sm text-slate-700 dark:text-slate-300">Active (prompt will run on schedule)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Try it out</h2>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Runs the current prompt body once (up to ~250 tokens) against the selected model. Nothing is saved. Topic placeholder is replaced with: <span class="font-mono" x-text="testTopic"></span></p>
+                <div x-show="testResult" class="mt-3 max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-4 text-sm whitespace-pre-wrap" x-text="testResult"></div>
+                <div x-show="testError" class="mt-3 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700" x-text="testError"></div>
+            </div>
+
+            <div class="flex justify-end space-x-4 border-t border-slate-200 dark:border-slate-700 pt-6">
+                <a href="{{ url_for('pages.ideas') }}" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</a>
+                <button type="button" @click="testRun()" :disabled="testing || loadingModels || !modelName" class="px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    <span x-show="!testing">Test Prompt</span>
+                    <span x-show="testing" class="flex items-center">
+                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        Testing...
+                    </span>
+                </button>
+                <button type="submit" :disabled="saving || loadingModels" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    <span x-show="!saving">Create Prompt</span>
+                    <span x-show="saving" class="flex items-center">
+                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        Creating...
+                    </span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function createPromptForm() {
+    return {
+        models: [],
+        modelsError: '',
+        loadingModels: true,
+        saving: false,
+        testing: false,
+        error: '',
+        testResult: '',
+        testError: '',
+        testTopic: 'a sustainable packaging startup for small cafes',
+        intervalMinutes: '1440',
+        cronExpression: '',
+        modelName: '',
+        async init() {
+            if (!localStorage.getItem('access_token')) { window.location.href = '/login'; return; }
+            try {
+                const chk = await authFetch('/api/v1/admin/stats');
+                if (!chk.ok) { window.location.href = '/ideas'; return; }
+            } catch (e) { window.location.href = '/ideas'; return; }
+            await this.fetchModels();
+        },
+        modelNameOf(m) {
+            if (typeof m === 'string') return m;
+            return m.name || m.model || m.id || JSON.stringify(m);
+        },
+        // Return speed badge based on model size (in bytes)
+        modelBadge(m) {
+            if (typeof m === 'string') return ' 🐢';
+            const size = m.size || 0;
+            const GB = 1000 * 1000 * 1000;
+            if (size < 3 * GB) return ' 🚀';      // < 3GB: rocket (fast)
+            if (size < 7 * GB) return ' 🐇';      // 3-7GB: rabbit (medium)
+            return ' 🐢';                      // > 7GB: turtle (slow)
+        },
+        // Default to gemma3:latest if available (best quality/speed balance),
+        // otherwise fall back to smallest model.
+        defaultModel() {
+            if (!this.models.length) return '';
+            const gemma = this.models.find(m => (typeof m === 'object' && (m.name === 'gemma3:latest' || m.model === 'gemma3:latest')) || m === 'gemma3:latest');
+            if (gemma) return this.modelNameOf(gemma);
+            const sized = this.models.filter((m) => typeof m === 'object' && m && typeof m.size === 'number');
+            if (!sized.length) return this.modelNameOf(this.models[0]);
+            sized.sort((a, b) => a.size - b.size);
+            return this.modelNameOf(sized[0]);
+        },
+        async fetchModels() {
+            this.loadingModels = true;
+            this.modelsError = '';
+            try {
+                const response = await authFetch('/api/v1/ollama/models');
+                const data = await response.json();
+                const raw = data.models ?? data.data?.models ?? [];
+                this.models = Array.isArray(raw) ? raw : [];
+                if (this.models.length === 0) {
+                    this.modelsError = 'No models available — check Ollama';
+                } else if (!this.modelName) {
+                    this.modelName = this.defaultModel();
+                }
+            } catch (error) {
+                console.error('Failed to load models:', error);
+                this.modelsError = 'Failed to load models — check Ollama';
+            } finally {
+                this.loadingModels = false;
+            }
+        },
+        async testRun() {
+            this.testResult = '';
+            this.testError = '';
+            const promptBody = document.getElementById('prompt_body').value;
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            if (!promptBody.trim() || !this.modelName) {
+                this.testError = 'Enter a prompt body and select a model first.';
+                return;
+            }
+            this.testing = true;
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 300000);
+            try {
+                const text = await streamPromptTest({
+                    prompt_body: promptBody,
+                    model_name: this.modelName,
+                    temperature: isNaN(temperature) ? 0.7 : temperature
+                }, (tok, full) => { this.testResult = full; }, ctrl.signal);
+                if (!text) this.testResult = '(empty response)';
+            } catch (error) {
+                this.testError = (error && error.name === 'AbortError')
+                    ? 'Test run timed out after 5 minutes — try a smaller model.'
+                    : error.message;
+            } finally {
+                clearTimeout(timer);
+                this.testing = false;
+            }
+        },
+        async submitForm() {
+            this.error = '';
+            const title = document.getElementById('title').value.trim();
+            const promptBody = document.getElementById('prompt_body').value;
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            const topP = parseFloat(document.getElementById('top_p').value);
+            const repeatPenalty = parseFloat(document.getElementById('repeat_penalty').value);
+            const numPredict = parseInt(document.getElementById('num_predict').value, 10);
+            const seedRaw = document.getElementById('seed').value.trim();
+            const seed = seedRaw === '' ? null : parseInt(seedRaw, 10);
+            const keepAlive = document.getElementById('keep_alive').value.trim() || '2h';
+            const isActive = document.getElementById('is_active').checked;
+            if (!title || !promptBody || !this.modelName) {
+                this.error = 'Title, prompt body and model are required.';
+                return;
+            }
+            const payload = {
+                title: title,
+                prompt_body: promptBody,
+                interval_minutes: this.intervalMinutes === 'custom' ? 1440 : parseInt(this.intervalMinutes, 10),
+                model_name: this.modelName,
+                temperature: isNaN(temperature) ? 0.7 : temperature,
+                top_p: isNaN(topP) ? 0.9 : topP,
+                repeat_penalty: isNaN(repeatPenalty) ? 1.1 : repeatPenalty,
+                num_predict: isNaN(numPredict) ? 1000 : numPredict,
+                seed: (seed === null || isNaN(seed)) ? null : seed,
+                keep_alive: keepAlive,
+                is_active: isActive,
+            };
+            if (this.intervalMinutes === 'custom' && this.cronExpression.trim()) {
+                payload.cron_expression = this.cronExpression.trim();
+            }
+            this.saving = true;
+            try {
+                const response = await authFetch('/api/v1/prompts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || 'Failed to create prompt');
+                }
+                window.location.href = '/ideas';
+            } catch (error) {
+                this.error = error.message;
+            } finally {
+                this.saving = false;
+            }
+        }
+    };
+}
+// Back-compat alias (older markup/tests may call loadModels())
+function loadModels() { return createPromptForm(); }
+</script>
+{% endblock %}

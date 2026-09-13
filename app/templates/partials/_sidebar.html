@@ -1,0 +1,18 @@
+<aside class="hidden lg:block w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 h-screen sticky top-16 overflow-y-auto">
+    <nav class="p-4 space-y-1" aria-label="Primary">
+        {% for link in nav_links %}
+        {% set active = request.endpoint == link.endpoint %}
+        <a href="{{ url_for(link.endpoint) }}" {% if active %}aria-current="page"{% endif %} class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {% if active %}bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300{% else %}text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary-600 dark:hover:text-primary-400{% endif %}">
+            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ link.icon }}"></path></svg>
+            {{ link.label }}
+        </a>
+        {% endfor %}
+    </nav>
+
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 dark:border-slate-700">
+        <div class="text-center text-xs text-slate-500 dark:text-slate-400">
+            <p>Brainstormer v{{ config.VERSION }}</p>
+            <p class="mt-1">AI Business Idea Generator</p>
+        </div>
+    </div>
+</aside>

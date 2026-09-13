@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Brainstormer{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ["Inter", "system-ui", "sans-serif"] },
+                    colors: {
+                        primary: { 50:"#eff6ff",100:"#dbeafe",500:"#3b82f6",600:"#2563eb",700:"#1d4ed8" }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body{font-family:Inter,system-ui,sans-serif}
+        .fallback-center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:3rem 1rem}
+        .fallback-card{max-width:28rem;width:100%;}
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased">
+{% block content %}{% endblock %}
+</body>
+</html>

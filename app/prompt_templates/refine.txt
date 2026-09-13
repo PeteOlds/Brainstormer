@@ -1,0 +1,15 @@
+### RAW BUSINESS IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### INSTRUCTIONS:
+1. Strip away fluff and focus on clarity.
+2. Output STRICTLY valid JSON matching the schema below.
+
+### OUTPUT JSON SCHEMA:
+{
+  "elevator_pitch": "string (1-2 sentences, max 500 chars)",
+  "target_audience": "string (specific personas, max 300 chars)",
+  "core_value_proposition": "string (primary benefit, max 500 chars)",
+  "monetization_strategy": "string (revenue streams, max 300 chars)"
+}

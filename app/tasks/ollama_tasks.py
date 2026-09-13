@@ -1,0 +1,333 @@
+import json
+import uuid
+from datetime import datetime, timezone, timedelta
+
+import structlog
+
+from app.tasks import celery, BaseTask
+from app.services.ollama_client import OllamaClient
+from app.services.prompt_templates import get_base_prompt, get_prompt_template
+from app.schemas.ollama_schemas import validate_ollama_output
+from app.extensions import db
+from app.models import PromptConfig, Idea, SecondaryActionResult
+from app.utils.crypto import decrypt
+
+logger = structlog.get_logger()
+
+
+class OllamaError(Exception):
+    pass
+
+
+def _generate_reference_code() -> str:
+    """Generate a unique reference code like IDEA-XXXX."""
+    # Max over codes parsed in Python (the ideas table is tiny). Do NOT
+    # `order_by(Idea.id)`: ids are random UUIDs, so that returned an
+    # arbitrary row and re-issued an existing code (IDEA-0005) on every
+    # insert -> UniqueViolation, poisoned session, orphaned RUNNING runs.
+    # Non-numeric codes (if any) are skipped rather than resetting to 0001.
+    nums = []
+    for (code,) in db.session.query(Idea.reference_code).all():
+        if not code:
+            continue
+        try:
+            nums.append(int(code.split("-")[1]))
+        except (ValueError, IndexError):
+            continue
+    if nums:
+        return f"IDEA-{max(nums) + 1:04d}"
+    return "IDEA-0001"
+
+
+def _generation_options(prompt_config) -> dict:
+    """Ollama options dict from a prompt config (null-safe fallbacks)."""
+    options = {
+        "temperature": prompt_config.temperature if prompt_config.temperature is not None else 0.7,
+        "top_p": prompt_config.top_p if prompt_config.top_p is not None else 0.9,
+        "repeat_penalty": (prompt_config.repeat_penalty
+                           if prompt_config.repeat_penalty is not None else 1.1),
+        "num_predict": prompt_config.num_predict or 1000,
+    }
+    if getattr(prompt_config, "seed", None) is not None:
+        options["seed"] = prompt_config.seed
+    return options
+
+
+def _record_failure(run_id: str | None, error) -> None:
+    """Mark a run FAILED even if the session was poisoned by a failed flush.
+
+    A failed flush (e.g. duplicate reference_code) puts the session into a
+    state where any further commit raises PendingRollbackError. Rolling back
+    first lets mark_failed persist instead of orphaning the run as RUNNING.
+    """
+    from app.models import PromptRun
+
+    db.session.rollback()
+    run = None
+    if run_id:
+        try:
+            run = db.session.get(PromptRun, uuid.UUID(str(run_id)))
+        except (ValueError, TypeError):
+            run = None
+    if run is not None:
+        run.mark_failed(error)
+        db.session.commit()
+
+
+@celery.task(bind=True, base=BaseTask, name="app.tasks.ollama_tasks.generate_idea",
+             autoretry_for=(Exception,), retry_backoff=True, retry_backoff_max=300, max_retries=3)
+def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
+    """Generate an idea from a prompt configuration."""
+    from app.models import PromptRun
+
+    def _get_run():
+        if not run_id:
+            return None
+        try:
+            return db.session.get(PromptRun, uuid.UUID(str(run_id)))
+        except (ValueError, TypeError):
+            return None
+
+    prompt_config = PromptConfig.query.get(prompt_config_id)
+    if not prompt_config or not prompt_config.is_active:
+        logger.warning("prompt_not_found_or_inactive", prompt_config_id=prompt_config_id)
+        run = _get_run()
+        if run is not None:
+            run.mark_failed("Prompt not found or inactive")
+            db.session.commit()
+        return
+
+    run = _get_run()
+    if run is not None:
+        run.mark_running()
+        db.session.commit()
+
+    def _final_attempt():
+        max_retries = self.max_retries if self.max_retries is not None else 0
+        return self.request.retries >= max_retries
+
+    client = OllamaClient()
+    try:
+        # Render prompt
+        base_prompt = get_base_prompt()
+        refine_template = get_prompt_template("REFINE")
+        user_prompt = refine_template.render(ORIGINAL_IDEA_CONTENT="")  # Initial generation has no original idea
+        
+        # For initial generation, we use a different prompt.
+        # The admin's prompt_body is the theme: without it every prompt
+        # generates generic ideas (the body used to be silently ignored).
+        from app.services.prompt_templates import PromptTemplate
+        initial_prompt = PromptTemplate("initial")
+        prompt_text = initial_prompt.render(
+            PROMPT_CONTEXT=prompt_config.prompt_body or "")
+        
+        # Call Ollama with the prompt's generation params.
+        response = client.generate_sync(
+            model=prompt_config.model_name,
+            prompt=prompt_text,
+            system=base_prompt,
+            format="json",
+            options=_generation_options(prompt_config),
+            keep_alive=prompt_config.keep_alive or "2h",
+        )
+        
+        # Validate response
+        structured = validate_ollama_output("REFINE", response["response"])
+        
+        # Create idea
+        idea = Idea(
+            reference_code=_generate_reference_code(),
+            prompt_title=prompt_config.title,
+            raw_content=response["response"],
+            structured_content=structured.model_dump(),
+            prompt_config_id=prompt_config.id,
+            status="NEW",
+        )
+        db.session.add(idea)
+        
+        # Update prompt config
+        prompt_config.last_run_at = datetime.now(timezone.utc)
+        if prompt_config.cron_expression:
+            # TODO: Use croniter
+            prompt_config.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=prompt_config.interval_minutes)
+        else:
+            prompt_config.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=prompt_config.interval_minutes)
+        
+        db.session.flush()  # assign idea.id before linking the run
+        if run is not None:
+            run.mark_success(idea.id)
+        db.session.commit()
+
+        logger.info("idea_generated", idea_id=str(idea.id), prompt_id=str(prompt_config.id))
+
+    except json.JSONDecodeError as e:
+        # One retry with stricter prompt
+        if self.request.retries == 0:
+            logger.warning("json_decode_failed_retrying", prompt_id=prompt_config_id, error=str(e))
+            raise self.retry(exc=e, countdown=5)
+        logger.error("json_decode_failed_final", prompt_id=prompt_config_id, error=str(e))
+        if run is not None:
+            run.mark_failed(f"Invalid model output: {e}")
+            db.session.commit()
+        raise
+    except Exception as e:
+        logger.error("ollama_error", prompt_id=prompt_config_id, error=str(e))
+        # Only record FAILED on the final attempt; intermediate failures
+        # keep the run in RUNNING while autoretry keeps trying.
+        # _record_failure rolls back first so a poisoned session (failed
+        # flush) cannot orphan the run as RUNNING via PendingRollbackError.
+        # NOTE: _final_attempt() is checked before touching the session:
+        # any query (even re-fetching the run) on a poisoned session raises.
+        if _final_attempt():
+            _record_failure(run_id, str(e))
+        raise
+    finally:
+        client.close()
+
+
+@celery.task(bind=True, base=BaseTask, name="app.tasks.ollama_tasks.run_secondary_action",
+             autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
+def run_secondary_action(self, idea_id: str, action_type: str, model_override: str = None, run_id: str | None = None):
+    """Run a secondary action on an existing idea."""
+    from app.models import PromptRun
+
+    def _get_run():
+        if not run_id:
+            return None
+        try:
+            return db.session.get(PromptRun, uuid.UUID(str(run_id)))
+        except (ValueError, TypeError):
+            return None
+
+    def _final_attempt():
+        max_retries = self.max_retries if self.max_retries is not None else 0
+        return self.request.retries >= max_retries
+
+    idea = Idea.query.get(idea_id)
+    if not idea:
+        logger.warning("idea_not_found", idea_id=idea_id)
+        run = _get_run()
+        if run is not None:
+            run.mark_failed("Idea not found")
+            db.session.commit()
+        return
+
+    run = _get_run()
+    if run is not None:
+        run.mark_running()
+        db.session.commit()
+
+    client = OllamaClient()
+    try:
+        # Get prompt template
+        prompt_template = get_prompt_template(action_type)
+        user_prompt = prompt_template.render(ORIGINAL_IDEA_CONTENT=idea.raw_content)
+        base_prompt = get_base_prompt()
+        model = model_override or idea.prompt_config.model_name if idea.prompt_config else "llama3:8b"
+        prompt_config = idea.prompt_config
+
+        # Call Ollama (same generation params as scheduled runs when known).
+        response = client.generate_sync(
+            model=model,
+            prompt=user_prompt,
+            system=base_prompt,
+            format="json",
+            options=_generation_options(prompt_config) if prompt_config else None,
+            keep_alive=(prompt_config.keep_alive if prompt_config and prompt_config.keep_alive else "2h"),
+        )
+
+        # Validate response
+        validated = validate_ollama_output(action_type, response["response"])
+
+        # Store result
+        result = SecondaryActionResult(
+            idea_id=idea.id,
+            action_type=action_type,
+            model_used=model,
+            result_data=validated.model_dump(),
+        )
+        db.session.add(result)
+
+        # If feasibility score, update idea
+        if action_type == "FEASIBILITY_SCORE":
+            idea.feasibility_score = validated.overall_score
+
+        db.session.commit()
+        if run is not None:
+            run.mark_success()
+            db.session.commit()
+        logger.info("secondary_action_completed", idea_id=idea_id, action_type=action_type)
+
+    except json.JSONDecodeError as e:
+        if self.request.retries == 0:
+            logger.warning("json_decode_failed_retrying", idea_id=idea_id, action_type=action_type, error=str(e))
+            raise self.retry(exc=e, countdown=5)
+        logger.error("json_decode_failed_final", idea_id=idea_id, action_type=action_type, error=str(e))
+        if run is not None:
+            run.mark_failed(f"Invalid model output: {e}")
+            db.session.commit()
+        raise
+    except Exception as e:
+        logger.error("secondary_action_error", idea_id=idea_id, action_type=action_type, error=str(e))
+        # Roll back first: a failed commit above poisons the session, and
+        # without this mark_failed raises PendingRollbackError, orphaning
+        # the run as RUNNING. _final_attempt() is checked before touching
+        # the session: any query on a poisoned session raises.
+        if _final_attempt():
+            _record_failure(run_id, str(e))
+        raise
+    finally:
+        client.close()
+
+
+@celery.task(base=BaseTask, name="app.tasks.ollama_tasks.check_due_prompts")
+def check_due_prompts():
+    """Check for due prompts and enqueue generation tasks."""
+    from datetime import datetime, timezone, timedelta
+    from app.models import PromptRun, PromptRunStatus
+
+    now = datetime.now(timezone.utc)
+
+    # Reconcile orphans: runs whose worker died or whose job was lost stay
+    # PENDING/RUNNING forever and lie on the dashboard. A healthy run is
+    # picked up in seconds and finishes within the task time limit.
+    try:
+        stale_pending = PromptRun.query.filter(
+            PromptRun.status.in_([PromptRunStatus.PENDING, PromptRunStatus.RUNNING]),
+            PromptRun.created_at < now - timedelta(minutes=45),
+        ).all()
+        for stale in stale_pending:
+            stale.mark_failed("Orphaned: no live job (worker restarted or queue purged)")
+        if stale_pending:
+            db.session.commit()
+            logger.info("reconciled_orphaned_runs", count=len(stale_pending))
+    except Exception as e:
+        logger.warning("orphan_reconcile_failed", error=str(e))
+        db.session.rollback()
+
+    due_prompts = PromptConfig.query.filter(
+        PromptConfig.is_active == True,
+        PromptConfig.next_run_at <= now,
+    ).all()
+
+    from app.models import PromptRun, PromptRunStatus
+
+    enqueued = 0
+    for prompt in due_prompts:
+        # Skip prompts that already have a live run: without this, every
+        # 60s tick re-enqueues them and the queue grows without bound.
+        live = PromptRun.query.filter(
+            PromptRun.prompt_config_id == prompt.id,
+            PromptRun.status.in_([PromptRunStatus.PENDING, PromptRunStatus.RUNNING]),
+        ).count()
+        if live:
+            continue
+        run = PromptRun(prompt_config_id=prompt.id, triggered_by="schedule")
+        db.session.add(run)
+        db.session.commit()
+        job = generate_idea.delay(str(prompt.id), run_id=str(run.id))
+        run.job_id = job.id
+        db.session.commit()
+        enqueued += 1
+
+    logger.info("checked_due_prompts", due=len(due_prompts), enqueued=enqueued)

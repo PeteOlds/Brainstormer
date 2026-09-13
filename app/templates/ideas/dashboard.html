@@ -1,0 +1,839 @@
+{% extends "base.html" %}
+
+{% block title %}Ideas Dashboard - Brainstormer{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="ideasApp()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Ideas Dashboard</h1>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Review, vote, and analyze generated business ideas</p>
+        </div>
+        <div class="mt-4 sm:mt-0 flex items-center space-x-3">
+            <span class="text-xs text-slate-500 dark:text-slate-400" x-show="lastUpdated">Updated <span x-text="lastUpdated"></span> · auto-refreshes</span>
+            <button @click="refreshIdeas()" :disabled="loading" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center" aria-label="Refresh ideas now">
+                <svg class="w-4 h-4 mr-2" :class="{'animate-spin': loading}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <span x-text="loading ? 'Refreshing...' : 'Refresh'">Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+        <div class="flex flex-col sm:flex-row gap-4">
+            <div class="flex-1 sm:w-64">
+                <label for="status-filter" class="sr-only">Filter by status</label>
+                <select id="status-filter" x-model="filters.status" class="block w-full pl-3 pr-10 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none">
+                    <option value="ACTIVE_ONLY">Active Only (default)</option>
+                    <option value="">All Statuses</option>
+                    <option value="NEW">New</option>
+                    <option value="CONSIDERATION">Consideration</option>
+                    <option value="DISCARDED">Discarded</option>
+                </select>
+            </div>
+            <div class="flex-1 sm:w-64">
+                <label for="sort-filter" class="sr-only">Sort by</label>
+                <select id="sort-filter" x-model="filters.sort" class="block w-full pl-3 pr-10 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none">
+                    <option value="created_at">Newest First</option>
+                    <option value="-created_at">Oldest First</option>
+                    <option value="votes">Highest Votes</option>
+                    <option value="-votes">Lowest Votes</option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <label for="search-filter" class="sr-only">Search ideas</label>
+                <input type="text" id="search-filter" x-model="filters.search" placeholder="Search ideas..." class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+            </div>
+            <div class="flex-1 sm:w-64">
+                <label for="prompt-filter" class="sr-only">Filter by prompt</label>
+                <select id="prompt-filter" x-model="filters.prompt_id" class="block w-full pl-3 pr-10 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none">
+                    <option value="">All Prompts</option>
+                    <template x-for="prompt in prompts" :key="prompt.id">
+                        <option :value="prompt.id" x-text="prompt.title"></option>
+                    </template>
+                </select>
+            </div>
+            <div class="flex-1 sm:w-64">
+                <label for="model-filter" class="sr-only">Filter by model</label>
+                <select id="model-filter" x-model="filters.model" class="block w-full pl-3 pr-10 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none">
+                    <option value="">All Models</option>
+                    <template x-for="model in [...new Set(prompts.map(p => p.model_name).filter(Boolean))]" :key="model">
+                        <option :value="model" x-text="model"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ideas Table (desktop) / stacked cards (mobile, §8.6) -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div class="overflow-x-auto hidden md:block">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-900">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ref</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Prompt</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Summary</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Votes</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                    <template x-for="idea in paginatedIdeas" :key="idea.id">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="font-mono text-sm text-slate-900 dark:text-white" x-text="idea.reference_code"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400" x-text="timeAgo(idea.created_at)" :title="formatDate(idea.created_at)"></td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200" x-text="idea.prompt_title"></span>
+                            </td>
+                            <td class="px-6 py-4 max-w-md">
+                                <button @click="openDetailModal(idea)" class="block w-full text-left cursor-pointer rounded focus:outline-none focus:ring-2 focus:ring-primary-500" :aria-label="'Read full idea ' + idea.reference_code">
+                                    <span class="block text-sm text-slate-700 dark:text-slate-300 line-clamp-2 [mask-image:linear-gradient(black_60%,transparent)]" x-text="prettySummary(idea)"></span>
+                                </button>
+                                <span class="mt-1 flex flex-wrap items-center gap-1.5">
+                                    <button x-show="hasMoreSummary(idea)" @click="openDetailModal(idea)" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 hover:underline">Read full idea →</button>
+                                    <template x-for="chip in actionChips(idea)" :key="chip.key">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" :title="chip.label + ' available inside'">
+                                            <svg class="mr-0.5 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg><span x-text="chip.label"></span>
+                                        </span>
+                                    </template>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="idea.status"></span>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <button @click="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-1.5 rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Upvote">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                    </button>
+                                    <span class="text-lg font-bold text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
+                                    <button @click="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-1.5 rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Downvote">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    </button>
+                                </div>
+                                <span class="text-xs text-slate-500 dark:text-slate-400" x-show="idea.user_vote !== 0" x-text="idea.user_vote === 1 ? 'You upvoted' : 'You downvoted'"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div class="flex items-center justify-end space-x-2" x-data="{ dropdownOpen: false }">
+                                    <button @click="dropdownOpen = !dropdownOpen" class="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+                                    </button>
+                                    <div x-show="dropdownOpen" @click.outside="dropdownOpen = false" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
+                                        <button @click="openDetailModal(idea); dropdownOpen = false" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">View Details</button>
+                                        <template x-if="isAdmin">
+                                            <div>
+                                            <hr class="border-slate-200 dark:border-slate-700 my-1">
+                                            <button @click="changeStatus('CONSIDERATION', idea.id); dropdownOpen = false" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Mark as under consideration">
+                                                <svg class="mr-2 h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                                Consider
+                                            </button>
+                                            <button @click="confirmDiscard(idea, () => dropdownOpen = false)" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Discard (hidden by the default filter)">
+                                                <svg class="mr-2 h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                Discard
+                                            </button>
+                                            <hr class="border-slate-200 dark:border-slate-700 my-1">
+                                            <template x-for="action in refinedActions" :key="action.key">
+                                                <button @click="runAction(idea.id, action.key); dropdownOpen = false" :title="action.description" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+                                                    <span class="font-medium" x-text="action.label"></span>
+                                                    <span class="ml-2 text-xs text-slate-500" x-show="idea.actions_run.includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
+                                                </button>
+                                            </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="filteredIdeas.length === 0 && !loading">
+                        <td colspan="7" class="px-6 py-12 text-center">
+                            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No ideas found</h3>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">No ideas match your current filters.</p>
+                        </td>
+                    </tr>
+                    <tr x-show="loading">
+                        <td colspan="7" class="px-6 py-12 text-center">
+                            <svg class="animate-spin mx-auto h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Loading ideas...</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Mobile stacked cards: full summary, no truncation -->
+        <div class="md:hidden divide-y divide-slate-200 dark:divide-slate-700">
+            <template x-for="idea in paginatedIdeas" :key="idea.id">
+                <article class="p-4 space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-mono text-xs text-slate-500 dark:text-slate-400" x-text="idea.reference_code"></span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="idea.status"></span>
+                    </div>
+                    <p class="text-sm text-slate-700 dark:text-slate-300" x-text="prettySummary(idea)"></p>
+                    <span x-show="actionChips(idea).length" class="flex flex-wrap items-center gap-1.5">
+                        <template x-for="chip in actionChips(idea)" :key="chip.key">
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                <svg class="mr-0.5 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg><span x-text="chip.label"></span>
+                            </span>
+                        </template>
+                    </span>
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 truncate" x-text="idea.prompt_title"></span>
+                        <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400" x-text="timeAgo(idea.created_at)"></span>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center space-x-1">
+                            <button @click="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" :disabled="voteLoading === idea.id" aria-label="Upvote">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                            </button>
+                            <span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
+                            <button @click="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" :disabled="voteLoading === idea.id" aria-label="Downvote">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                        </div>
+                        <button @click="openDetailModal(idea)" class="px-4 py-2 min-h-[44px] text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">Details</button>
+                    </div>
+                </article>
+            </template>
+            <div x-show="filteredIdeas.length === 0 && !loading" class="px-6 py-12 text-center">
+                <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No ideas found</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">No ideas match your current filters.</p>
+            </div>
+            <div x-show="loading" class="px-6 py-12 text-center">
+                <svg class="animate-spin mx-auto h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Loading ideas...</p>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700" x-show="totalPages > 1">
+            <nav class="flex items-center justify-between">
+                <div class="text-sm text-slate-700 dark:text-slate-300">
+                    Showing <span x-text="((currentPage - 1) * pageSize) + 1"></span> to <span x-text="Math.min(currentPage * pageSize, total)"></span> of <span x-text="total"></span> results
+                </div>
+                <div class="flex space-x-2">
+                    <button @click="currentPage--" :disabled="currentPage === 1" class="px-3 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                    <button @click="currentPage++" :disabled="currentPage === totalPages" class="px-3 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+                </div>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div x-show="detailModalOpen" x-cloak style="display: none;" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeDetailModal()" onclick="if(event.target===this) this.style.display='none'" aria-labelledby="detail-modal-title" role="dialog" aria-modal="true">
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+        <div class="relative flex min-h-full items-center justify-center p-4">
+            <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-4xl bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-slate-300 dark:border-slate-500 max-h-[90vh] flex flex-col outline-none" tabindex="-1">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
+                    <div class="flex items-center space-x-3">
+                        <span class="font-mono text-lg font-semibold text-slate-900 dark:text-white" x-text="selectedIdea?.reference_code"></span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(selectedIdea?.status)" x-text="selectedIdea?.status"></span>
+                    </div>
+                    <button @click="closeDetailModal()" onclick="try{this.closest("[x-show]").style.display="none"}catch(e){}" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Prompt</label>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200" x-text="selectedIdea?.prompt_title"></span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Generated</label>
+                            <span class="text-sm text-slate-700 dark:text-slate-300" x-text="formatDate(selectedIdea?.created_at)"></span>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Net Votes</label>
+                            <span class="text-2xl font-bold text-slate-900 dark:text-white" x-text="selectedIdea?.net_votes"></span>
+                        </div>
+                        <template x-if="isAdmin && selectedIdea?.generation_seconds !== null && selectedIdea?.generation_seconds !== undefined">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Generation time <span class="normal-case font-normal">(admin)</span></label>
+                                <span class="text-sm text-slate-700 dark:text-slate-300" x-text="formatDuration(selectedIdea?.generation_seconds)"></span>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4"></div>
+                    
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Idea Content</h3>
+                        <div class="prose prose-slate dark:prose-invert max-w-none" x-html="selectedIdea?.rendered_content"></div>
+                    </div>
+                    
+                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Voting</h3>
+                            <div class="flex items-center space-x-2">
+                                <button @click="vote(selectedIdea.id, 1)" :class="getVoteClass(selectedIdea, 1)" class="p-2 rounded-lg transition-colors" :disabled="voteLoading === selectedIdea?.id" aria-label="Upvote">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                </button>
+                                <span class="text-2xl font-bold text-slate-900 dark:text-white" x-text="selectedIdea?.net_votes"></span>
+                                <button @click="vote(selectedIdea.id, -1)" :class="getVoteClass(selectedIdea, -1)" class="p-2 rounded-lg transition-colors" :disabled="voteLoading === selectedIdea?.id" aria-label="Downvote">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="text-sm text-slate-500 dark:text-slate-400" x-show="selectedIdea?.user_vote !== 0" x-text="selectedIdea?.user_vote === 1 ? 'You upvoted this idea' : 'You downvoted this idea'"></div>
+                    </div>
+                    
+                    <template x-if="isAdmin">
+                        <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Admin Actions</h3>
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <select @change="changeStatus($event.target.value, selectedIdea.id)" class="flex-1 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" :value="selectedIdea?.status">
+                                    <option value="NEW">New</option>
+                                    <option value="CONSIDERATION">Consideration</option>
+                                    <option value="DISCARDED">Discarded</option>
+                                </select>
+                                <button @click="runAction(selectedIdea.id, 'REFINE')" :disabled="actionLoading === 'REFINE'" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                    <span x-show="actionLoading !== 'REFINE'">Refine Idea</span>
+                                    <span x-show="actionLoading === 'REFINE'" class="flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Refining...</span>
+                                </button>
+                                <button @click="runAction(selectedIdea.id, 'COMPETITORS')" :disabled="actionLoading === 'COMPETITORS'" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                    <span x-show="actionLoading !== 'COMPETITORS'">Competitor Analysis</span>
+                                    <span x-show="actionLoading === 'COMPETITORS'" class="flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Analyzing...</span>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Secondary Actions</h3>
+                        <div class="space-y-4" x-show="selectedIdea?.actions && selectedIdea.actions.length > 0">
+                            <template x-for="action in selectedIdea?.actions" :key="action.action_type + action.executed_at">
+                                <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="font-medium text-slate-900 dark:text-white capitalize" x-text="action.action_type.toLowerCase().replace('_', ' ')"></span>
+                                        <span class="text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(action.executed_at)"></span>
+                                    </div>
+                                    <div class="prose prose-sm prose-slate dark:prose-invert max-w-none" x-html="action.rendered_output"></div>
+                                </div>
+                            </template>
+                            <div x-show="!selectedIdea?.actions || selectedIdea.actions.length === 0" class="text-center py-8 text-slate-500 dark:text-slate-400">
+                                <svg class="mx-auto h-8 w-8 mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                                <p>No secondary actions run yet.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
+                    <button @click="closeDetailModal()" onclick="try{this.closest("[x-show]").style.display="none"}catch(e){}" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function ideasApp() {
+    return {
+        ideas: [],
+        filteredIdeas: [],
+        prompts: [],
+        loading: false,
+        voteLoading: null,
+        actionLoading: null,
+        detailModalOpen: false,
+        selectedIdea: null,
+        currentPage: 1,
+        pageSize: 10,
+        total: 0,
+        totalPages: 1,
+        isAdmin: false,
+        lastUpdated: '',
+        availableActions: [],
+        filters: { status: 'ACTIVE_ONLY', sort: 'created_at', search: '', prompt_id: '', model: '' },
+
+        // Follow-up AI actions come from the server registry
+        // (GET /api/v1/actions), so new actions appear with no UI changes.
+        async loadActions() {
+            try {
+                const response = await authFetch('/api/v1/actions');
+                const data = await response.json();
+                const payload = data.data || data;
+                this.availableActions = payload.actions || [];
+            } catch (error) {
+                console.error('Failed to load actions:', error);
+            }
+        },
+
+        async init() {
+            // Deep links (e.g. from /admin/activity): ?status=&prompt=&model=
+            const query = new URLSearchParams(window.location.search);
+            const qStatus = query.get('status');
+            if (qStatus) this.filters.status = qStatus.toUpperCase();
+            const qPrompt = query.get('prompt');
+            if (qPrompt) this.filters.prompt_id = qPrompt;
+            const qModel = query.get('model');
+            if (qModel) this.filters.model = qModel;
+            await Promise.all([this.loadIdeas(), this.loadPrompts(), this.checkAdmin(), this.loadActions()]);
+            // Live updates: refresh the list every 30s while the page is
+            // visible and no modal is open, so new ideas appear by themselves.
+            setInterval(() => {
+                if (!this.detailModalOpen && document.visibilityState === 'visible' && !this.loading) {
+                    this.loadIdeas();
+                }
+            }, 30000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && !this.detailModalOpen && !this.loading) {
+                    this.loadIdeas();
+                }
+            });
+            // Auto-refresh when filters change
+            this.$watch('filters.status', () => { this.loadIdeas(); });
+            this.$watch('filters.search', () => { this.loadIdeas(); });
+            this.$watch('filters.prompt_id', () => { this.loadIdeas(); });
+            this.$watch('filters.model', () => { this.applyFilters(); });
+            this.$watch('filters.sort', () => { this.loadIdeas(); });
+        },
+        
+        async loadIdeas() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: this.currentPage,
+                    limit: this.pageSize,
+                    sort_by: this.filters.sort,
+                });
+                // Don't send ACTIVE_ONLY to API - handle locally
+                if (this.filters.status && this.filters.status !== 'ACTIVE_ONLY') {
+                    params.append('status', this.filters.status);
+                }
+                if (this.filters.search) params.append('search', this.filters.search);
+                if (this.filters.prompt_id) params.append('prompt_config_id', this.filters.prompt_id);
+                if (this.filters.model) params.append('model', this.filters.model);
+                
+                const response = await authFetch(`/api/v1/ideas?${params}`);
+                const data = await response.json();
+                const payload = data.data || data;
+                this.ideas = payload.ideas || [];
+                this.total = payload.total || this.ideas.length;
+                this.applyFilters();
+            } catch (error) {
+                console.error('Failed to load ideas:', error);
+            } finally {
+                this.loading = false;
+                this.lastUpdated = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            }
+        },
+        
+        async loadPrompts() {
+            try {
+                const response = await authFetch('/api/v1/prompts');
+                const data = await response.json();
+                const payload = data.data || data;
+                this.prompts = payload.prompts || [];
+                this.applyFilters();
+            } catch (error) {
+                console.error('Failed to load prompts:', error);
+            }
+        },
+        
+        async checkAdmin() {
+            try {
+                const response = await authFetch('/api/v1/admin/stats');
+                this.isAdmin = response.ok;
+            } catch (error) {
+                this.isAdmin = false;
+            }
+        },
+        
+        applyFilters() {
+            let filtered = [...this.ideas];
+            // Default: hide DISCARDED unless explicitly selected
+            if (this.filters.status === 'ACTIVE_ONLY') {
+                filtered = filtered.filter(i => i.status !== 'DISCARDED');
+            } else if (this.filters.status) {
+                filtered = filtered.filter(i => i.status === this.filters.status);
+            }
+            if (this.filters.search) {
+                const search = this.filters.search.toLowerCase();
+                filtered = filtered.filter(i => 
+                    (i.summary || '').toLowerCase().includes(search) ||
+                    (i.prompt_title || '').toLowerCase().includes(search) ||
+                    (i.reference_code || '').toLowerCase().includes(search)
+                );
+            }
+            if (this.filters.prompt_id) {
+                filtered = filtered.filter(i => i.prompt_config_id === this.filters.prompt_id);
+            }
+            if (this.filters.model) {
+                const modelByPrompt = Object.fromEntries(
+                    (this.prompts || []).map(p => [p.id, p.model_name]));
+                filtered = filtered.filter(i => modelByPrompt[i.prompt_config_id] === this.filters.model);
+            }
+            this.filteredIdeas = filtered;
+            this.total = filtered.length;
+            this.totalPages = Math.ceil(this.total / this.pageSize);
+        },
+        
+        get paginatedIdeas() {
+            const start = (this.currentPage - 1) * this.pageSize;
+            return this.filteredIdeas.slice(start, start + this.pageSize);
+        },
+        
+        async refreshIdeas() {
+            await this.loadIdeas();
+        },
+        
+        async loadIdeaDetail(ideaId) {
+            try {
+                const response = await authFetch(`/api/v1/ideas/${ideaId}`);
+                const data = await response.json();
+                const payload = data.data || data;
+                this.selectedIdea = payload.idea;
+                this.selectedIdea.actions = payload.actions || [];
+                // Admin-only: present only when the API includes it.
+                this.selectedIdea.generation_seconds = payload.generation_seconds ?? null;
+                this.selectedIdea.rendered_content = this.prettyContent(this.selectedIdea);
+                this.selectedIdea.actions = this.selectedIdea.actions.map(a => ({
+                    ...a,
+                    rendered_output: this.prettyActionOutput(a.output || a.result_data)
+                }));
+            } catch (error) {
+                console.error('Failed to load idea detail:', error);
+            }
+        },
+        
+        openDetailModal(idea) {
+            this.selectedIdea = { ...idea };
+            this.loadIdeaDetail(idea.id);
+            this.detailModalOpen = true;
+        },
+        
+        closeDetailModal() {
+            this.detailModalOpen = false;
+            this.selectedIdea = null;
+        },
+        
+        async vote(ideaId, direction) {
+            this.voteLoading = ideaId;
+            try {
+                const response = await authFetch(`/api/v1/ideas/${ideaId}/vote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ direction })
+                });
+                if (!response.ok) throw new Error('Failed to vote');
+                const data = await response.json();
+                const payload = data.data || data;
+                const idea = this.ideas.find(i => i.id === ideaId);
+                if (idea) {
+                    idea.net_votes = payload.net_votes;
+                    idea.user_vote = payload.current_user_vote;
+                }
+                if (this.selectedIdea?.id === ideaId) {
+                    this.selectedIdea.net_votes = payload.net_votes;
+                    this.selectedIdea.user_vote = payload.current_user_vote;
+                }
+            } catch (error) {
+                alert('Failed to vote: ' + error.message);
+            } finally {
+                this.voteLoading = null;
+            }
+        },
+        
+        getVoteClass(idea, direction) {
+            const voted = idea?.user_vote === direction;
+            return `p-1.5 rounded-lg transition-colors ${voted ? 'bg-primary-100 text-primary-600 dark:bg-primary-900 dark:text-primary-400' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`;
+        },
+        
+        get refinedActions() {
+            // 3-dot menu shows Refine + Competitors only (not feasibility).
+            return (this.availableActions || []).filter((a) => a.key === 'REFINE' || a.key === 'COMPETITORS');
+        },
+
+        async confirmDiscard(idea, close) {
+            if (!confirm('Discard this idea? It will be hidden by the default filter.')) return;
+            await this.changeStatus('DISCARDED', idea.id);
+            if (close) close();
+        },
+
+        async changeStatus(status, ideaId) {            try {
+                const response = await authFetch(`/api/v1/ideas/${ideaId}/status`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+                if (!response.ok) throw new Error('Failed to update status');
+                await this.loadIdeas();
+                if (this.selectedIdea?.id === ideaId) {
+                    this.selectedIdea.status = status;
+                }
+            } catch (error) {
+                alert('Failed to update status: ' + error.message);
+            }
+        },
+        
+        async runAction(ideaId, actionType) {
+            this.actionLoading = actionType;
+            try {
+                const response = await authFetch(`/api/v1/ideas/${ideaId}/actions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action_type: actionType })
+                });
+                if (!response.ok) throw new Error('Failed to run action');
+                
+                // Poll for result
+                const poll = async () => {
+                    const response = await authFetch(`/api/v1/ideas/${ideaId}/actions`);
+                    const data = await response.json();
+                    const payload = data.data || data;
+                    const action = payload.results?.find(r => r.action_type === actionType);
+                    if (action) {
+                        this.selectedIdea.actions = payload.results;
+                        this.selectedIdea.actions = this.selectedIdea.actions.map(a => ({
+                            ...a,
+                            rendered_output: this.prettyActionOutput(a.output || a.result_data)
+                        }));
+                        return true;
+                    }
+                    return false;
+                };
+                
+                for (let i = 0; i < 30; i++) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    if (await poll()) break;
+                }
+            } catch (error) {
+                alert('Failed to run action: ' + error.message);
+            } finally {
+                this.actionLoading = null;
+            }
+        },
+        
+        getStatusClass(status) {
+            const classes = {
+                'NEW': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                'CONSIDERATION': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+                'DISCARDED': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+            };
+            return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${classes[status] || classes.NEW}`;
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return 'Never';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        },
+        
+        // Readable one-liner for table cells: prefers a structured pitch or
+        // summary over raw JSON blobs like {"elevator_pitch": "..."}.
+        pickSummary(obj) {
+            if (!obj || typeof obj !== 'object') return '';
+            const keys = ['elevator_pitch', 'summary', 'pitch', 'description', 'overview', 'tagline', 'idea'];
+            for (const k of keys) {
+                if (typeof obj[k] === 'string' && obj[k].trim()) return obj[k].trim();
+            }
+            return '';
+        },
+
+        firstString(value) {
+            if (!value) return '';
+            if (typeof value === 'string') return value;
+            if (Array.isArray(value)) {
+                for (const v of value) {
+                    const s = this.firstString(v);
+                    if (s && s.trim()) return s;
+                }
+                return '';
+            }
+            if (typeof value === 'object') {
+                for (const k of Object.keys(value)) {
+                    const s = this.firstString(value[k]);
+                    if (s && s.trim()) return s;
+                }
+            }
+            return '';
+        },
+
+        summaryFullText(idea) {
+            // Unsliced candidate text behind prettySummary (for "has more" checks).
+            if (!idea) return '';
+            const tryParse = (t) => {
+                if (typeof t !== 'string') return null;
+                const s = t.trim();
+                if (!s.startsWith('{') && !s.startsWith('[')) return null;
+                try { return JSON.parse(s); } catch (e) { return null; }
+            };
+            const fromObj = (o) => this.pickSummary(o) || this.firstString(o);
+            if (idea.structured_content) {
+                if (typeof idea.structured_content === 'object') {
+                    return fromObj(idea.structured_content) || '';
+                }
+                const o = tryParse(idea.structured_content);
+                if (o) return fromObj(o) || '';
+                return String(idea.structured_content);
+            }
+            const raw = idea.summary || idea.raw_content || '';
+            const o = tryParse(raw);
+            if (o) return fromObj(o) || '';
+            return String(raw);
+        },
+
+        hasMoreSummary(idea) {
+            return this.summaryFullText(idea).length > 220;
+        },
+
+        actionChips(idea) {
+            // Richness signals: which follow-up analyses already live inside.
+            const done = idea && Array.isArray(idea.actions_run) ? idea.actions_run : [];
+            const labels = { REFINE: 'Refined', COMPETITORS: 'Competitors', FEASIBILITY_SCORE: 'Scored' };
+            return done.filter((k) => labels[k]).map((k) => ({ key: k, label: labels[k] }));
+        },
+
+        prettySummary(idea) {
+            if (!idea) return '';
+            const tryParse = (t) => {
+                if (typeof t !== 'string') return null;
+                const s = t.trim();
+                if (!s.startsWith('{') && !s.startsWith('[')) return null;
+                try { return JSON.parse(s); } catch (e) { return null; }
+            };
+            const fromObj = (o) => this.pickSummary(o) || this.firstString(o);
+            // Structured content wins when present.
+            if (idea.structured_content) {
+                if (typeof idea.structured_content === 'object') {
+                    const s = fromObj(idea.structured_content);
+                    if (s) return s.slice(0, 220);
+                } else {
+                    const o = tryParse(idea.structured_content);
+                    if (o) {
+                        const s = fromObj(o);
+                        if (s) return s.slice(0, 220);
+                    } else {
+                        return String(idea.structured_content).slice(0, 220);
+                    }
+                }
+            }
+            const raw = idea.summary || idea.raw_content || '';
+            const o = tryParse(raw);
+            if (o) {
+                const s = fromObj(o);
+                if (s) return s.slice(0, 220);
+            }
+            return String(raw).slice(0, 220);
+        },
+
+        // Secondary-action rendering: structured results become labelled
+        // sections (Elevator Pitch, Target Audience, ...) instead of raw JSON.
+        prettyActionOutput(data) {
+            let obj = data;
+            if (typeof obj === 'string') {
+                const t = obj.trim();
+                if (!t.startsWith('{')) return this.renderMarkdown(obj);
+                try { obj = JSON.parse(t); } catch (e) { return this.renderMarkdown(obj); }
+            }
+            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+                return this.renderMarkdown(String(data ?? ''));
+            }
+            const esc = (s) => String(s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            const label = (k) => k.replace(/_/g, ' ')
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+            const renderValue = (v) => {
+                if (Array.isArray(v)) {
+                    const items = v.map((item) => (item && typeof item === 'object')
+                        ? Object.keys(item).map((k) => '<strong>' + esc(label(k)) + ':</strong> ' + esc(typeof item[k] === 'object' ? JSON.stringify(item[k]) : String(item[k] ?? ''))).join('<br>')
+                        : esc(String(item ?? '')));
+                    return '<ul class="list-disc pl-5 space-y-1"><li>' + items.join('</li><li>') + '</li></ul>';
+                }
+                if (v && typeof v === 'object') {
+                    return '<ul class="list-disc pl-5 space-y-1">' + Object.keys(v).map((k) => {
+                        const sv = v[k];
+                        const inner = (sv && typeof sv === 'object')
+                            ? esc(JSON.stringify(sv))
+                            : (/^(https?:\/\/)/.test(String(sv ?? '')) ? esc(String(sv)) : this.renderMarkdown(esc(String(sv ?? ''))));
+                        if (sv && typeof sv === 'object' && 'score' in sv) {
+                            return '<li><strong>' + esc(label(k)) + ' ' + esc(String(sv.score)) + '/10:</strong> ' + esc(String(sv.reasoning ?? '')) + '</li>';
+                        }
+                        return '<li><strong>' + esc(label(k)) + ':</strong> ' + inner + '</li>';
+                    }).join('') + '</ul>';
+                }
+                return this.renderMarkdown(esc(String(v ?? '')));
+            };
+            return Object.keys(obj).map((k) => {
+                return '<div class="mb-3"><div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">'
+                    + esc(label(k)) + '</div><div class="text-sm text-slate-700 dark:text-slate-300">'
+                    + renderValue(obj[k]) + '</div></div>';
+            }).join('');
+        },
+
+        // Full-idea rendering for the detail modal: JSON blobs become
+        // labelled sections instead of a raw dump.
+        prettyContent(idea) {            if (!idea) return '';
+            const text = idea.content || idea.raw_content || '';
+            const t = String(text).trim();
+            if (!t.startsWith('{')) return this.renderMarkdown(t);
+            let obj;
+            try { obj = JSON.parse(t); } catch (e) { return this.renderMarkdown(t); }
+            if (!obj || typeof obj !== 'object') return this.renderMarkdown(t);
+            const esc = (s) => String(s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            const label = (k) => k.replace(/_/g, ' ')
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+            return Object.keys(obj).map((k) => {
+                const v = obj[k];
+                const body = (v && typeof v === 'object')
+                    ? '<code>' + esc(JSON.stringify(v, null, 2)) + '</code>'
+                    : this.renderMarkdown(esc(String(v ?? '')));
+                return '<div class="mb-3"><div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">'
+                    + esc(label(k)) + '</div><div class="text-sm text-slate-700 dark:text-slate-300">'
+                    + body + '</div></div>';
+            }).join('');
+        },
+
+        timeAgo(dateStr) {
+            if (!dateStr) return 'Never';
+            const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+            if (isNaN(s) || s < 0) return this.formatDate(dateStr);
+            if (s < 60) return 'just now';
+            if (s < 3600) {
+                const m = Math.floor(s / 60);
+                return m + (m === 1 ? ' min ago' : ' mins ago');
+            }
+            if (s < 86400) {
+                const h = Math.floor(s / 3600);
+                return h + (h === 1 ? ' hour ago' : ' hours ago');
+            }
+            const d = Math.floor(s / 86400);
+            if (d === 1) return 'yesterday';
+            if (d < 7) return d + ' days ago';
+            return this.formatDate(dateStr);
+        },
+
+        formatDuration(seconds) {
+            if (seconds === null || seconds === undefined) return '—';
+            const s = Math.round(seconds);
+            if (s < 60) return s + 's';
+            const m = Math.floor(s / 60);
+            const rest = s % 60;
+            return rest ? m + 'm ' + rest + 's' : m + 'm';
+        },
+
+        renderMarkdown(text) {
+            if (!text) return '';
+            // Simple markdown rendering for display
+            return text
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/`(.+?)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
+        },
+    };
+}
+</script>
+{% endblock %}

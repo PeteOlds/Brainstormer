@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}User Management - Brainstormer{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">User Management</h1>
+        <button onclick="openCreateModal()" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+            <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Create User
+        </button>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-4">
+        <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex-1">
+                <input type="text" id="search-input" placeholder="Search by email, name, or role..." 
+                    class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value="{{ search }}">
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <table class="w-full">
+            <thead>
+                <tr class="text-left text-sm text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                    <th class="pb-3 px-4">User</th>
+                    <th class="pb-3 px-4">Role</th>
+                    <th class="pb-3 px-4">Status</th>
+                    <th class="pb-3 px-4">Last Login</th>
+                    <th class="pb-3 px-4 text-right">Logins</th>
+                    <th class="pb-3 px-4">Created</th>
+                    <th class="pb-3 px-4 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700" id="users-tbody">
+                {% for u in pagination.items %}
+                <tr data-user-id="{{ u.id }}">
+                    <td class="py-4 px-4">
+                        <div>
+                            <p class="font-medium text-slate-900 dark:text-white">{{ u.email }}</p>
+                            {% if u.name %}
+                            <p class="text-sm text-slate-500 dark:text-slate-400">{{ u.name }}</p>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="py-4 px-4">
+                        <select class="role-select px-2 py-1 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700" 
+                            data-user-id="{{ u.id }}" data-original-value="{{ u.role.value }}" {% if current_user is defined and u.id == current_user.id %}disabled{% endif %}>
+                            <option value="USER" {% if u.role.value == 'USER' %}selected{% endif %}>User</option>
+                            <option value="ADMIN" {% if u.role.value == 'ADMIN' %}selected{% endif %}>Admin</option>
+                        </select>
+                    </td>
+                    <td class="py-4 px-4">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="status-toggle sr-only peer" 
+                                data-user-id="{{ u.id }}" {% if u.is_active %}checked{% endif %} {% if current_user is defined and u.id == current_user.id %}disabled{% endif %}>
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                    </td>
+                    <td class="py-4 px-4 text-sm text-slate-500 dark:text-slate-400">
+                        {% if u.last_login_at %}{{ u.last_login_at.strftime('%Y-%m-%d %H:%M') }}{% else %}Never{% endif %}
+                    </td>
+                    <td class="py-4 px-4 text-sm tabular-nums text-slate-500 dark:text-slate-400 text-right">
+                        {{ u.login_count or 0 }}
+                    </td>
+                    <td class="py-4 px-4 text-sm text-slate-500 dark:text-slate-400">
+                        {{ u.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    </td>
+                    <td class="py-4 px-4 text-right">
+                        <div class="flex items-center justify-end space-x-2">
+                            <button onclick="deleteUser('{{ u.id }}', '{{ u.email }}')" 
+                                class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm"
+                                {% if current_user is defined and u.id == current_user.id %}disabled class="opacity-50 cursor-not-allowed"{% endif %}>
+                                Deactivate
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        {% if pagination.pages > 1 %}
+        <div class="px-4 py-4 border-t border-slate-200 dark:border-slate-700">
+            <nav class="flex items-center justify-between">
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Page {{ pagination.page }} of {{ pagination.pages }} ({{ pagination.total }} total)
+                </p>
+                <div class="flex space-x-2">
+                    {% if pagination.has_prev %}
+                    <a href="?page={{ pagination.prev_num }}{% if search %}&search={{ search }}{% endif %}" 
+                        class="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                        Previous
+                    </a>
+                    {% endif %}
+                    {% if pagination.has_next %}
+                    <a href="?page={{ pagination.next_num }}{% if search %}&search={{ search }}{% endif %}" 
+                        class="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Search with debounce
+    let searchTimeout;
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                const url = new URL(window.location);
+                if (e.target.value) {
+                    url.searchParams.set('search', e.target.value);
+                } else {
+                    url.searchParams.delete('search');
+                }
+                url.searchParams.set('page', '1');
+                window.location.href = url.toString();
+            }, 300);
+        });
+    }
+
+    // Role select change
+    document.querySelectorAll('.role-select').forEach(select => {
+        select.addEventListener('change', async (e) => {
+            const userId = e.target.dataset.userId;
+            const role = e.target.value;
+            try {
+                const token = localStorage.getItem('access_token');
+                const res = await fetch('/api/v1/admin/users/' + userId, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ role })
+                });
+                if (!res.ok) {
+                    alert('Failed to update role');
+                    e.target.value = e.target.dataset.originalValue;
+                }
+            } catch (e) {
+                console.error('Failed to update role:', e);
+                e.target.value = e.target.dataset.originalValue;
+            }
+        });
+    });
+
+    // Status toggle
+    document.querySelectorAll('.status-toggle').forEach(toggle => {
+        toggle.addEventListener('change', async (e) => {
+            const userId = e.target.dataset.userId;
+            const isActive = e.target.checked;
+            try {
+                const token = localStorage.getItem('access_token');
+                const res = await fetch('/api/v1/admin/users/' + userId, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ is_active: isActive })
+                });
+                if (!res.ok) {
+                    alert('Failed to update status');
+                    e.target.checked = !isActive;
+                }
+            } catch (e) {
+                console.error('Failed to update status:', e);
+                e.target.checked = !isActive;
+            }
+        });
+    });
+
+    // Delete user
+    window.deleteUser = async function(userId, email) {
+        if (!confirm('Are you sure you want to deactivate ' + email + '?')) return;
+        try {
+            const token = localStorage.getItem('access_token');
+            const res = await fetch('/api/v1/admin/users/' + userId, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert('Failed to deactivate user');
+            }
+        } catch (e) {
+            console.error('Failed to delete user:', e);
+            alert('Failed to deactivate user');
+        }
+    };
+
+    // Create user modal
+    window.openCreateModal = function() {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 z-50 overflow-y-auto';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', 'Create user');
+        modal.innerHTML = `
+            <div class="flex min-h-full items-center justify-center p-4">
+                <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" onclick="this.parentElement.remove()"></div>
+                <div class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-lg shadow-2xl border-2 border-slate-300 dark:border-slate-500 p-6">
+                    <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-4">Create User</h2>
+                    <form id="create-user-form">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                            <input type="email" name="email" required class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
+                            <input type="text" name="name" class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
+                            <input type="password" name="password" required class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Role</label>
+                            <select name="role" class="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="USER">User</option>
+                                <option value="ADMIN">Admin</option>
+                            </select>
+                        </div>
+                        <div class="flex justify-end space-x-3 mt-6">
+                            <button type="button" onclick="this.closest('.fixed').remove()" class="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                            <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">Create</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.querySelector('#create-user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            try {
+                const token = localStorage.getItem('access_token');
+                const res = await fetch('/api/v1/admin/users/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify(data)
+                });
+                if (res.ok) {
+                    modal.remove();
+                    location.reload();
+                } else {
+                    const err = await res.json();
+                    alert(err.message || 'Failed to create user');
+                }
+            } catch (e) {
+                console.error('Failed to create user:', e);
+                alert('Failed to create user');
+            }
+        });
+    };
+});
+</script>
+{% endblock %}
