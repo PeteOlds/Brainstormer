@@ -56,7 +56,6 @@ Coverage must stay at or above 80%.
 - [Install & configuration](docs/install-config.md)
 - [User guide](docs/user-guide.md)
 - [Security & Privacy Guardrails](Guardrail.md)
-- [Best Practice Updates](BEST_PRACTICE_UPDATES.md)
 - [Product Requirements](PRD.md)
 
 ## API (Planned)

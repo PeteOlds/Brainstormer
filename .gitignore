@@ -38,3 +38,6 @@ instance/
 
 # Personal notes vault (Obsidian)
 Brainstormer/
+
+# Never publish upstream docs
+BEST_PRACTICE_UPDATES.md

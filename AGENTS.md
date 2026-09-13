@@ -17,10 +17,10 @@ Every build must:
 - Never commit `.env` or real secrets
 - Semantic commit prefixes (feat:, fix:, docs:, refactor:, test:, chore:)
 - **Security & Privacy**: All changes must pass `Guardrail.md` checklist
-- **LLM Integration**: Follow patterns in `BEST_PRACTICE_UPDATES.md` sections 1-3
+- **LLM Integration**: Follow the `ollama-integration`, `structured-output`, and `prompt-engineering` skills
 
 ## Project-Specific Requirements
-- **Background Jobs**: Celery + Redis (see `BEST_PRACTICE_UPDATES.md` §1)
+- **Background Jobs**: Celery + Redis (see `celery-tasks` skill)
 - **Ollama Client**: `app/services/ollama_client.py` with JSON enforcement; `@token_required` not `@admin_required` on `/ollama/models`
 - **Prompt Templates**: File-based in `app/prompt_templates/` (not hardcoded)
 - **Response Validation**: Pydantic schemas in `app/schemas/ollama_schemas.py`
@@ -47,6 +47,10 @@ Every build must:
 - `flask-testing` — test fixtures
 - `docker` — container patterns
 - `ci-cd` — GitHub Actions pipeline
+- `celery-tasks` — background jobs, retry, worker topology
+- `ollama-integration` — local LLM client patterns
+- `structured-output` — Pydantic validation of model responses
+- `prompt-engineering` — file-based prompt templates
 
 ## Guardrails Reference
 See `Guardrail.md` for non-negotiable security/privacy rules. Every PR must satisfy the checklist in §13.
