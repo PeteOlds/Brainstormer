@@ -280,6 +280,99 @@ class TestGenerateIdeaTask:
             generate_idea("00000000-0000-0000-0000-000000000000")
 
 
+class TestSecondaryActionRobustness:
+    def _seed(self, db, email="admin_sec@test.com", temperature=0.9):
+        from app.models import User, PromptConfig, Idea, UserRole
+        admin = User(email=email, role=UserRole.ADMIN)
+        admin.set_password("admin123")
+        db.session.add(admin)
+        db.session.commit()
+        prompt = PromptConfig(
+            title="Sec", prompt_body="Test", interval_minutes=60,
+            model_name="llama3:8b", temperature=temperature,
+            created_by_id=admin.id)
+        db.session.add(prompt)
+        db.session.commit()
+        idea = Idea(
+            reference_code="IDEA-S1",
+            prompt_title="Test Prompt",
+            raw_content="AI-powered inventory management for small retailers.",
+            prompt_config_id=prompt.id)
+        db.session.add(idea)
+        db.session.commit()
+        return idea
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_secondary_runs_cold(self, mock_client_class, celery_app):
+        """Analytical actions cap temperature at 0.3 (prompt had 0.9)."""
+        import json as _json
+        with celery_app.app_context():
+            from app.tasks.ollama_tasks import run_secondary_action
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.generate_sync.return_value = {
+                "response": _json.dumps({
+                    "elevator_pitch": "AI inventory management refined",
+                    "target_audience": "Small retail businesses",
+                    "core_value_proposition": "Automated stock optimization",
+                    "monetization_strategy": "SaaS subscription"}),
+                "done": True}
+            from app.extensions import db
+            idea = self._seed(db)
+            run_secondary_action(str(idea.id), "REFINE")
+            opts = mock_client.generate_sync.call_args.kwargs["options"]
+            assert opts["temperature"] == 0.3
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_validation_error_strict_retry(self, mock_client_class, celery_app):
+        """First bad schema output triggers one strict retry; success stored."""
+        import json as _json
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import SecondaryActionResult
+            from app.tasks.ollama_tasks import run_secondary_action
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            good = _json.dumps({
+                "elevator_pitch": "AI inventory management refined",
+                "target_audience": "Small retail businesses",
+                "core_value_proposition": "Automated stock optimization",
+                "monetization_strategy": "SaaS subscription"})
+            mock_client.generate_sync.side_effect = [
+                {"response": _json.dumps({"wrong": "shape"}), "done": True},
+                {"response": good, "done": True}]
+            idea = self._seed(db, email="admin_sec2@test.com")
+            run_secondary_action(str(idea.id), "REFINE")
+            assert mock_client.generate_sync.call_count == 2
+            retry_prompt = mock_client.generate_sync.call_args_list[1].kwargs["prompt"]
+            assert "FAILED validation" in retry_prompt
+            assert SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="REFINE").count() == 1
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_fenced_json_accepted(self, mock_client_class, celery_app):
+        """Markdown fences around valid JSON no longer fail validation."""
+        import json as _json
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import SecondaryActionResult
+            from app.tasks.ollama_tasks import run_secondary_action
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            good = _json.dumps({
+                "elevator_pitch": "AI inventory management refined",
+                "target_audience": "Small retail businesses",
+                "core_value_proposition": "Automated stock optimization",
+                "monetization_strategy": "SaaS subscription"})
+            mock_client.generate_sync.return_value = {
+                "response": "```json\n" + good + "\n```", "done": True}
+            idea = self._seed(db, email="admin_sec3@test.com")
+            run_secondary_action(str(idea.id), "REFINE")
+            assert mock_client.generate_sync.call_count == 1
+            assert SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="REFINE").count() == 1
+
+
 class TestRunSecondaryActionTask:
     @patch('app.tasks.ollama_tasks.OllamaClient')
     def test_run_secondary_action_refine(self, mock_client_class, celery_app):

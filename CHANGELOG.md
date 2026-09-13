@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-09-13
+### Fixed
+- Secondary actions now run cold (temperature capped at 0.3): analytical calls inherited creative temps and garbled schemas
+- Validation-feedback retry: a schema failure retries once with the errors fed back instead of blindly repeating; markdown fences stripped before validation
+
 ## [0.5.0] - 2026-09-13
 ### Added
 - Prompt health (PRD §9.2): `GET /api/v1/admin/prompts/health` with 7d stats (runs, ideas/run, discard %, avg score/feasibility) and HIGH_DISCARD / STARVED / LOW_FEASIBILITY flags linking to edit form + ideas; Activity panel section; `?edit=` deep link auto-opens the prompt edit modal

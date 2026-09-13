@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 import structlog
+from pydantic import ValidationError
 
 from app.tasks import celery, BaseTask
 from app.services.ollama_client import OllamaClient
@@ -255,6 +256,29 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         db.session.commit()
 
     client = OllamaClient()
+
+    def _retries_so_far():
+        try:
+            return self.request.retries or 0
+        except AttributeError:
+            return 0  # direct call outside a worker (tests)
+
+    def _call_and_validate(prompt_text):
+        import re
+        response = client.generate_sync(
+            model=model,
+            prompt=prompt_text,
+            system=base_prompt,
+            format="json",
+            options=options,
+            keep_alive=keep_alive,
+        )
+        text = (response["response"] or "").strip()
+        # Strip markdown fences small models love to add.
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+        return validate_ollama_output(action_type, text)
+
     try:
         # Get prompt template
         prompt_template = get_prompt_template(action_type)
@@ -263,18 +287,32 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         model = model_override or idea.prompt_config.model_name if idea.prompt_config else "llama3:8b"
         prompt_config = idea.prompt_config
 
-        # Call Ollama (same generation params as scheduled runs when known).
-        response = client.generate_sync(
-            model=model,
-            prompt=user_prompt,
-            system=base_prompt,
-            format="json",
-            options=_generation_options(prompt_config) if prompt_config else None,
-            keep_alive=(prompt_config.keep_alive if prompt_config and prompt_config.keep_alive else "2h"),
-        )
+        # Analytical actions run cold: precision over creativity. Cap the
+        # prompt's temperature at 0.3 (a lower setting is respected).
+        options = _generation_options(prompt_config) if prompt_config else None
+        if options is None:
+            options = {"temperature": 0.3}
+        else:
+            options["temperature"] = min(options.get("temperature", 0.3), 0.3)
+        keep_alive = (prompt_config.keep_alive
+                      if prompt_config and prompt_config.keep_alive else "2h")
 
-        # Validate response
-        validated = validate_ollama_output(action_type, response["response"])
+        # Call Ollama (same generation params as scheduled runs when known).
+        try:
+            validated = _call_and_validate(user_prompt)
+        except ValidationError as e:
+            # One strict retry: show the model its schema errors. Blind
+            # autoretry below would just repeat the identical prompt.
+            if _retries_so_far() > 0:
+                raise
+            logger.warning("validation_failed_retrying", idea_id=idea_id,
+                           action_type=action_type, error=str(e)[:500])
+            strict_prompt = (
+                user_prompt
+                + "\n\nYour previous output FAILED validation with these errors:\n"
+                + str(e)[:1500]
+                + "\nOutput ONLY valid JSON matching the schema. No prose, no markdown fences.")
+            validated = _call_and_validate(strict_prompt)
 
         # Store result
         result = SecondaryActionResult(
