@@ -609,6 +609,36 @@ class TestAdminEndpoints:
         assert "ideas" in data
         assert "prompts" in data
 
+    def test_prompts_health_flags(self, admin_client, app, admin_user):
+        with app.app_context():
+            from app.models import Idea, IdeaStatus, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            bad = PromptConfig(
+                title="Bad Prompt", prompt_body="Test", interval_minutes=60,
+                model_name="llama3:8b", is_active=True, created_by_id=admin.id)
+            db.session.add(bad)
+            db.session.commit()
+            for i in range(3):
+                db.session.add(Idea(
+                    reference_code=f"IDEA-H{i}", prompt_title="T",
+                    raw_content="c", status="DISCARDED", prompt_config_id=bad.id))
+            db.session.add(PromptConfig(
+                title="Starved Prompt", prompt_body="Test", interval_minutes=60,
+                model_name="llama3:8b", is_active=True, created_by_id=admin.id))
+            db.session.commit()
+
+        resp = admin_client.get("/api/v1/admin/prompts/health")
+        assert resp.status_code == 200
+        rows = {p["title"]: p for p in resp.get_json()["data"]["prompts"]}
+        assert {c["code"] for c in rows["Bad Prompt"]["flags"]} == {"HIGH_DISCARD"}
+        assert rows["Bad Prompt"]["discard_pct"] == 100
+        assert {c["code"] for c in rows["Starved Prompt"]["flags"]} == {"STARVED"}
+        flag = rows["Bad Prompt"]["flags"][0]
+        assert flag["edit"].startswith("/prompts?edit=")
+        assert flag["ideas"].startswith("/ideas?prompt=")
+
     def test_get_stats_user_forbidden(self, client, auth_user):
         _email, token = auth_user
         resp = client.get("/api/v1/admin/stats", headers={"Authorization": f"Bearer {token}"})

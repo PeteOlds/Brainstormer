@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-09-13
+### Added
+- Prompt health (PRD §9.2): `GET /api/v1/admin/prompts/health` with 7d stats (runs, ideas/run, discard %, avg score/feasibility) and HIGH_DISCARD / STARVED / LOW_FEASIBILITY flags linking to edit form + ideas; Activity panel section; `?edit=` deep link auto-opens the prompt edit modal
+
 ## [0.4.0] - 2026-09-13
 ### Added
 - Prompt memory (PRD §9.1): every run renders Avoid (last 10 ideas) + Explore (top-voted themes) sections from `${MEMORY_AVOID}` / `${MEMORY_EXPLORE}`; "none yet" on new prompts; recomputed per run, never stored

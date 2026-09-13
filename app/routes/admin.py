@@ -131,6 +131,70 @@ def admin_create_user(user):
     return api_created(new_user.to_dict())
 
 
+@bp.route("/admin/prompts/health", methods=["GET"])
+@admin_required
+def prompts_health(user):
+    """Per-prompt health over the trailing 7 days (PRD §9.2).
+
+    Flags direct human attention; nothing here mutates prompts.
+    """
+    return api_ok({"prompts": _prompts_health()})
+
+
+def _prompts_health():
+    from datetime import datetime, timezone, timedelta
+    from app.models import IdeaStatus, PromptRun
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    report = []
+    for prompt in PromptConfig.query.filter_by(is_active=True).order_by(PromptConfig.title).all():
+        runs_7d = PromptRun.query.filter(
+            PromptRun.prompt_config_id == prompt.id,
+            PromptRun.created_at >= cutoff).count()
+        ideas_q = Idea.query.filter(
+            Idea.prompt_config_id == prompt.id,
+            Idea.created_at >= cutoff)
+        ideas_7d = ideas_q.count()
+        discarded = ideas_q.filter(Idea.status == IdeaStatus.DISCARDED).count()
+        discard_pct = round(discarded / ideas_7d * 100) if ideas_7d else None
+        avg_net = db.session.query(func.avg(Idea.net_score)).filter(
+            Idea.prompt_config_id == prompt.id,
+            Idea.created_at >= cutoff).scalar()
+        avg_feas = db.session.query(func.avg(Idea.feasibility_score)).filter(
+            Idea.prompt_config_id == prompt.id,
+            Idea.created_at >= cutoff,
+            Idea.feasibility_score.isnot(None)).scalar()
+
+        flags = []
+        links = {"edit": f"/prompts?edit={prompt.id}",
+                 "ideas": f"/ideas?prompt={prompt.id}"}
+        if discard_pct is not None and discard_pct > 70:
+            flags.append({"code": "HIGH_DISCARD",
+                          "message": f"{discard_pct:.0f}% discarded — consider retiring or reframing.",
+                          **links})
+        if ideas_7d == 0:
+            flags.append({"code": "STARVED",
+                          "message": "No ideas in 7 days — schedule starved or runs failing.",
+                          **links})
+        if avg_feas is not None and float(avg_feas) < 5:
+            flags.append({"code": "LOW_FEASIBILITY",
+                          "message": f"Avg feasibility {float(avg_feas):.1f} — concepts may be too ambitious.",
+                          **links})
+        report.append({
+            "id": str(prompt.id),
+            "title": prompt.title,
+            "model_name": prompt.model_name,
+            "runs_7d": runs_7d,
+            "ideas_7d": ideas_7d,
+            "ideas_per_run": round(ideas_7d / runs_7d, 2) if runs_7d else None,
+            "discard_pct": discard_pct,
+            "avg_net_score": round(float(avg_net), 1) if avg_net is not None else None,
+            "avg_feasibility": round(float(avg_feas), 1) if avg_feas is not None else None,
+            "flags": flags,
+        })
+    return report
+
+
 @bp.route("/admin/prompts", methods=["GET"])
 @admin_required
 def admin_prompts(user):
@@ -339,6 +403,7 @@ def activity_stats(user):
         "ideas_by_prompt": ideas_by_prompt,
         "ideas_by_status": ideas_by_status,
         "model_timings": model_timings,
+        "prompt_health": _prompts_health(),
     })
 
 

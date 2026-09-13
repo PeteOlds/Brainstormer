@@ -201,6 +201,34 @@
         </div>
     </div>
 
+    <div x-show="!modelFilter" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Prompt health</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Trailing 7 days — flags link to the prompt and its ideas</p>
+        <div x-show="loading" class="py-4 text-center text-sm text-slate-500">Loading…</div>
+        <div x-show="!loading" class="space-y-3">
+            <template x-for="p in promptHealth" :key="p.id">
+                <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                    <div class="flex items-baseline justify-between gap-2 text-sm">
+                        <span class="font-medium text-slate-900 dark:text-white truncate" x-text="p.title"></span>
+                        <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400" x-text="p.runs_7d + ' runs · ' + p.ideas_7d + ' ideas'"></span>
+                    </div>
+                    <div x-show="p.flags.length" class="mt-2 space-y-1.5">
+                        <template x-for="f in p.flags" :key="f.code">
+                            <div class="flex flex-wrap items-center gap-2 text-xs">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" x-text="f.code.replace(/_/g, ' ')"></span>
+                                <span class="text-slate-600 dark:text-slate-400" x-text="f.message"></span>
+                                <a :href="f.edit" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Edit prompt</a>
+                                <a :href="f.ideas" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline">View ideas</a>
+                            </div>
+                        </template>
+                    </div>
+                    <p x-show="!p.flags.length" class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Healthy</p>
+                </div>
+            </template>
+            <p x-show="!loading && !promptHealth.length" class="text-sm text-slate-500">No active prompts.</p>
+        </div>
+    </div>
+
     <div x-show="!modelFilter" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Activity stream -->
         <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
@@ -266,6 +294,7 @@ function activityApp() {
         perf: { total_runs: null, pending_count: 0, by_status: {}, success_rate: null, avg_seconds: null, per_model: [], last_error: null },
         ideasByStatus: {},
         modelTimings: [],
+        promptHealth: [],
         popularity: { prompts: [], top_ideas: [] },
         ideasByModel: [],
         ideasByPrompt: [],
@@ -311,6 +340,7 @@ function activityApp() {
                 this.ideasByPrompt = payload.ideas_by_prompt || [];
                 this.ideasByStatus = payload.ideas_by_status || {};
                 this.modelTimings = payload.model_timings || [];
+                this.promptHealth = payload.prompt_health || [];
                 this.loadError = false;
             } catch (e) {
                 console.error('Failed to load activity:', e);

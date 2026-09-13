@@ -536,13 +536,19 @@ function initPromptsPage() {
             }
         },
         
-        init() {
+        async init() {
             if (!localStorage.getItem('access_token')) { window.location.href = '/login'; return; }
             this.$watch('filters.status', () => { this.currentPage = 1; this.applyFilters(); });
             this.$watch('filters.search', () => { this.currentPage = 1; this.applyFilters(); });
-            this.loadPrompts();
+            await this.loadPrompts();
             this.loadModels();
-            this.checkAdmin();
+            await this.checkAdmin();
+            // Deep link from prompt health flags (?edit=<prompt_id>).
+            const editId = new URLSearchParams(window.location.search).get('edit');
+            if (editId) {
+                const target = (this.prompts || []).find((p) => p.id === editId);
+                if (target) this.editPrompt(target);
+            }
             // Live updates: pick up pending → done transitions by itself.
             setInterval(() => {
                 if (!this.modalOpen && document.visibilityState === 'visible' && !this.loading) {
