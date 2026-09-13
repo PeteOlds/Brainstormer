@@ -41,3 +41,6 @@ Brainstormer/
 
 # Never publish upstream docs
 BEST_PRACTICE_UPDATES.md
+
+# Obsidian vault state
+.obsidian/
