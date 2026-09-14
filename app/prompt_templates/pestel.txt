@@ -1,0 +1,30 @@
+Act as an expert business analyst and strategic advisor. Conduct a comprehensive PESTEL analysis for the product idea below. Infer the target industry/market from the idea itself.
+
+### PRODUCT IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+
+### INSTRUCTIONS:
+1. Evaluate the macro-environmental landscape across each of the six dimensions with specific, actionable depth:
+   - Political: government policies, tax guidelines, trade restrictions, political stability, upcoming legislative changes.
+   - Economic: inflation trends, interest rates, exchange rates, disposable income levels, broader economic cycles affecting purchasing power.
+   - Social: shifting cultural attitudes, demographic shifts, lifestyle trends, buying habits, social values.
+   - Technological: emerging tech trends, automation, R&D breakthroughs, intellectual property protection, infrastructure dependencies.
+   - Environmental: ecological regulations, climate impacts, sustainability expectations, waste mandates, carbon footprint.
+   - Legal: consumer protection laws, data privacy regulations (e.g. GDPR/privacy acts), employment standards, industry compliance.
+2. Conclude with a strategic risk summary: top external opportunities and threats, plus two to three prioritized recommendations for navigating these macro-environmental factors.
+3. Output STRICTLY a valid JSON object matching the schema below. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
+
+### OUTPUT JSON SCHEMA:
+{
+  "political": "string (policies, tax, trade, stability, legislation)",
+  "economic": "string (inflation, rates, income, cycles, purchasing power)",
+  "social": "string (culture, demographics, lifestyle, habits, values)",
+  "technological": "string (trends, automation, R&D, IP, infrastructure)",
+  "environmental": "string (regulations, climate, sustainability, waste, carbon)",
+  "legal": "string (consumer protection, privacy, employment, compliance)",
+  "opportunities": ["external opportunity 1", "external opportunity 2"],
+  "threats": ["external threat 1", "external threat 2"],
+  "recommendations": ["prioritized recommendation 1", "prioritized recommendation 2"]
+}

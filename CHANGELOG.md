@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-09-14
+### Added
+- Admin-only PESTEL analysis: new `PESTEL` action (flat-string schema), `pestel.txt` template, registry entry, 3-dot menu + chips support, `actiontype` enum extended
+
 ## [0.6.0] - 2026-09-14
 ### Added
 - Admin-only Porter's Five Forces analysis: new `FIVE_FORCES` action (flat-string schema tuned for small models), `forces.txt` template, registry entry, 3-dot menu + chips support, `actiontype` enum extended

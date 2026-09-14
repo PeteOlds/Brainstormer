@@ -202,6 +202,13 @@ class TestOllamaSchemas:
         with _pytest.raises(Exception):
             validate_ollama_output("FIVE_FORCES", '{"competitive_rivalry": "x"}')
 
+    def test_validate_pestel_output(self):
+        from app.schemas.ollama_schemas import PestelOutput
+        json_str = '{"political": "Stable policy environment with supportive startup legislation in place.", "economic": "Moderate inflation with steady consumer spending power overall.", "social": "Growing sustainability culture among younger demographics today.", "technological": "Rapid AI tooling advances lower build costs significantly.", "environmental": "Tightening packaging rules raise compliance costs somewhat.", "legal": "Standard consumer protection plus GDPR-style privacy duties.", "opportunities": ["Green subsidies"], "threats": ["Recession"], "recommendations": ["Launch in subsidised regions"]}'
+        result = validate_ollama_output("PESTEL", json_str)
+        assert isinstance(result, PestelOutput)
+        assert result.opportunities == ["Green subsidies"]
+
     def test_validate_ollama_output_invalid(self):
         with pytest.raises(Exception):
             validate_ollama_output("REFINE", "invalid json")

@@ -568,6 +568,33 @@ class TestActionEndpoints:
             assert resp.status_code == 202
             mock_run.delay.assert_called_once()
 
+    def test_run_action_pestel(self, admin_client, app, admin_user, admin_prompt):
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-PE1",
+                prompt_title="Test",
+                raw_content="Test content for pestel",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        with patch('app.tasks.ollama_tasks.run_secondary_action') as mock_run:
+            mock_run.delay.return_value.id = "fake-pestel-job-id"
+            resp = admin_client.post(f"/api/v1/ideas/{idea_id}/actions", json={
+                "action_type": "PESTEL"
+            })
+            assert resp.status_code == 202
+            mock_run.delay.assert_called_once()
+
     def test_run_action_user_forbidden(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
         with app.app_context():

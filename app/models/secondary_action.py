@@ -11,6 +11,7 @@ class ActionType(str, Enum):
     COMPETITORS = "COMPETITORS"
     FEASIBILITY_SCORE = "FEASIBILITY_SCORE"
     FIVE_FORCES = "FIVE_FORCES"
+    PESTEL = "PESTEL"
 
 
 class SecondaryActionResult(db.Model):

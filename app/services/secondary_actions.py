@@ -41,6 +41,13 @@ ACTION_REGISTRY = [
         "template": "forces",
         "done_label": "Assessed",
     },
+    {
+        "key": "PESTEL",
+        "label": "PESTEL",
+        "description": "Macro-environment scan: political, economic, social, technological, environmental, legal, plus opportunities, threats and recommendations.",
+        "template": "pestel",
+        "done_label": "Scanned",
+    },
 ]
 
 _ACTION_INDEX = {entry["key"]: entry for entry in ACTION_REGISTRY}

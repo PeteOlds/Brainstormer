@@ -349,6 +349,32 @@ class TestSecondaryActionRobustness:
                 idea_id=idea.id, action_type="FIVE_FORCES").count() == 1
 
     @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_run_secondary_action_pestel(self, mock_client_class, celery_app):
+        import json as _json
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import SecondaryActionResult
+            from app.tasks.ollama_tasks import run_secondary_action
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.generate_sync.return_value = {
+                "response": _json.dumps({
+                    "political": "Stable policy environment with supportive startup legislation.",
+                    "economic": "Moderate inflation with steady consumer spending power.",
+                    "social": "Growing sustainability culture among younger demographics.",
+                    "technological": "Rapid AI tooling advances lower build costs.",
+                    "environmental": "Tightening packaging rules raise compliance costs.",
+                    "legal": "Standard consumer protection plus privacy duties.",
+                    "opportunities": ["Green subsidies"],
+                    "threats": ["Recession"],
+                    "recommendations": ["Launch in subsidised regions"]}),
+                "done": True}
+            idea = self._seed(db, email="admin_sec5@test.com")
+            run_secondary_action(str(idea.id), "PESTEL")
+            assert SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="PESTEL").count() == 1
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
     def test_validation_error_strict_retry(self, mock_client_class, celery_app):
         """First bad schema output triggers one strict retry; success stored."""
         import json as _json

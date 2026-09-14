@@ -55,12 +55,26 @@ class FiveForcesOutput(BaseModel):
     recommendations: List[str]
 
 
+class PestelOutput(BaseModel):
+    """PESTEL analysis — same flat-shape rule as FiveForcesOutput."""
+    political: str = Field(..., min_length=20)
+    economic: str = Field(..., min_length=20)
+    social: str = Field(..., min_length=20)
+    technological: str = Field(..., min_length=20)
+    environmental: str = Field(..., min_length=20)
+    legal: str = Field(..., min_length=20)
+    opportunities: List[str]
+    threats: List[str]
+    recommendations: List[str]
+
+
 # Action type to schema mapping
 _ACTION_SCHEMAS = {
     "REFINE": RefineOutput,
     "COMPETITORS": CompetitorsOutput,
     "FEASIBILITY_SCORE": FeasibilityOutput,
     "FIVE_FORCES": FiveForcesOutput,
+    "PESTEL": PestelOutput,
 }
 
 
