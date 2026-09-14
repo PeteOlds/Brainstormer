@@ -12,7 +12,9 @@ def test_health_ok(client):
 
 def test_health_degraded_without_redis(client):
     # Intended prod behaviour: Redis down -> 503 degraded (not 200).
-    res = client.get("/api/health")
+    # Stubbed: a real Redis may be reachable from some dev hosts.
+    with patch("app.routes.health.check_redis", return_value=False):
+        res = client.get("/api/health")
     assert res.status_code == 503
     assert res.get_json()["data"]["status"] == "degraded"
 
