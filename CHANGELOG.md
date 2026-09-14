@@ -8,6 +8,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Admin-only Porter's Five Forces analysis: new `FIVE_FORCES` action (flat-string schema tuned for small models), `forces.txt` template, registry entry, 3-dot menu + chips support, `actiontype` enum extended
 
+## [0.5.2] - 2026-09-14
+### Fixed
+- Circular import at startup (`celery_auto_init_skipped` noise): tasks import is lazy inside `create_app` — auto-init now succeeds with all tasks registered
+- Beat liveness: new `beat_heartbeat` task (60s) stamping Redis; `/api/health` gains a `scheduler` check (missing key = boot grace, stale > 3 min = degraded)
+
 ## [0.5.1] - 2026-09-13
 ### Fixed
 - Secondary actions now run cold (temperature capped at 0.3): analytical calls inherited creative temps and garbled schemas

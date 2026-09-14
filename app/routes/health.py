@@ -29,6 +29,18 @@ def check_redis() -> bool:
         return False
 
 
+def check_scheduler() -> bool:
+    """Check beat liveness via its heartbeat key (see maintenance_tasks)."""
+    try:
+        from app.tasks.maintenance_tasks import check_beat_heartbeat
+        redis_client = current_app.extensions.get("redis_client")
+        if redis_client is None:
+            return False
+        return check_beat_heartbeat(redis_client)
+    except Exception:
+        return False
+
+
 def check_database() -> bool:
     """Check if database is reachable."""
     try:
@@ -44,6 +56,7 @@ def health():
     checks = {
         "database": check_database(),
         "redis": check_redis(),
+        "scheduler": check_scheduler(),
     }
     # Ollama check is async, do it separately for ready endpoint
     status = "healthy" if all(checks.values()) else "degraded"

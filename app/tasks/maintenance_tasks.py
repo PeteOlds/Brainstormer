@@ -69,3 +69,45 @@ def update_next_run_times(self):
     db.session.commit()
     logger.info("updated_next_run_times", updated=updated)
     return {"updated": updated}
+
+HEARTBEAT_KEY = "brainstormer:beat_heartbeat"
+HEARTBEAT_MAX_AGE = 180  # seconds; beat ticks every 60s
+
+
+def write_beat_heartbeat(redis_client) -> str:
+    """Stamp scheduler liveness. Returns the stored ISO timestamp."""
+    now = datetime.now(timezone.utc).isoformat()
+    redis_client.set(HEARTBEAT_KEY, now)
+    return now
+
+
+def check_beat_heartbeat(redis_client) -> bool:
+    """True when beat ticked recently. Missing key = grace (fresh boot)."""
+    try:
+        raw = redis_client.get(HEARTBEAT_KEY)
+    except Exception:
+        return False
+    if not raw:
+        return True
+    if isinstance(raw, bytes):
+        raw = raw.decode()
+    try:
+        stamped = datetime.fromisoformat(raw)
+    except (ValueError, TypeError):
+        return False
+    if stamped.tzinfo is None:
+        stamped = stamped.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - stamped).total_seconds() < HEARTBEAT_MAX_AGE
+
+
+@celery.task(bind=True, base=BaseTask, name="app.tasks.maintenance_tasks.beat_heartbeat")
+def beat_heartbeat(self):
+    """Scheduler liveness stamp (runs on beat, executes on default queue)."""
+    from flask import current_app
+    redis_client = current_app.extensions.get("redis_client")
+    if redis_client is None:
+        logger.warning("heartbeat_no_redis")
+        return {"status": "no_redis"}
+    stamped = write_beat_heartbeat(redis_client)
+    logger.info("beat_heartbeat", at=stamped)
+    return {"status": "ok", "at": stamped}

@@ -59,6 +59,10 @@ def init_celery(app):
                 "task": "app.tasks.ollama_tasks.check_due_prompts",
                 "schedule": 60.0,
             },
+            "beat-heartbeat": {
+                "task": "app.tasks.maintenance_tasks.beat_heartbeat",
+                "schedule": 60.0,
+            },
         },
     )
 

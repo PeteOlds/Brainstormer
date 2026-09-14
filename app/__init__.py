@@ -3,7 +3,10 @@ from flask import Flask, jsonify
 
 from .config import config, Config
 from .extensions import db, migrate, limiter, talisman, init_extensions
-from .tasks import init_celery
+# NOTE: `from .tasks import init_celery` must stay lazy (inside create_app
+# below). A top-level import re-triggers this module mid-execution via the
+# app.tasks auto-init, causing a circular import that left workers silently
+# half-initialized.
 
 
 def create_app(config_name: str | None = None, init_celery_app: bool = True):

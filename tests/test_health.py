@@ -2,9 +2,10 @@ from unittest.mock import patch
 
 
 def test_health_ok(client):
-    # No real Redis in the test env; stub the check and verify the
+    # No real Redis/beat in the test env; stub the checks and verify the
     # endpoint reports healthy when all dependencies pass.
-    with patch("app.routes.health.check_redis", return_value=True):
+    with patch("app.routes.health.check_redis", return_value=True), \
+         patch("app.routes.health.check_scheduler", return_value=True):
         res = client.get("/api/health")
     assert res.status_code == 200
     assert res.get_json()["data"]["status"] == "healthy"

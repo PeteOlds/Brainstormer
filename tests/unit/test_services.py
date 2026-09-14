@@ -225,3 +225,50 @@ class TestTokenLifetime:
             payload = pyjwt.decode(tokens["access_token"], options={"verify_signature": False})
             expected = app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
             assert payload["exp"] - payload["iat"] == expected
+
+
+class TestBeatHeartbeat:
+    def test_write_then_check_fresh(self):
+        from app.tasks.maintenance_tasks import (
+            write_beat_heartbeat, check_beat_heartbeat, HEARTBEAT_KEY)
+
+        class FakeRedis:
+            def __init__(self):
+                self.d = {}
+            def set(self, k, v):
+                self.d[k] = v
+            def get(self, k):
+                return self.d.get(k)
+
+        r = FakeRedis()
+        write_beat_heartbeat(r)
+        assert HEARTBEAT_KEY in r.d
+        assert check_beat_heartbeat(r) is True
+
+    def test_missing_key_grace_passes(self):
+        from app.tasks.maintenance_tasks import check_beat_heartbeat
+
+        class FakeRedis:
+            def get(self, k):
+                return None
+
+        assert check_beat_heartbeat(FakeRedis()) is True
+
+    def test_stale_heartbeat_fails(self):
+        from datetime import datetime, timezone, timedelta
+        from app.tasks.maintenance_tasks import check_beat_heartbeat
+
+        class FakeRedis:
+            def get(self, k):
+                return (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+
+        assert check_beat_heartbeat(FakeRedis()) is False
+
+    def test_broken_redis_fails(self):
+        from app.tasks.maintenance_tasks import check_beat_heartbeat
+
+        class FakeRedis:
+            def get(self, k):
+                raise ConnectionError("down")
+
+        assert check_beat_heartbeat(FakeRedis()) is False
