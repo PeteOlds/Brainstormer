@@ -647,3 +647,34 @@ class TestCheckDuePromptsTask:
             
             # Should only enqueue the due active prompt
             mock_generate_idea.delay.assert_called_once()
+
+
+class TestRecordFailure_format:
+    def test_empty_message_exception_keeps_class_name(self, celery_app):
+        """httpx ConnectTimeout str() is empty — must not become 'Unknown error'."""
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import PromptConfig, PromptRun, User, UserRole
+            from app.tasks.ollama_tasks import _record_failure
+
+            admin = User(email="admin_fmterr@test.com", role=UserRole.ADMIN)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            db.session.commit()
+            prompt = PromptConfig(
+                title="Fmt", prompt_body="Test", interval_minutes=60,
+                model_name="llama3:8b", created_by_id=admin.id)
+            db.session.add(prompt)
+            db.session.commit()
+            run = PromptRun(prompt_config_id=prompt.id, triggered_by="manual")
+            db.session.add(run)
+            db.session.commit()
+            run_id = run.id
+
+            import httpx
+            _record_failure(str(run_id), httpx.ConnectTimeout(""))
+
+            db.session.expire_all()
+            run = PromptRun.query.get(run_id)
+            assert run.status.value == "FAILED"
+            assert run.error == "ConnectTimeout"

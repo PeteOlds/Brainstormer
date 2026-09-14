@@ -94,9 +94,16 @@ def _record_failure(run_id: str | None, error) -> None:
     A failed flush (e.g. duplicate reference_code) puts the session into a
     state where any further commit raises PendingRollbackError. Rolling back
     first lets mark_failed persist instead of orphaning the run as RUNNING.
+
+    Pass the exception object (not str): exceptions with empty messages
+    (e.g. httpx ConnectTimeout) otherwise record a useless "Unknown error".
     """
     from app.models import PromptRun
 
+    if isinstance(error, BaseException):
+        text = f"{type(error).__name__}: {error}" if str(error) else type(error).__name__
+    else:
+        text = str(error) if error else "Unknown error"
     db.session.rollback()
     run = None
     if run_id:
@@ -105,7 +112,7 @@ def _record_failure(run_id: str | None, error) -> None:
         except (ValueError, TypeError):
             run = None
     if run is not None:
-        run.mark_failed(error)
+        run.mark_failed(text)
         db.session.commit()
 
 
@@ -217,7 +224,7 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
         # NOTE: _final_attempt() is checked before touching the session:
         # any query (even re-fetching the run) on a poisoned session raises.
         if _final_attempt():
-            _record_failure(run_id, str(e))
+            _record_failure(run_id, e)
         raise
     finally:
         client.close()
@@ -349,7 +356,7 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         # the run as RUNNING. _final_attempt() is checked before touching
         # the session: any query on a poisoned session raises.
         if _final_attempt():
-            _record_failure(run_id, str(e))
+            _record_failure(run_id, e)
         raise
     finally:
         client.close()
