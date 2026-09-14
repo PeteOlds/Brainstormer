@@ -42,11 +42,25 @@ class FeasibilityOutput(BaseModel):
     verdict: Verdict
 
 
+class FiveForcesOutput(BaseModel):
+    """Porter's Five Forces — flat strings/lists only: nested objects
+    garble on small models (see: COMPETITORS validation failures)."""
+    competitive_rivalry: str = Field(..., min_length=20)
+    threat_of_substitutes: str = Field(..., min_length=20)
+    threat_of_new_entrants: str = Field(..., min_length=20)
+    bargaining_power_of_buyers: str = Field(..., min_length=20)
+    bargaining_power_of_suppliers: str = Field(..., min_length=20)
+    market_attractiveness: str = Field(..., min_length=10)
+    primary_risks: List[str]
+    recommendations: List[str]
+
+
 # Action type to schema mapping
 _ACTION_SCHEMAS = {
     "REFINE": RefineOutput,
     "COMPETITORS": CompetitorsOutput,
     "FEASIBILITY_SCORE": FeasibilityOutput,
+    "FIVE_FORCES": FiveForcesOutput,
 }
 
 

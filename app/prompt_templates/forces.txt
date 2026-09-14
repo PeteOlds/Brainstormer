@@ -1,0 +1,28 @@
+Act as an expert business analyst and strategic advisor. Conduct a comprehensive Porter's Five Forces analysis for the product idea below.
+
+### PRODUCT IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+
+### INSTRUCTIONS:
+1. Evaluate each of the five forces with specific, actionable depth:
+   - Competitive Rivalry: concentration of existing competitors, market growth rate, basis of competition (pricing, features, brand).
+   - Threat of Substitutes: alternative ways customers solve this problem outside our product category.
+   - Threat of New Entrants: entry barriers such as capital requirements, regulatory hurdles, proprietary technology, brand loyalty.
+   - Bargaining Power of Buyers: customer concentration, price sensitivity, switching costs.
+   - Bargaining Power of Suppliers: reliance on critical vendors, platform dependencies, key resources.
+2. Conclude with a strategic summary: overall market attractiveness, primary risk factors, and two to three actionable recommendations for a sustainable competitive advantage.
+3. Output STRICTLY a valid JSON object matching the schema below. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
+
+### OUTPUT JSON SCHEMA:
+{
+  "competitive_rivalry": "string (assessment of existing competitors, growth, basis of competition)",
+  "threat_of_substitutes": "string (alternative customer solutions outside the category)",
+  "threat_of_new_entrants": "string (entry barriers: capital, regulation, technology, brand)",
+  "bargaining_power_of_buyers": "string (concentration, price sensitivity, switching costs)",
+  "bargaining_power_of_suppliers": "string (vendor reliance, platform dependencies, key resources)",
+  "market_attractiveness": "string (overall verdict on market attractiveness)",
+  "primary_risks": ["risk 1", "risk 2"],
+  "recommendations": ["actionable recommendation 1", "actionable recommendation 2"]
+}

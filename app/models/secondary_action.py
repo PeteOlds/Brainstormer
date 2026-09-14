@@ -10,6 +10,7 @@ class ActionType(str, Enum):
     REFINE = "REFINE"
     COMPETITORS = "COMPETITORS"
     FEASIBILITY_SCORE = "FEASIBILITY_SCORE"
+    FIVE_FORCES = "FIVE_FORCES"
 
 
 class SecondaryActionResult(db.Model):

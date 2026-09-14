@@ -44,6 +44,7 @@ def get_prompt_template(action_type: str) -> PromptTemplate:
         "REFINE": "refine",
         "COMPETITORS": "competitors",
         "FEASIBILITY_SCORE": "feasibility",
+        "FIVE_FORCES": "forces",
     }
     template_name = mapping.get(action_type)
     if not template_name:

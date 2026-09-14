@@ -549,8 +549,8 @@ function ideasApp() {
         },
         
         get refinedActions() {
-            // 3-dot menu shows Refine + Competitors only (not feasibility).
-            return (this.availableActions || []).filter((a) => a.key === 'REFINE' || a.key === 'COMPETITORS');
+            // 3-dot menu shows Refine + Competitors + Five Forces only.
+            return (this.availableActions || []).filter((a) => a.key === 'REFINE' || a.key === 'COMPETITORS' || a.key === 'FIVE_FORCES');
         },
 
         async confirmDiscard(idea, close) {
@@ -689,7 +689,7 @@ function ideasApp() {
         actionChips(idea) {
             // Richness signals: which follow-up analyses already live inside.
             const done = idea && Array.isArray(idea.actions_run) ? idea.actions_run : [];
-            const labels = { REFINE: 'Refined', COMPETITORS: 'Competitors', FEASIBILITY_SCORE: 'Scored' };
+            const labels = { REFINE: 'Refined', COMPETITORS: 'Competitors', FEASIBILITY_SCORE: 'Scored', FIVE_FORCES: 'Five Forces' };
             return done.filter((k) => labels[k]).map((k) => ({ key: k, label: labels[k] }));
         },
 

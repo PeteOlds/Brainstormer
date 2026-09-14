@@ -34,6 +34,13 @@ ACTION_REGISTRY = [
         "template": "feasibility",
         "done_label": "Scored",
     },
+    {
+        "key": "FIVE_FORCES",
+        "label": "Five Forces",
+        "description": "Porter's Five Forces: rivalry, substitutes, entrants, buyers, suppliers, plus risks and recommendations.",
+        "template": "forces",
+        "done_label": "Assessed",
+    },
 ]
 
 _ACTION_INDEX = {entry["key"]: entry for entry in ACTION_REGISTRY}

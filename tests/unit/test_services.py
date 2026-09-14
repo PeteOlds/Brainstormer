@@ -190,6 +190,18 @@ class TestOllamaSchemas:
         result = validate_ollama_output("REFINE", json_str)
         assert isinstance(result, RefineOutput)
 
+    def test_validate_five_forces_output(self):
+        from app.schemas.ollama_schemas import FiveForcesOutput
+        json_str = '{"competitive_rivalry": "Several entrenched players compete on price and features in a growing market.", "threat_of_substitutes": "Spreadsheets and manual processes remain common workarounds.", "threat_of_new_entrants": "Moderate capital needs but strong brand loyalty protects incumbents.", "bargaining_power_of_buyers": "Fragmented buyers with low switching costs are price sensitive.", "bargaining_power_of_suppliers": "Commodity inputs from many vendors keep supplier power low.", "market_attractiveness": "Attractive niche with clear differentiation openings.", "primary_risks": ["Price war", "Platform dependency"], "recommendations": ["Own a narrow vertical first", "Build switching costs via integrations"]}'
+        result = validate_ollama_output("FIVE_FORCES", json_str)
+        assert isinstance(result, FiveForcesOutput)
+        assert len(result.primary_risks) == 2
+
+    def test_validate_five_forces_missing_field(self):
+        import pytest as _pytest
+        with _pytest.raises(Exception):
+            validate_ollama_output("FIVE_FORCES", '{"competitive_rivalry": "x"}')
+
     def test_validate_ollama_output_invalid(self):
         with pytest.raises(Exception):
             validate_ollama_output("REFINE", "invalid json")
