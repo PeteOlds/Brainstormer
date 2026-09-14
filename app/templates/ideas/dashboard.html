@@ -116,7 +116,7 @@
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                     </button>
                                 </div>
-                                <span class="text-xs text-slate-500 dark:text-slate-400" x-show="idea.user_vote !== 0" x-text="idea.user_vote === 1 ? 'You upvoted' : 'You downvoted'"></span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400" x-show="idea.user_vote === 1 || idea.user_vote === -1" x-text="idea.user_vote === 1 ? 'You upvoted' : 'You downvoted'"></span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div class="flex items-center justify-end space-x-2" x-data="{ dropdownOpen: false }">
@@ -282,7 +282,7 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="text-sm text-slate-500 dark:text-slate-400" x-show="selectedIdea?.user_vote !== 0" x-text="selectedIdea?.user_vote === 1 ? 'You upvoted this idea' : 'You downvoted this idea'"></div>
+                        <div class="text-sm text-slate-500 dark:text-slate-400" x-show="selectedIdea?.user_vote === 1 || selectedIdea?.user_vote === -1" x-text="selectedIdea?.user_vote === 1 ? 'You upvoted this idea' : 'You downvoted this idea'"></div>
                     </div>
                     
                     <template x-if="isAdmin">

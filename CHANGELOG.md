@@ -8,6 +8,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Admin-only Porter's Five Forces analysis: new `FIVE_FORCES` action (flat-string schema tuned for small models), `forces.txt` template, registry entry, 3-dot menu + chips support, `actiontype` enum extended
 
+## [0.5.3] - 2026-09-14
+### Fixed
+- New ideas wrongly showed "You downvoted": `user_vote` is null (not 0) when unvoted, and `null !== 0` passed the check — now shows only on real +1/-1 votes (table + detail modal)
+
 ## [0.5.2] - 2026-09-14
 ### Fixed
 - Circular import at startup (`celery_auto_init_skipped` noise): tasks import is lazy inside `create_app` — auto-init now succeeds with all tasks registered
