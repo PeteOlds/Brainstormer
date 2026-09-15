@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.10.0] - 2026-09-15
+### Added
+- Mobile responsive polish (PRD §10.4): zero horizontal overflow at 360px on all pages (navbar user area truncates, admin link/username progressively hide), 44px touch targets on nav/buttons/filters/inputs/menus/footer, users table scroll container, detail modal becomes a bottom sheet on mobile, prompt forms usable single-column
+
 ## [0.9.0] - 2026-09-15
 ### Added
 - Admin idea edit + audit (PRD §10.2): `PATCH /ideas/<id>` for prompt_title/raw_content (400 on empty, unchanged fields skipped), `idea_edits` table with editor names, history in detail view, edit form in Admin Actions

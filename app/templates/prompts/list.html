@@ -9,7 +9,7 @@
             <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Prompt Configurations</h1>
             <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Manage automated prompt configurations for idea generation</p>
         </div>
-        <button x-show="isAdmin" @click="openCreateModal()" class="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
+        <button x-show="isAdmin" @click="openCreateModal()" class="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 min-h-[44px] border border-transparent text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
             <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             Create Prompt
         </button>
@@ -20,7 +20,7 @@
         <div class="flex flex-col sm:flex-row gap-4">
             <div class="flex-1">
                 <label for="status-filter" class="sr-only">Filter by status</label>
-                <select id="status-filter" x-model="filters.status" class="block w-full pl-3 pr-10 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none">
+                <select id="status-filter" x-model="filters.status" class="block w-full pl-3 pr-10 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none">
                     <option value="">All Statuses</option>
                     <option value="true">Active</option>
                     <option value="false">Paused</option>
@@ -28,7 +28,7 @@
             </div>
             <div class="flex-1">
                 <label for="search-filter" class="sr-only">Search ideas</label>
-                <input type="text" id="search-filter" x-model="filters.search" placeholder="Search by title..." class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                <input type="text" id="search-filter" x-model="filters.search" placeholder="Search by title..." class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
             </div>
         </div>
     </div>
@@ -86,7 +86,7 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <div class="flex items-center justify-end space-x-2" x-data="{ dropdownOpen: false }">
-                                    <button @click="dropdownOpen = !dropdownOpen" class="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
+                                    <button @click="dropdownOpen = !dropdownOpen" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
                                     </button>
                                      <div x-show="dropdownOpen" @click.outside="dropdownOpen = false" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
@@ -165,14 +165,14 @@
                     <div>
                         <label for="title" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title <span class="text-red-500">*</span></label>
                         <input type="text" id="title" x-model="form.title" required maxlength="200"
-                               class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                               class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                                placeholder="e.g., SaaS Tools for Micro-Businesses">
                     </div>
                     
                     <div>
                         <label for="prompt_body" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Prompt Body <span class="text-red-500">*</span></label>
                         <textarea id="prompt_body" x-model="form.prompt_body" rows="8" required
-                                  class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm"
+                                  class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm"
                                   placeholder="Enter the system prompt to send to Ollama..."></textarea>
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">This prompt will be sent to Ollama with JSON format enforcement.</p>
                     </div>
@@ -180,7 +180,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label for="interval_minutes" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Interval (minutes) <span class="text-red-500">*</span></label>
-                            <select id="interval_minutes" x-model="form.interval_minutes" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                            <select id="interval_minutes" x-model="form.interval_minutes" class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                                 <option value="360">Every 6 hours</option>
                                 <option value="720">Every 12 hours</option>
                                 <option value="1440" selected>Daily</option>
@@ -191,7 +191,7 @@
                         <div x-show="form.interval_minutes === 'custom'">
                             <label for="cron_expression" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cron Expression</label>
                             <input type="text" id="cron_expression" x-model="form.cron_expression" placeholder="e.g., 0 */6 * * *"
-                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
+                                   class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
                             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Standard cron format. Leave empty to use interval.</p>
                         </div>
                     </div>
@@ -199,7 +199,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label for="model_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Model <span class="text-red-500">*</span></label>
-<select id="model_name" x-model="form.model_name" :disabled="loadingModels" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+<select id="model_name" x-model="form.model_name" :disabled="loadingModels" class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                                 <option value="" disabled x-show="loadingModels">Loading models...</option>
                                 <option value="" disabled x-show="!loadingModels">Select Model</option>
                                 <template x-for="model in models" :key="modelNameOf(model)">
@@ -211,7 +211,7 @@
                         <div>
                             <label for="temperature" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Temperature</label>
                             <input type="number" id="temperature" x-model.number="form.temperature" min="0" max="2" step="0.1"
-                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                   class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">0.0 = deterministic, 1.0 = creative</p>
                         </div>
                     </div>
@@ -223,28 +223,28 @@
                             <div>
                                 <label for="modal-top_p" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Top P <span class="cursor-help text-slate-400" title="Nucleus sampling: lower = more focused, higher = more varied. Pairs with temperature. Range 0–1.">?</span></label>
                                 <input type="number" id="modal-top_p" x-model.number="form.top_p" min="0" max="1" step="0.05"
-                                       class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                       class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                             </div>
                             <div>
                                 <label for="modal-repeat_penalty" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Repeat Penalty <span class="cursor-help text-slate-400" title="Above 1 discourages repetition and rambling. Range 0–2.">?</span></label>
                                 <input type="number" id="modal-repeat_penalty" x-model.number="form.repeat_penalty" min="0" max="2" step="0.1"
-                                       class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                       class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                             </div>
                             <div>
                                 <label for="modal-num_predict" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Max Tokens <span class="cursor-help text-slate-400" title="Upper bound on tokens per run. Ideas need ~500; the rest is headroom. Range 1–4096.">?</span></label>
                                 <input type="number" id="modal-num_predict" x-model.number="form.num_predict" min="1" max="4096" step="1"
-                                       class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                       class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                             </div>
                             <div>
                                 <label for="modal-seed" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Seed <span class="cursor-help text-slate-400" title="Empty = random each run. Set a number to reproduce runs.">?</span></label>
                                 <input type="number" id="modal-seed" x-model.number="form.seed" min="0" step="1" placeholder="Random"
-                                       class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                       class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Empty = random each run; set a number to reproduce runs.</p>
                             </div>
                             <div>
                                 <label for="modal-keep_alive" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Keep Alive <span class="cursor-help text-slate-400" title="How long Ollama keeps the model loaded between runs (e.g. 30m, 2h, 0 = unload). Longer = faster runs, more RAM.">?</span></label>
                                 <input type="text" id="modal-keep_alive" x-model="form.keep_alive" maxlength="20"
-                                       class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
+                                       class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
                             </div>
                         </div>
                     </div>
@@ -266,7 +266,7 @@
                                 Testing...
                             </span>
                         </button>
-                        <button type="submit" :disabled="saving" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        <button type="submit" :disabled="saving" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             <span x-show="!saving" x-text="editingPrompt ? 'Save Changes' : 'Create Prompt'"></span>
                             <span x-show="saving" class="flex items-center">
                                 <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>

@@ -10,10 +10,10 @@
 <div class="hidden md:flex items-center space-x-4">
                 {% for link in nav_links %}
                 {% set active = request.endpoint == link.endpoint %}
-                <a href="{{ url_for(link.endpoint) }}" {% if active %}aria-current="page"{% endif %} class="px-3 py-2 rounded-md text-sm font-medium {% if active %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-700 dark:text-slate-300 hover:text-indigo-600{% endif %}">{{ link.label }}</a>
+                <a href="{{ url_for(link.endpoint) }}" {% if active %}aria-current="page"{% endif %} class="px-3 py-2 min-h-[44px] inline-flex items-center rounded-md text-sm font-medium {% if active %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-700 dark:text-slate-300 hover:text-indigo-600{% endif %}">{{ link.label }}</a>
                 {% endfor %}
             </div>
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-3 min-w-0">
                 {% if current_user and current_user.is_authenticated %}
                 <div class="relative" x-data="{ open: false }">
                     <button @click="open = !open" class="flex items-center space-x-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -46,10 +46,10 @@
                     <a href="/login" class="px-4 py-2 text-sm font-medium text-indigo-600 hover:text-indigo-700">Sign in</a>
                     <a href="/register" class="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">Sign up</a>
                 </div>
-                <div id="user-area" class="items-center space-x-3" style="display: none;">
-                    <a id="nav-admin-link" href="/api/v1/admin" class="px-3 py-2 rounded-md text-sm font-medium text-indigo-600 hover:text-indigo-700" style="display: none;">Admin Panel</a>
-                    <span id="nav-username" class="text-sm font-medium text-slate-700 dark:text-slate-300"></span>
-                    <button id="logout-btn" type="button" class="px-4 py-2 text-sm font-medium rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300">Logout</button>
+                <div id="user-area" class="items-center space-x-2 sm:space-x-3 min-w-0" style="display: none;">
+                    <a id="nav-admin-link" href="/api/v1/admin" class="hidden min-[500px]:inline-flex min-h-[44px] items-center px-3 py-2 rounded-md text-sm font-medium text-indigo-600 hover:text-indigo-700 shrink-0" style="display: none;">Admin Panel</a>
+                    <span id="nav-username" class="hidden min-[420px]:block text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[110px] sm:max-w-none"></span>
+                    <button id="logout-btn" type="button" class="px-3 sm:px-4 py-2 min-h-[44px] text-sm font-medium rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 shrink-0">Logout</button>
                 </div>
                 {% endif %}
             </div>

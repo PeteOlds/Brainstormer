@@ -22,14 +22,14 @@
                 <div>
                     <label for="title" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title <span class="text-red-500">*</span></label>
                     <input type="text" id="title" name="title" required maxlength="200"
-                           class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                           class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                            placeholder="e.g., SaaS Tools for Micro-Businesses">
                 </div>
                 
                 <div>
                     <label for="prompt_body" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Prompt Body <span class="text-red-500">*</span></label>
                     <textarea id="prompt_body" name="prompt_body" rows="10" required
-                              class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm"
+                              class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm"
                               placeholder="Enter the system prompt to send to Ollama..."></textarea>
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">This prompt will be sent to Ollama with JSON format enforcement.</p>
                 </div>
@@ -41,7 +41,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label for="interval_minutes" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Interval <span class="text-red-500">*</span></label>
-                        <select id="interval_minutes" name="interval_minutes" x-model="intervalMinutes" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                        <select id="interval_minutes" name="interval_minutes" x-model="intervalMinutes" class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                             <option value="360">Every 6 hours</option>
                             <option value="720">Every 12 hours</option>
                             <option value="1440" selected>Daily</option>
@@ -53,7 +53,7 @@
                     <div x-show="intervalMinutes === 'custom'">
                         <label for="cron_expression" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cron Expression</label>
                         <input type="text" id="cron_expression" name="cron_expression" x-model="cronExpression" placeholder="e.g., 0 */6 * * *"
-                               class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
+                               class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Standard cron format. Leave empty to use interval minutes.</p>
                     </div>
                 </div>
@@ -61,7 +61,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label for="model_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Model <span class="text-red-500">*</span></label>
-                        <select id="model_name" name="model_name" x-model="modelName" :disabled="loadingModels" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                        <select id="model_name" name="model_name" x-model="modelName" :disabled="loadingModels" class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                             <option value="" disabled x-show="loadingModels">Loading models...</option>
                             <option value="" disabled x-show="!loadingModels">Select Model</option>
                             <template x-for="model in models" :key="modelNameOf(model)">
@@ -74,7 +74,7 @@
                     <div>
                         <label for="temperature" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Temperature</label>
                         <input type="number" id="temperature" name="temperature" min="0" max="2" step="0.1" value="0.7"
-                               class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                               class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">0.0 = deterministic, 1.0 = creative</p>
                     </div>
                 </div>
@@ -87,28 +87,28 @@
                         <div>
                             <label for="top_p" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Top P <span class="cursor-help text-slate-400" title="Nucleus sampling: lower = more focused, higher = more varied. Pairs with temperature. Range 0–1.">?</span></label>
                             <input type="number" id="top_p" name="top_p" min="0" max="1" step="0.05" value="0.9"
-                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                   class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                         </div>
                         <div>
                             <label for="repeat_penalty" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Repeat Penalty <span class="cursor-help text-slate-400" title="Above 1 discourages repetition and rambling. Range 0–2.">?</span></label>
                             <input type="number" id="repeat_penalty" name="repeat_penalty" min="0" max="2" step="0.1" value="1.1"
-                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                   class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                         </div>
                         <div>
                             <label for="num_predict" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Max Tokens <span class="cursor-help text-slate-400" title="Upper bound on tokens per run. Ideas need ~500; the rest is headroom. Range 1–4096.">?</span></label>
                             <input type="number" id="num_predict" name="num_predict" min="1" max="4096" step="1" value="1000"
-                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                   class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                         </div>
                         <div>
                             <label for="seed" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Seed <span class="cursor-help text-slate-400" title="Empty = random each run. Set a number to reproduce runs.">?</span></label>
                             <input type="number" id="seed" name="seed" min="0" step="1" placeholder="Random"
-                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                   class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Empty = random each run; set a number to reproduce runs.</p>
                         </div>
                         <div>
                             <label for="keep_alive" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Keep Alive <span class="cursor-help text-slate-400" title="How long Ollama keeps the model loaded between runs (e.g. 30m, 2h, 0 = unload). Longer = faster runs, more RAM.">?</span></label>
                             <input type="text" id="keep_alive" name="keep_alive" value="2h" maxlength="20"
-                                   class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
+                                   class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
                         </div>
                     </div>
                 </div>
