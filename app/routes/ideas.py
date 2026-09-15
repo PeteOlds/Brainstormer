@@ -3,7 +3,7 @@ from sqlalchemy import func, desc, asc
 import uuid
 
 from app.extensions import db
-from app.models import Idea, Vote, SecondaryActionResult, IdeaStatusHistory, User
+from app.models import Idea, Vote, SecondaryActionResult, IdeaStatusHistory, User, Comment
 from app.utils.decorators import token_required, admin_required
 from app.utils.responses import api_ok, api_error, api_created
 
@@ -223,3 +223,103 @@ def get_actions(user, idea_id):
     idea = Idea.query.get_or_404(idea_id)
     actions = SecondaryActionResult.query.filter_by(idea_id=idea_id).order_by(SecondaryActionResult.executed_at).all()
     return api_ok({"results": [a.to_dict() for a in actions]})
+
+def _comment_tree(idea_id):
+    """Nested comment tree for an idea, oldest first, with author names."""
+    comments = (Comment.query.filter_by(idea_id=idea_id)
+                .order_by(Comment.created_at).all())
+    authors = {}
+    user_ids = {c.user_id for c in comments}
+    if user_ids:
+        for u in User.query.filter(User.id.in_(list(user_ids))).all():
+            authors[u.id] = u.name or u.email
+    by_parent = {}
+    for c in comments:
+        by_parent.setdefault(c.parent_id, []).append(c)
+
+    def build(node):
+        return [child.to_dict(
+            author_name=authors.get(child.user_id, "Unknown"),
+            children=build(child),
+        ) for child in by_parent.get(node.id if node else None, [])]
+
+    return build(None)
+
+
+@bp.route("/ideas/<uuid:idea_id>/comments", methods=["GET"])
+@token_required
+def list_comments(user, idea_id):
+    """Nested comment thread for an idea."""
+    Idea.query.get_or_404(idea_id)
+    return api_ok({"comments": _comment_tree(idea_id)})
+
+
+@bp.route("/ideas/<uuid:idea_id>/comments", methods=["POST"])
+@token_required
+def create_comment(user, idea_id):
+    """Post a comment or a reply (parent_id must belong to the same idea)."""
+    Idea.query.get_or_404(idea_id)
+    data = request.get_json() or {}
+    body = (data.get("body") or "").strip()
+    if not body:
+        return api_error("Comment body is required.", status_code=400)
+    if len(body) > 2000:
+        return api_error("Comment body must be 2000 characters or fewer.", status_code=400)
+
+    parent = None
+    if data.get("parent_id"):
+        try:
+            parent = Comment.query.get(uuid.UUID(str(data["parent_id"])))
+        except (ValueError, TypeError):
+            return api_error("Invalid parent_id.", status_code=400)
+        if not parent or parent.idea_id != idea_id:
+            return api_error("parent_id must belong to the same idea.", status_code=400)
+
+    comment = Comment(idea_id=idea_id, user_id=user.id,
+                      parent_id=parent.id if parent else None, body=body)
+    db.session.add(comment)
+    db.session.commit()
+    return api_created({"comment": comment.to_dict(
+        author_name=user.name or user.email)})
+
+
+def _comment_or_403(user, comment_id):
+    comment = Comment.query.get_or_404(comment_id)
+    if comment.user_id != user.id and user.role.value != "ADMIN":
+        return None, api_error("Not permitted.", status_code=403)
+    return comment, None
+
+
+@bp.route("/comments/<uuid:comment_id>", methods=["PATCH"])
+@token_required
+def update_comment(user, comment_id):
+    """Edit own comment (admins may edit any). Deleted stubs stay deleted."""
+    comment, err = _comment_or_403(user, comment_id)
+    if err:
+        return err
+    if comment.is_deleted:
+        return api_error("Deleted comments cannot be edited.", status_code=400)
+    data = request.get_json() or {}
+    body = (data.get("body") or "").strip()
+    if not body:
+        return api_error("Comment body is required.", status_code=400)
+    if len(body) > 2000:
+        return api_error("Comment body must be 2000 characters or fewer.", status_code=400)
+    comment.body = body
+    db.session.commit()
+    return api_ok({"comment": comment.to_dict()})
+
+
+@bp.route("/comments/<uuid:comment_id>", methods=["DELETE"])
+@token_required
+def delete_comment(user, comment_id):
+    """Soft-delete: children reparent to the deleted node's parent."""
+    comment, err = _comment_or_403(user, comment_id)
+    if err:
+        return err
+    for child in Comment.query.filter_by(parent_id=comment.id).all():
+        child.parent_id = comment.parent_id
+    comment.is_deleted = True
+    comment.body = "[deleted]"
+    db.session.commit()
+    return api_ok({"deleted": str(comment.id)})

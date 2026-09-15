@@ -710,3 +710,144 @@ class TestHealthEndpoints:
     def test_unknown_route_404(self, client):
         resp = client.get("/api/nonexistent")
         assert resp.status_code == 404
+
+class TestCommentEndpoints:
+    def _make_idea(self, app, ref="IDEA-C1"):
+        from app.models import Idea, PromptConfig, User
+        from app.extensions import db
+
+        admin = User.query.filter_by(email="admin@test.com").first()
+        prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+        idea = Idea(
+            reference_code=ref,
+            prompt_title="Test",
+            raw_content="Test content",
+            status="NEW",
+            prompt_config_id=prompt.id
+        )
+        db.session.add(idea)
+        db.session.commit()
+        return idea.id
+
+    def _auth(self, client, email):
+        reg = client.post("/api/v1/register", json={
+            "email": email, "password": "password123"})
+        assert reg.status_code == 201
+        return reg.get_json()["data"]["access_token"]
+
+    def test_post_and_list_thread(self, client, app, admin_user, admin_prompt):
+        token = self._auth(client, "commenter@test.com")
+        with app.app_context():
+            idea_id = self._make_idea(app)
+
+        r1 = client.post(f"/api/v1/ideas/{idea_id}/comments",
+                         json={"body": "Top level"},
+                         headers={"Authorization": f"Bearer {token}"})
+        assert r1.status_code == 201
+        top_id = r1.get_json()["data"]["comment"]["id"]
+
+        r2 = client.post(f"/api/v1/ideas/{idea_id}/comments",
+                         json={"body": "A reply", "parent_id": top_id},
+                         headers={"Authorization": f"Bearer {token}"})
+        assert r2.status_code == 201
+
+        resp = client.get(f"/api/v1/ideas/{idea_id}/comments",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        tree = resp.get_json()["data"]["comments"]
+        assert len(tree) == 1
+        assert tree[0]["body"] == "Top level"
+        assert tree[0]["author"] == "commenter@test.com"
+        assert len(tree[0]["replies"]) == 1
+        assert tree[0]["replies"][0]["body"] == "A reply"
+
+    def test_parent_must_belong_to_same_idea(self, client, app, admin_user, admin_prompt):
+        token = self._auth(client, "otheridea@test.com")
+        with app.app_context():
+            idea_a = self._make_idea(app, ref="IDEA-CA")
+            idea_b = self._make_idea(app, ref="IDEA-CB")
+
+        r1 = client.post(f"/api/v1/ideas/{idea_a}/comments",
+                         json={"body": "On A"},
+                         headers={"Authorization": f"Bearer {token}"})
+        other_parent = r1.get_json()["data"]["comment"]["id"]
+
+        resp = client.post(f"/api/v1/ideas/{idea_b}/comments",
+                           json={"body": "Sneaky", "parent_id": other_parent},
+                           headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 400
+
+    def test_validation(self, client, app, admin_user, admin_prompt):
+        token = self._auth(client, "valid@test.com")
+        with app.app_context():
+            idea_id = self._make_idea(app, ref="IDEA-CV")
+
+        resp = client.post(f"/api/v1/ideas/{idea_id}/comments",
+                           json={"body": "   "},
+                           headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 400
+
+        resp = client.post(f"/api/v1/ideas/{idea_id}/comments",
+                           json={"body": "x" * 2001},
+                           headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 400
+
+    def test_edit_own_comment(self, client, app, admin_user, admin_prompt):
+        token = self._auth(client, "editor@test.com")
+        with app.app_context():
+            idea_id = self._make_idea(app, ref="IDEA-CE")
+
+        cid = client.post(f"/api/v1/ideas/{idea_id}/comments",
+                          json={"body": "Original"},
+                          headers={"Authorization": f"Bearer {token}"}
+                          ).get_json()["data"]["comment"]["id"]
+
+        resp = client.patch(f"/api/v1/comments/{cid}",
+                            json={"body": "Edited"},
+                            headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["comment"]["body"] == "Edited"
+
+    def test_edit_stranger_forbidden_admin_allowed(self, client, app, admin_user, admin_prompt, admin_client):
+        token = self._auth(client, "stranger@test.com")
+        with app.app_context():
+            idea_id = self._make_idea(app, ref="IDEA-CS")
+
+        owner_token = self._auth(client, "owner@test.com")
+        cid = client.post(f"/api/v1/ideas/{idea_id}/comments",
+                          json={"body": "Mine"},
+                          headers={"Authorization": f"Bearer {owner_token}"}
+                          ).get_json()["data"]["comment"]["id"]
+
+        resp = client.patch(f"/api/v1/comments/{cid}",
+                            json={"body": "Hijacked"},
+                            headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 403
+
+        resp = admin_client.patch(f"/api/v1/comments/{cid}", json={"body": "Mod edit"})
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["comment"]["body"] == "Mod edit"
+
+    def test_delete_reparents_children(self, client, app, admin_user, admin_prompt):
+        token = self._auth(client, "deleter@test.com")
+        with app.app_context():
+            idea_id = self._make_idea(app, ref="IDEA-CD")
+
+        top = client.post(f"/api/v1/ideas/{idea_id}/comments",
+                          json={"body": "Parent"},
+                          headers={"Authorization": f"Bearer {token}"}
+                          ).get_json()["data"]["comment"]["id"]
+        client.post(f"/api/v1/ideas/{idea_id}/comments",
+                    json={"body": "Child", "parent_id": top},
+                    headers={"Authorization": f"Bearer {token}"})
+
+        resp = client.delete(f"/api/v1/comments/{top}",
+                             headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+
+        tree = client.get(f"/api/v1/ideas/{idea_id}/comments",
+                          headers={"Authorization": f"Bearer {token}"}
+                          ).get_json()["data"]["comments"]
+        assert len(tree) == 2
+        bodies = sorted([c["body"] for c in tree])
+        assert bodies == ["Child", "[deleted]"]

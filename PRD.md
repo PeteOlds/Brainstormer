@@ -1066,3 +1066,55 @@ ideas raise nothing; backfill completes without blocking generation.
 ### Build order
 
 §9.1 → §9.2 → §9.3. Each layer is independently shippable; §9.1 can land without the others.
+
+## 10. Social & Integrations (Sept 2026)
+
+Phasing: comments → admin edit → Slack (setup+posts → votes → threads) → mobile polish.
+Each phase shippable independently; Slack 3b/3c assume Socket Mode (no public URL needed).
+
+### 10.1 Threaded comments
+
+All authenticated users may comment; authors edit/delete own, admins any (append-only across
+system boundaries is covered in §10.3, not here). Full nesting via `parent_id`, render depth-cap
+~6 with "continue thread" fallback.
+- Model `Comment`: `id, idea_id (FK cascade), user_id (FK), parent_id (self-FK nullable), body
+  (text, max 2000), created_at/updated_at`, index `(idea_id, created_at)`.
+- API (`token_required`): `GET /ideas/<id>/comments` (nested tree + author names),
+  `POST` (body + optional `parent_id`, must belong to same idea), `PATCH /comments/<id>`
+  (author or admin), `DELETE` (author or admin; children reparent to deleted node's parent,
+  deleted node kept as "[deleted]" stub).
+- UI: comment section in idea detail modal under actions; reply per node; relative timestamps;
+  optimistic insert with rollback on 4xx.
+- Acceptance: nesting assembles correctly; permission matrix (author/admin/stranger ×
+  edit/delete) enforced; deleting a parent preserves children.
+
+### 10.2 Admin idea edit + audit
+
+Admins may edit content fields (title/summary/body); status keeps its existing separate flow.
+- `PATCH /ideas/<id>` (`admin_required`), 400 on empty title/body.
+- Audit table `IdeaEdit`: `idea_id, editor_id, field, old_value, new_value, edited_at`;
+  history shown in detail view.
+- Acceptance: edit persists + toast + refresh; history lists who/when/what.
+
+### 10.3 Slack integration
+
+Setup (assisted runbook): custom Slack app with `chat:write`, `reactions:read`,
+`channels:history`; bot token in server env only. Connectivity via **Socket Mode**
+(websocket; LAN-only app needs no public URL, no firewall work).
+- Per-prompt `slack_channel` (admin-set, `#name` validated on save); prompts without one post nothing.
+- Phase 3a (posts): every new idea posts a Block Kit message (title, summary, status, back-link).
+  Failed posts log + retry on rate-limit, never block generation.
+- Phase 3b (votes): Slack user → Brainstormer user by email (auto-provision as USER with
+  `slack_user_id` link); 👍/👎 reactions toggle votes through existing vote logic; Slack event-ID dedup.
+- Phase 3c (threads): two-way sync between app comments and Slack threads; synced messages carry
+  metadata to ignore echoes (loop guard); newest-wins on conflict; deletes don't propagate.
+- Acceptance: idea posts within a minute; reaction toggles vote both ways; a reply in either
+  system appears in the other without duplicates.
+
+### 10.4 Mobile acceptance criteria
+
+Responsive-web polish (no native/PWA packaging in this phase): ideas list becomes cards on small
+screens with touch-sized vote buttons; detail modal becomes a full-screen sheet; admin tables get
+scroll containers + sticky headers; verified nav behaviour; single-column forms with large inputs;
+viewport-safe toasts/dialogs. Walk every page at 360px and 768px: no horizontal overflow, tap
+targets ≥44px.

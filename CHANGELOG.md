@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-09-15
+### Added
+- Threaded idea comments (PRD §10.1): all users can post/reply (full nesting), authors edit/delete own, admins any; deletes become "[deleted]" stubs with children reparented; UI lives in the idea detail modal with reply/edit/delete, 44px targets, optimistic post
+
 ## [0.7.0] - 2026-09-14
 ### Added
 - Admin-only PESTEL analysis: new `PESTEL` action (flat-string schema), `pestel.txt` template, registry entry, 3-dot menu + chips support, `actiontype` enum extended
