@@ -3,7 +3,7 @@ from sqlalchemy import func, desc, asc
 import uuid
 
 from app.extensions import db
-from app.models import Idea, Vote, SecondaryActionResult, IdeaStatusHistory, User, Comment
+from app.models import Idea, Vote, SecondaryActionResult, IdeaStatusHistory, User, Comment, IdeaEdit
 from app.utils.decorators import token_required, admin_required
 from app.utils.responses import api_ok, api_error, api_created
 
@@ -77,6 +77,7 @@ def get_idea(user, idea_id):
     payload = {
         "idea": idea.to_dict(include_content=True, user_vote=user_vote),
         "actions": [a.to_dict() for a in actions],
+        "edit_history": _edit_history(idea_id),
     }
     if user.role.value == "ADMIN":
         # Generation duration is admin-only: how long the linked run took.
@@ -224,6 +225,18 @@ def get_actions(user, idea_id):
     actions = SecondaryActionResult.query.filter_by(idea_id=idea_id).order_by(SecondaryActionResult.executed_at).all()
     return api_ok({"results": [a.to_dict() for a in actions]})
 
+def _edit_history(idea_id):
+    """Audit trail newest-first with editor names."""
+    edits = (IdeaEdit.query.filter_by(idea_id=idea_id)
+             .order_by(IdeaEdit.edited_at.desc()).all())
+    names = {}
+    editor_ids = {e.editor_id for e in edits}
+    if editor_ids:
+        for u in User.query.filter(User.id.in_(list(editor_ids))).all():
+            names[u.id] = u.name or u.email
+    return [e.to_dict(editor_name=names.get(e.editor_id, "Unknown")) for e in edits]
+
+
 def _comment_tree(idea_id):
     """Nested comment tree for an idea, oldest first, with author names."""
     comments = (Comment.query.filter_by(idea_id=idea_id)
@@ -323,3 +336,42 @@ def delete_comment(user, comment_id):
     comment.body = "[deleted]"
     db.session.commit()
     return api_ok({"deleted": str(comment.id)})
+
+
+EDITABLE_FIELDS = ("prompt_title", "raw_content")
+
+
+@bp.route("/ideas/<uuid:idea_id>", methods=["PATCH"])
+@admin_required
+def update_idea_content(user, idea_id):
+    """Edit idea content fields (Admin only). Status keeps its own endpoint."""
+    idea = Idea.query.get_or_404(idea_id)
+    data = request.get_json() or {}
+
+    updates = {f: data[f] for f in EDITABLE_FIELDS if f in data}
+    if not updates:
+        return api_error("Nothing to update. Editable fields: prompt_title, raw_content.", status_code=400)
+
+    if "prompt_title" in updates:
+        title = (updates["prompt_title"] or "").strip()
+        if not title:
+            return api_error("prompt_title must not be empty.", status_code=400)
+        if len(title) > 200:
+            return api_error("prompt_title must be 200 characters or fewer.", status_code=400)
+        updates["prompt_title"] = title
+    if "raw_content" in updates:
+        body = (updates["raw_content"] or "").strip()
+        if not body:
+            return api_error("raw_content must not be empty.", status_code=400)
+        updates["raw_content"] = body
+
+    for field, new_value in updates.items():
+        old_value = getattr(idea, field)
+        if old_value == new_value:
+            continue
+        setattr(idea, field, new_value)
+        db.session.add(IdeaEdit(
+            idea_id=idea.id, editor_id=user.id,
+            field=field, old_value=old_value, new_value=new_value))
+    db.session.commit()
+    return api_ok(idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)))

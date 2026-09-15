@@ -851,3 +851,74 @@ class TestCommentEndpoints:
         assert len(tree) == 2
         bodies = sorted([c["body"] for c in tree])
         assert bodies == ["Child", "[deleted]"]
+
+
+class TestIdeaEditEndpoints:
+    def _make_idea(self, app, ref="IDEA-E1"):
+        from app.models import Idea, PromptConfig, User
+        from app.extensions import db
+
+        admin = User.query.filter_by(email="admin@test.com").first()
+        prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+        idea = Idea(
+            reference_code=ref,
+            prompt_title="Original title",
+            raw_content="Original body",
+            status="NEW",
+            prompt_config_id=prompt.id
+        )
+        db.session.add(idea)
+        db.session.commit()
+        return idea.id
+
+    def test_admin_edit_records_audit(self, admin_client, app, admin_user, admin_prompt):
+        with app.app_context():
+            idea_id = self._make_idea(app)
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={
+            "prompt_title": "Edited title",
+            "raw_content": "Edited body",
+        })
+        assert resp.status_code == 200
+
+        detail = admin_client.get(f"/api/v1/ideas/{idea_id}").get_json()["data"]
+        assert detail["idea"]["prompt_title"] == "Edited title"
+        fields = {e["field"]: e for e in detail["edit_history"]}
+        assert set(fields) == {"prompt_title", "raw_content"}
+        assert fields["prompt_title"]["old_value"] == "Original title"
+        assert fields["prompt_title"]["new_value"] == "Edited title"
+        assert "admin@example.com" in fields["prompt_title"]["editor"]
+
+    def test_edit_validation(self, admin_client, app, admin_user, admin_prompt):
+        with app.app_context():
+            idea_id = self._make_idea(app, ref="IDEA-EV")
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={})
+        assert resp.status_code == 400
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={"prompt_title": "   "})
+        assert resp.status_code == 400
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={"status": "NEW"})
+        assert resp.status_code == 400
+
+    def test_edit_user_forbidden(self, client, auth_user, app, admin_user, admin_prompt):
+        _email, token = auth_user
+        with app.app_context():
+            idea_id = self._make_idea(app, ref="IDEA-EF")
+
+        resp = client.patch(f"/api/v1/ideas/{idea_id}",
+                            json={"prompt_title": "Hijacked"},
+                            headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 403
+
+    def test_unchanged_fields_no_audit(self, admin_client, app, admin_user, admin_prompt):
+        with app.app_context():
+            idea_id = self._make_idea(app, ref="IDEA-EN")
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={
+            "prompt_title": "Original title",
+        })
+        assert resp.status_code == 200
+        history = admin_client.get(f"/api/v1/ideas/{idea_id}").get_json()["data"]["edit_history"]
+        assert history == []

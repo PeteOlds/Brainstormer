@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.9.0] - 2026-09-15
+### Added
+- Admin idea edit + audit (PRD §10.2): `PATCH /ideas/<id>` for prompt_title/raw_content (400 on empty, unchanged fields skipped), `idea_edits` table with editor names, history in detail view, edit form in Admin Actions
+
 ## [0.8.0] - 2026-09-15
 ### Added
 - Threaded idea comments (PRD §10.1): all users can post/reply (full nesting), authors edit/delete own, admins any; deletes become "[deleted]" stubs with children reparented; UI lives in the idea detail modal with reply/edit/delete, 44px targets, optimistic post
