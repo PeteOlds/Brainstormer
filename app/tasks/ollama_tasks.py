@@ -205,6 +205,20 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
 
         logger.info("idea_generated", idea_id=str(idea.id), prompt_id=str(prompt_config.id))
 
+        # Slack Phase 3a: best-effort post, never blocks generation.
+        try:
+            from flask import current_app
+            from app.services import slack_service
+            channel = (prompt_config.slack_channel or "").strip()
+            if channel:
+                slack_service.post_idea(
+                    channel,
+                    idea.to_dict(),
+                    current_app.config.get("APP_BASE_URL", "http://localhost:8000"),
+                )
+        except Exception as e:
+            logger.warning("slack_hook_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+
     except json.JSONDecodeError as e:
         # One retry with stricter prompt
         if self.request.retries == 0:

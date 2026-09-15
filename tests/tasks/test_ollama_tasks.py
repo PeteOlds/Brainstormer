@@ -704,3 +704,94 @@ class TestRecordFailure_format:
             run = PromptRun.query.get(run_id)
             assert run.status.value == "FAILED"
             assert run.error == "ConnectTimeout"
+
+
+class TestSlackHook:
+    def _valid_response(self):
+        return {
+            "response": json.dumps({
+                "elevator_pitch": "AI-powered inventory management for small retailers",
+                "target_audience": "Small retail businesses",
+                "core_value_proposition": "Automated stock optimization",
+                "monetization_strategy": "SaaS subscription"
+            }),
+            "done": True
+        }
+
+    def _seed_prompt(self, db, channel, email):
+        from app.models import User, PromptConfig, UserRole
+        admin = User(email=email, role=UserRole.ADMIN)
+        admin.set_password("admin123")
+        db.session.add(admin)
+        db.session.commit()
+        prompt = PromptConfig(
+            title="Slack Hook Prompt",
+            prompt_body="Generate a business idea",
+            interval_minutes=1440,
+            model_name="llama3:8b",
+            temperature=0.7,
+            is_active=True,
+            slack_channel=channel,
+            created_by_id=admin.id,
+        )
+        db.session.add(prompt)
+        db.session.commit()
+        return prompt.id
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_posts_to_configured_channel(self, mock_client_class, celery_app):
+        from unittest.mock import patch as _patch
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.generate_sync.return_value = self._valid_response()
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import Idea
+            from app.tasks.ollama_tasks import generate_idea
+
+            prompt_id = self._seed_prompt(db, "#ideas", "admin_hook@test.com")
+            with _patch('app.services.slack_service.post_idea') as mock_post:
+                generate_idea(str(prompt_id))
+                assert mock_post.call_count == 1
+                assert mock_post.call_args.args[0] == "#ideas"
+
+            assert Idea.query.filter_by(prompt_config_id=prompt_id).count() == 1
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_no_channel_no_post(self, mock_client_class, celery_app):
+        from unittest.mock import patch as _patch
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.generate_sync.return_value = self._valid_response()
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import Idea
+            from app.tasks.ollama_tasks import generate_idea
+
+            prompt_id = self._seed_prompt(db, None, "admin_hook2@test.com")
+            with _patch('app.services.slack_service.post_idea') as mock_post:
+                generate_idea(str(prompt_id))
+                assert mock_post.call_count == 0
+
+            assert Idea.query.filter_by(prompt_config_id=prompt_id).count() == 1
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_post_failure_does_not_break_generation(self, mock_client_class, celery_app):
+        from unittest.mock import patch as _patch
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.generate_sync.return_value = self._valid_response()
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import Idea
+            from app.tasks.ollama_tasks import generate_idea
+
+            prompt_id = self._seed_prompt(db, "#ideas", "admin_hook3@test.com")
+            with _patch('app.services.slack_service.post_idea',
+                        side_effect=RuntimeError("slack down")):
+                generate_idea(str(prompt_id))  # must not raise
+
+            assert Idea.query.filter_by(prompt_config_id=prompt_id).count() == 1

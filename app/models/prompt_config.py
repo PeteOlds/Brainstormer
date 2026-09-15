@@ -27,6 +27,7 @@ class PromptConfig(db.Model):
     num_predict = db.Column(db.Integer, default=1000)
     seed = db.Column(db.Integer, nullable=True)
     keep_alive = db.Column(db.String(20), default="2h")
+    slack_channel = db.Column(db.String(80), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     last_run_at = db.Column(db.DateTime(timezone=True))
     next_run_at = db.Column(db.DateTime(timezone=True), index=True)
@@ -83,6 +84,7 @@ class PromptConfig(db.Model):
             "num_predict": self.num_predict,
             "seed": self.seed,
             "keep_alive": self.keep_alive,
+            "slack_channel": self.slack_channel,
             "is_active": self.is_active,
             "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
             "next_run_at": self.next_run_at.isoformat() if self.next_run_at else None,

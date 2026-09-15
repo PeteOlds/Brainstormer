@@ -80,6 +80,16 @@
                 </div>
 
                 <div class="space-y-6 border-t border-slate-200 dark:border-slate-700 pt-6">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Slack notifications</h2>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">New ideas post here automatically. Leave empty to skip. Requires a bot token on the server.</p>
+                    <div>
+                        <label for="slack_channel" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Slack channel <span class="cursor-help text-slate-400" title="Channel name (#ideas) or channel ID. Leave empty for no posts.">?</span></label>
+                        <input type="text" id="slack_channel" name="slack_channel" maxlength="80" placeholder="#ideas"
+                               class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
+                    </div>
+                </div>
+
+                <div class="space-y-6 border-t border-slate-200 dark:border-slate-700 pt-6">
                     <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Generation</h2>
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Sampling knobs sent to Ollama on every run. Hover the ? for help.</p>
 
@@ -255,6 +265,7 @@ function createPromptForm() {
             const seedRaw = document.getElementById('seed').value.trim();
             const seed = seedRaw === '' ? null : parseInt(seedRaw, 10);
             const keepAlive = document.getElementById('keep_alive').value.trim() || '2h';
+            const slackChannel = document.getElementById('slack_channel').value.trim();
             const isActive = document.getElementById('is_active').checked;
             if (!title || !promptBody || !this.modelName) {
                 this.error = 'Title, prompt body and model are required.';
@@ -271,6 +282,7 @@ function createPromptForm() {
                 num_predict: isNaN(numPredict) ? 1000 : numPredict,
                 seed: (seed === null || isNaN(seed)) ? null : seed,
                 keep_alive: keepAlive,
+                slack_channel: slackChannel || null,
                 is_active: isActive,
             };
             if (this.intervalMinutes === 'custom' && this.cronExpression.trim()) {

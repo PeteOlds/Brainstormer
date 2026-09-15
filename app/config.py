@@ -36,6 +36,10 @@ class Config:
     OLLAMA_BASE_URL = get_env("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_TIMEOUT = int(get_env("OLLAMA_TIMEOUT", "120"))
 
+    # App / Slack
+    APP_BASE_URL = get_env("APP_BASE_URL", "http://localhost:8000")
+    SLACK_BOT_TOKEN = get_env("SLACK_BOT_TOKEN", "")
+
     # JWT Authentication
     JWT_SECRET_KEY = get_env("JWT_SECRET_KEY", required=True)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(get_env("JWT_ACCESS_TOKEN_EXPIRES", "900")))

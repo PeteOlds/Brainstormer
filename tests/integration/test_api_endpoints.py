@@ -100,8 +100,30 @@ class TestPromptEndpoints:
         assert data["seed"] == 42
         assert data["keep_alive"] == "30m"
 
-    def test_create_prompt_temperature_out_of_range(self, admin_client):
-        # API must 400, not silently clamp (same rule as interval_minutes).
+    def test_create_prompt_slack_channel(self, admin_client):
+        resp = admin_client.post("/api/v1/prompts", json={
+            "title": "Slack Prompt",
+            "prompt_body": "Test",
+            "interval_minutes": 60,
+            "model_name": "llama3:8b",
+            "slack_channel": "#ideas",
+            "is_active": False,
+        })
+        assert resp.status_code == 201
+        assert resp.get_json()["data"]["slack_channel"] == "#ideas"
+
+        for bad in ("not a channel", "x" * 81):
+            resp = admin_client.post("/api/v1/prompts", json={
+                "title": "Bad Channel",
+                "prompt_body": "Test",
+                "interval_minutes": 60,
+                "model_name": "llama3:8b",
+                "slack_channel": bad,
+                "is_active": False,
+            })
+            assert resp.status_code == 400
+
+    def test_create_prompt_temperature_out_of_range(self, admin_client):        # API must 400, not silently clamp (same rule as interval_minutes).
         for bad in (-0.5, 2.5, "hot"):
             resp = admin_client.post("/api/v1/prompts", json={
                 "title": "Bad Temp",

@@ -279,3 +279,45 @@ class TestBeatHeartbeat:
                 raise ConnectionError("down")
 
         assert check_beat_heartbeat(FakeRedis()) is False
+
+
+class TestSlackService:
+    def test_no_token_returns_none(self, monkeypatch):
+        from app.services import slack_service
+        monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
+        assert slack_service.post_idea("#general", {"reference_code": "IDEA-1"}) is None
+
+    def test_success_returns_ts(self):
+        from unittest.mock import MagicMock
+        from app.services import slack_service
+        client = MagicMock()
+        client.chat_postMessage.return_value = {"ts": "123.456", "ok": True}
+        ts = slack_service.post_idea("#general", {"reference_code": "IDEA-1", "status": "NEW"},
+                                     "http://x", client=client)
+        assert ts == "123.456"
+        kwargs = client.chat_postMessage.call_args.kwargs
+        assert kwargs["channel"] == "#general"
+        assert isinstance(kwargs["blocks"], list)
+
+    def test_failure_returns_none(self):
+        from unittest.mock import MagicMock
+        from app.services import slack_service
+        client = MagicMock()
+        client.chat_postMessage.side_effect = RuntimeError("boom")
+        assert slack_service.post_idea("#general", {"reference_code": "IDEA-1"},
+                                       "http://x", client=client) is None
+
+    def test_rate_limit_retries_once(self):
+        from unittest.mock import MagicMock
+        from app.services import slack_service
+
+        class RateLimited(Exception):
+            def __init__(self):
+                self.response = {"headers": {"Retry-After": "0"}}
+
+        client = MagicMock()
+        client.chat_postMessage.side_effect = [RateLimited(), {"ts": "1.0", "ok": True}]
+        ts = slack_service.post_idea("#general", {"reference_code": "IDEA-1"},
+                                     "http://x", client=client)
+        assert ts == "1.0"
+        assert client.chat_postMessage.call_count == 2

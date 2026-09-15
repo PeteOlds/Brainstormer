@@ -246,6 +246,11 @@
                                 <input type="text" id="modal-keep_alive" x-model="form.keep_alive" maxlength="20"
                                        class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
                             </div>
+                            <div>
+                                <label for="modal-slack_channel" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Slack channel <span class="cursor-help text-slate-400" title="New ideas post here automatically (#channel or ID). Empty = no posts. Requires a bot token on the server.">?</span></label>
+                                <input type="text" id="modal-slack_channel" x-model="form.slack_channel" maxlength="80" placeholder="#ideas"
+                                       class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors font-mono text-sm">
+                            </div>
                         </div>
                     </div>
                     
@@ -301,7 +306,7 @@ function initPromptsPage() {
         total: 0,
         totalPages: 1,
         filters: { status: '', search: '' },
-        form: { title: '', prompt_body: '', interval_minutes: 1440, cron_expression: '', model_name: '', temperature: 0.7, top_p: 0.9, repeat_penalty: 1.1, num_predict: 1000, seed: null, keep_alive: '2h', is_active: true },
+        form: { title: '', prompt_body: '', interval_minutes: 1440, cron_expression: '', model_name: '', temperature: 0.7, top_p: 0.9, repeat_penalty: 1.1, num_predict: 1000, seed: null, keep_alive: '2h', slack_channel: '', is_active: true },
         
         async loadPrompts() {
             this.loading = true;
@@ -406,7 +411,7 @@ function initPromptsPage() {
         },
         
         resetForm() {
-            this.form = { title: '', prompt_body: '', interval_minutes: 1440, cron_expression: '', model_name: '', temperature: 0.7, top_p: 0.9, repeat_penalty: 1.1, num_predict: 1000, seed: null, keep_alive: '2h', is_active: true };
+            this.form = { title: '', prompt_body: '', interval_minutes: 1440, cron_expression: '', model_name: '', temperature: 0.7, top_p: 0.9, repeat_penalty: 1.1, num_predict: 1000, seed: null, keep_alive: '2h', slack_channel: '', is_active: true };
             this.testResult = '';
             this.testError = '';
         },

@@ -69,6 +69,19 @@ def _parse_keep_alive(value, default="2h"):
     return text, None
 
 
+def _parse_slack_channel(value):
+    """Optional Slack channel: '#name' or ID. Empty clears it."""
+    if value is None or str(value).strip() == "":
+        return None, None
+    text = str(value).strip()
+    if len(text) > 80:
+        return None, api_error("Invalid slack_channel: too long (max 80 chars)", status_code=400)
+    if not (text.startswith("#") or text.startswith("C") or text.startswith("G")):
+        return None, api_error(
+            "Invalid slack_channel: use #channel-name or a channel ID.", status_code=400)
+    return text, None
+
+
 @bp.route("/prompts/test", methods=["POST"])
 @admin_required
 def test_prompt(user):
@@ -247,6 +260,9 @@ def create_prompt(user):
     keep_alive, err = _parse_keep_alive(data.get("keep_alive", "2h"))
     if err:
         return err
+    slack_channel, err = _parse_slack_channel(data.get("slack_channel"))
+    if err:
+        return err
 
     # Check max active prompts (10)
     active_count = PromptConfig.query.filter(PromptConfig.is_active == True).count()
@@ -265,6 +281,7 @@ def create_prompt(user):
         num_predict=num_predict,
         seed=seed,
         keep_alive=keep_alive,
+        slack_channel=slack_channel,
         is_active=data.get("is_active", True),
         created_by_id=user.id,
     )
@@ -344,6 +361,10 @@ def update_prompt(user, prompt_id):
             return err
     if "keep_alive" in data:
         prompt.keep_alive, err = _parse_keep_alive(data["keep_alive"])
+        if err:
+            return err
+    if "slack_channel" in data:
+        prompt.slack_channel, err = _parse_slack_channel(data["slack_channel"])
         if err:
             return err
     if "cron_expression" in data:

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.11.0] - 2026-09-15
+### Added
+- Slack Phase 3a (PRD §10.3): per-prompt `slack_channel` (#name or ID, validated, empty clears), `slack_sdk` dependency, best-effort Block Kit auto-post on new ideas (never blocks generation, one rate-limit retry), channel fields on both prompt forms
+
 ## [0.10.0] - 2026-09-15
 ### Added
 - Mobile responsive polish (PRD §10.4): zero horizontal overflow at 360px on all pages (navbar user area truncates, admin link/username progressively hide), 44px touch targets on nav/buttons/filters/inputs/menus/footer, users table scroll container, detail modal becomes a bottom sheet on mobile, prompt forms usable single-column
