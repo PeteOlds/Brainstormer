@@ -6,6 +6,7 @@ from .idea import Idea, IdeaStatus
 from .vote import Vote
 from .comment import Comment
 from .idea_edit import IdeaEdit
+from .slack import SlackPost, SlackEvent
 from .secondary_action import SecondaryActionResult, ActionType
 from .status_history import IdeaStatusHistory
 from .types import GUID
@@ -19,6 +20,8 @@ __all__ = [
     "Vote",
     "Comment",
     "IdeaEdit",
+    "SlackPost",
+    "SlackEvent",
     "SecondaryActionResult",
     "ActionType",
     "IdeaStatusHistory",

@@ -321,3 +321,117 @@ class TestSlackService:
                                      "http://x", client=client)
         assert ts == "1.0"
         assert client.chat_postMessage.call_count == 2
+
+
+class TestSlackReactions:
+    def _seed_idea(self, db, ref="IDEA-SV"):
+        from app.models import Idea, PromptConfig, User, UserRole
+        admin = User(email="admin_slack@test.com", role=UserRole.ADMIN)
+        admin.set_password("admin123")
+        db.session.add(admin)
+        db.session.commit()
+        prompt = PromptConfig(
+            title="Slack Votes", prompt_body="Test", interval_minutes=60,
+            model_name="llama3:8b", created_by_id=admin.id)
+        db.session.add(prompt)
+        db.session.commit()
+        idea = Idea(reference_code=ref, prompt_title="T", raw_content="c",
+                    prompt_config_id=prompt.id)
+        db.session.add(idea)
+        db.session.commit()
+        return idea
+
+    def _mock_client(self, email="voter@test.com"):
+        from unittest.mock import MagicMock
+        client = MagicMock()
+        client.users_info.return_value = {
+            "user": {"profile": {"email": email}, "real_name": "Voter"}}
+        return client
+
+    def test_provision_new_user_by_email(self, celery_app):
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import User, UserRole
+            from app.services import slack_service
+            user = slack_service.get_or_provision_user(
+                self._mock_client(), "U123")
+            assert user.email == "voter@test.com"
+            assert user.role == UserRole.USER
+            assert user.slack_user_id == "U123"
+            # Second call resolves by slack id, no duplicate.
+            same = slack_service.get_or_provision_user(
+                self._mock_client(), "U123")
+            assert same.id == user.id
+            assert User.query.filter_by(email="voter@test.com").count() == 1
+
+    def test_link_existing_email_account(self, celery_app):
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import User, UserRole
+            from app.services import slack_service
+            admin = User(email="linked@test.com", role=UserRole.USER)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            db.session.commit()
+            user = slack_service.get_or_provision_user(
+                self._mock_client("linked@test.com"), "U999")
+            assert user.id == admin.id
+            assert user.slack_user_id == "U999"
+            assert user.role == UserRole.USER
+
+    def test_vote_add_flip_rescind(self, celery_app):
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import User, UserRole
+            from app.services import slack_service
+            idea = self._seed_idea(db)
+            user = User(email="flip@test.com", role=UserRole.USER)
+            user.set_password("admin123")
+            db.session.add(user)
+            db.session.commit()
+            assert slack_service.apply_slack_vote(user, idea.id, 1, True) == 1
+            assert slack_service.apply_slack_vote(user, idea.id, -1, True) == -1
+            assert slack_service.apply_slack_vote(user, idea.id, -1, False) == 0
+            # Removing a vote you don't hold changes nothing.
+            assert slack_service.apply_slack_vote(user, idea.id, -1, False) == 0
+
+    def test_event_dedup(self, celery_app):
+        with celery_app.app_context():
+            from app.services import slack_service
+            assert slack_service.mark_event_seen("Ev001") is True
+            assert slack_service.mark_event_seen("Ev001") is False
+
+    def test_handle_reaction_end_to_end(self, celery_app):
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import SlackPost
+            from app.services import slack_service
+            idea = self._seed_idea(db, ref="IDEA-SE")
+            db.session.add(SlackPost(idea_id=idea.id, channel_id="C1",
+                                     message_ts="111.222"))
+            db.session.commit()
+            client = self._mock_client("react@test.com")
+            out = slack_service.handle_reaction_event(
+                client,
+                {"reaction": "+1", "user": "U555",
+                 "item": {"type": "message", "channel": "C1", "ts": "111.222"}},
+                event_id="Ev100", event_type="reaction_added")
+            assert out == "vote:net=1"
+            # Redelivery is a no-op.
+            assert slack_service.handle_reaction_event(
+                client,
+                {"reaction": "+1", "user": "U555",
+                 "item": {"type": "message", "channel": "C1", "ts": "111.222"}},
+                event_id="Ev100", event_type="reaction_added") == "duplicate"
+            # Unknown emoji ignored.
+            assert slack_service.handle_reaction_event(
+                client,
+                {"reaction": "eyes", "user": "U555",
+                 "item": {"type": "message", "channel": "C1", "ts": "111.222"}},
+                event_id="Ev101", event_type="reaction_added") == "ignored-reaction"
+            # Unknown message ignored.
+            assert slack_service.handle_reaction_event(
+                client,
+                {"reaction": "+1", "user": "U555",
+                 "item": {"type": "message", "channel": "C9", "ts": "999.999"}},
+                event_id="Ev102", event_type="reaction_added") == "unknown-message"

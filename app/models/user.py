@@ -23,6 +23,7 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     last_login_at = db.Column(db.DateTime(timezone=True), nullable=True)
     login_count = db.Column(db.Integer, default=0, nullable=False)
+    slack_user_id = db.Column(db.String(20), nullable=True, unique=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
