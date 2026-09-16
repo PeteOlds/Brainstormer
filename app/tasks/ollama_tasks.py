@@ -148,7 +148,7 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
         max_retries = self.max_retries if self.max_retries is not None else 0
         return self.request.retries >= max_retries
 
-    client = OllamaClient()
+    client = OllamaClient(timeout=600.0)
     try:
         # Render prompt
         base_prompt = get_base_prompt()
@@ -276,7 +276,7 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         run.mark_running()
         db.session.commit()
 
-    client = OllamaClient()
+    client = OllamaClient(timeout=600.0)
 
     def _retries_so_far():
         try:

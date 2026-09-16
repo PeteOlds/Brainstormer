@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.13.0] - 2026-09-16
+### Fixed
+- Secondary action timeout increased to 600s (from 120s) for CPU-bound large models; primary generation stays at 120s
+
 ## [0.12.0] - 2026-09-16
 ### Added
 - Slack Phase 3b (votes): `slack_user_id` link + `slack_posts`/`slack_events` tables, email-match auto-provisioning, 👍/👎 reaction add/remove mapped to set/flip/rescind, event-ID dedup, Socket Mode listener entrypoint (`slack_listener.py`, needs `SLACK_APP_TOKEN`)
