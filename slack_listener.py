@@ -7,6 +7,7 @@ with connections:write). Exits loudly if either is missing.
 """
 import os
 import sys
+import time
 
 import structlog
 
@@ -45,6 +46,8 @@ def main():
     from slack_sdk.socket_mode.response import SocketModeResponse
     from slack_sdk.web import WebClient
 
+    logger.info("slack_listener_starting")
+
     web_client = WebClient(token=bot_token)
     socket_client = SocketModeClient(app_token=app_token, web_client=web_client)
 
@@ -66,7 +69,6 @@ def main():
     socket_client.socket_mode_request_listeners.append(on_envelope)
     logger.info("slack_listener_starting")
     socket_client.connect()
-    import time
     try:
         while True:
             time.sleep(60)

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.14.0] - 2026-09-16
+### Added
+- Slack Phase 3c (two-way threads): app comments mirror to Slack threads (for posted ideas), Slack thread replies sync back as comments, loop-guard marker, Socket Mode listener entrypoint (`slack_listener.py`)
+
 ## [0.13.0] - 2026-09-16
 ### Fixed
 - Secondary action timeout increased to 600s (from 120s) for CPU-bound large models; primary generation stays at 120s

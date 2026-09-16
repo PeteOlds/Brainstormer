@@ -201,3 +201,160 @@ def handle_reaction_event(client, event, event_id=None, event_type="reaction_add
     if net is None:
         return "unknown-idea"
     return f"vote:net={net}"
+
+
+# Loop guard marker (zero-width space + prefix) — prepended to every
+# bot-generated comment so we can ignore echoes on the inbound path.
+MIRROR_MARKER = "\u2063brainstormer:"
+
+
+def mirror_comment_to_thread(idea, comment, client=None, app_base_url=None):
+    """Post a comment from the app into the idea's Slack thread.
+
+    Only runs when the idea has a SlackPost record (i.e., was posted to Slack).
+    Returns the Slack message ts or None.
+    """
+    from app.extensions import db
+    from app.models import SlackPost
+
+    post = SlackPost.query.filter_by(idea_id=idea.id).first()
+    if not post:
+        logger.info("slack_mirror_skipped_no_post", idea_id=str(idea.id))
+        return None
+
+    client = client or get_client()
+    if client is None:
+        logger.info("slack_mirror_skipped_unconfigured")
+        return None
+
+    # Build comment block with author and optional backlink
+    author = getattr(comment, "author_name", "Unknown")
+    body = comment.body or ""
+    if comment.is_deleted:
+        body = "[deleted]"
+
+    # Build block kit message
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*{author}*: {body[:2900]}"
+            }
+        },
+        {
+            "type": "context",
+            "elements": [{
+                "type": "mrkdwn",
+                "text": f"<{app_base_url}/ideas?comment={comment.id}|View in Brainstormer>"
+            }]
+        }
+    ]
+    # Invisible loop-guard marker
+    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"{MIRROR_MARKER}{comment.id}"}})
+
+    client = client or get_client()
+    if client is None:
+        logger.warning("slack_mirror_skipped_unconfigured")
+        return None
+
+    try:
+        resp = client.chat_postMessage(
+            channel=post.channel_id,
+            thread_ts=post.message_ts,
+            blocks=blocks,
+            text=f"{author}: {body[:200]}",
+        )
+        return resp.get("ts")
+    except Exception as e:
+        logger.warning("slack_mirror_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+        return None
+
+
+def handle_thread_reply(client, event, event_id=None):
+    """Handle a reply in a Slack thread — create a comment in the app.
+
+    Only processes replies in threads that correspond to a known SlackPost.
+    Ignores messages from bots, our own posts (MIRROR_MARKER), and non-thread messages.
+    """
+    if not event_id or not mark_event_seen(event_id):
+        return "duplicate"
+
+    subtype = event.get("subtype")
+    if subtype == "bot_message":
+        return "bot-message-ignored"
+
+    # Skip our own mirrored comments
+    text = event.get("text", "") or ""
+    if MIRROR_MARKER in text:
+        return "self-message-ignored"
+
+    item = event.get("item", {}) or {}
+    if item.get("type") != "message":
+        return "ignored-not-message"
+    if item.get("type") != "message":
+        return "ignored-not-message"
+    thread_ts = event.get("thread_ts")
+    if not thread_ts:
+        return "ignored-no-thread"
+
+    # Find the SlackPost by thread_ts (which is the original message_ts)
+    from app.models import SlackPost
+    post = SlackPost.query.filter_by(channel_id=event.get("channel"), message_ts=thread_ts).first()
+    if not post:
+        return "unknown-thread"
+
+    # Get or provision the user
+    user = get_or_provision_user(client, event.get("user", ""))
+    if user is None:
+        return "unknown-user"
+
+    # Create the comment
+    body = event.get("text", "").strip()
+    if not body:
+        return "empty-body"
+
+    from app.extensions import db
+    from app.models import Comment
+
+    comment = Comment(
+        idea_id=post.idea_id,
+        user_id=user.id,
+        parent_id=None,  # Slack threads are flat; we treat all replies as top-level
+        body=body,
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    logger.info("slack_thread_reply_mirrored", comment_id=str(comment.id), idea_id=str(post.idea_id))
+    return "mirrored"
+
+
+def is_own_message(event):
+    """Check if a message was sent by our bot."""
+    return event.get("bot_id") is not None
+
+
+def process_slack_event(client, event, event_id=None):
+    """Route an incoming Slack event to the appropriate handler."""
+    event_type = event.get("type", "")
+
+    if event_type in ("reaction_added", "reaction_removed"):
+        return handle_reaction_event(client, event, event_id=event.get("event_ts"), event_type=event.get("type"))
+
+    if event_type == "message":
+        # Skip bot messages and our own
+        if event.get("bot_id") or is_own_message(event):
+            return "bot-message-ignored"
+
+        subtype = event.get("subtype")
+        if subtype == "bot_message":
+            return "bot-message-ignored"
+
+        thread_ts = event.get("thread_ts")
+        if thread_ts:
+            return handle_thread_reply(client, event, event_id=event.get("event_ts"), event_type=event.get("type"))
+        # Non-thread messages are not mirrored
+        return "ignored-not-thread"
+
+    return "ignored-event-type"
