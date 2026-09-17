@@ -166,8 +166,9 @@ def _prompts_health():
             Idea.feasibility_score.isnot(None)).scalar()
 
         flags = []
+        # Tuning needs the full picture including discarded ideas.
         links = {"edit": f"/prompts?edit={prompt.id}",
-                 "ideas": f"/ideas?prompt={prompt.id}"}
+                 "ideas": f"/ideas?prompt={prompt.id}&status=ALL"}
         if discard_pct is not None and discard_pct > 70:
             flags.append({"code": "HIGH_DISCARD",
                           "message": f"{discard_pct:.0f}% discarded — consider retiring or reframing.",

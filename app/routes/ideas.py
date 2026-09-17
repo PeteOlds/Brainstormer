@@ -1,5 +1,6 @@
 from flask import Blueprint, request
 from sqlalchemy import func, desc, asc
+import json
 import uuid
 
 from app.extensions import db
@@ -29,11 +30,12 @@ def list_ideas(user):
 
     query = Idea.query
 
-    if status and status.upper() != 'ACTIVE_ONLY':
+    if status and status.upper() not in ('ACTIVE_ONLY', 'ALL'):
         query = query.filter(Idea.status == status.upper())
     elif status and status.upper() == 'ACTIVE_ONLY':
         # ACTIVE_ONLY is a frontend-only filter - exclude DISCARDED ideas
         query = query.filter(Idea.status != 'DISCARDED')
+    # 'ALL' (or absent) means no status filter.
     if prompt_config_id:
         query = query.filter(Idea.prompt_config_id == prompt_config_id)
     if model:
@@ -383,7 +385,7 @@ def delete_comment(user, comment_id):
     return api_ok({"deleted": str(comment.id)})
 
 
-EDITABLE_FIELDS = ("prompt_title", "raw_content")
+EDITABLE_FIELDS = ("prompt_title", "raw_content", "structured_content")
 
 
 @bp.route("/ideas/<uuid:idea_id>", methods=["PATCH"])
@@ -395,7 +397,7 @@ def update_idea_content(user, idea_id):
 
     updates = {f: data[f] for f in EDITABLE_FIELDS if f in data}
     if not updates:
-        return api_error("Nothing to update. Editable fields: prompt_title, raw_content.", status_code=400)
+        return api_error("Nothing to update. Editable fields: prompt_title, raw_content, structured_content.", status_code=400)
 
     if "prompt_title" in updates:
         title = (updates["prompt_title"] or "").strip()
@@ -409,8 +411,58 @@ def update_idea_content(user, idea_id):
         if not body:
             return api_error("raw_content must not be empty.", status_code=400)
         updates["raw_content"] = body
+    if "structured_content" in updates:
+        sc = updates["structured_content"]
+        if not isinstance(sc, dict):
+            return api_error("structured_content must be an object.", status_code=400)
+        allowed = {
+            "elevator_pitch": 500,
+            "target_audience": 300,
+            "core_value_proposition": 500,
+            "monetization_strategy": 300,
+        }
+        unknown = [k for k in sc if k not in allowed]
+        if unknown:
+            return api_error(f"Unknown structured fields: {', '.join(unknown)}.", status_code=400)
+        cleaned = {}
+        for key, cap in allowed.items():
+            if key not in sc:
+                continue
+            val = sc[key]
+            if not isinstance(val, str) or not val.strip():
+                return api_error(f"{key} must be a non-empty string.", status_code=400)
+            if len(val.strip()) > cap:
+                return api_error(f"{key} must be {cap} characters or fewer.", status_code=400)
+            cleaned[key] = val.strip()
+        if not cleaned:
+            return api_error("structured_content must include at least one known field.", status_code=400)
+        updates["structured_content"] = cleaned
 
     for field, new_value in updates.items():
+        if field == "structured_content":
+            current = idea.structured_content
+            if isinstance(current, str):
+                try:
+                    current = json.loads(current)
+                except (ValueError, TypeError):
+                    current = {}
+            if not isinstance(current, dict):
+                current = {}
+            # Build a FRESH dict: mutating the tracked object in place makes
+            # SQLAlchemy compare new-vs-mutated (equal) and skip the UPDATE.
+            updated = dict(current)
+            for key, val in new_value.items():
+                if updated.get(key) == val:
+                    continue
+                db.session.add(IdeaEdit(
+                    idea_id=idea.id, editor_id=user.id,
+                    field=f"structured_content.{key}",
+                    old_value=updated.get(key), new_value=val))
+                updated[key] = val
+            idea.structured_content = updated
+            # Keep the rendered display in sync with the edited fields.
+            idea.raw_content = json.dumps(updated)
+            continue
         old_value = getattr(idea, field)
         if old_value == new_value:
             continue

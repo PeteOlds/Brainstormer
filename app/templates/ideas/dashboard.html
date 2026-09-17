@@ -336,10 +336,22 @@
                                     <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Title</label>
                                     <input x-model="editTitle" type="text" maxlength="200" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Body</label>
-                                    <textarea x-model="editBody" rows="4" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"></textarea>
-                                </div>
+                                <template x-if="editStructured">
+                                    <div class="space-y-3">
+                                        <template x-for="f in editFieldDefs" :key="f.key">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1" x-text="f.label"></label>
+                                                <textarea x-model="editFields[f.key]" rows="3" :maxlength="f.max" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template x-if="!editStructured">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Body</label>
+                                        <textarea x-model="editBody" rows="4" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"></textarea>
+                                    </div>
+                                </template>
                                 <div class="flex gap-2">
                                     <button @click="saveIdeaEdit()" :disabled="editSaving" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save changes</button>
                                     <button @click="editingIdea = false" class="px-4 py-2 min-h-[44px] text-sm text-slate-600 dark:text-slate-300">Cancel</button>
@@ -458,6 +470,14 @@ function ideasApp() {
         editTitle: '',
         editBody: '',
         editSaving: false,
+        editStructured: false,
+        editFields: {},
+        editFieldDefs: [
+            { key: 'elevator_pitch', label: 'Elevator Pitch', max: 500 },
+            { key: 'target_audience', label: 'Target Audience', max: 300 },
+            { key: 'core_value_proposition', label: 'Core Value Proposition', max: 500 },
+            { key: 'monetization_strategy', label: 'Monetization Strategy', max: 300 },
+        ],
         currentPage: 1,
         pageSize: 10,
         total: 0,
@@ -485,9 +505,14 @@ function ideasApp() {
 
         async init() {
             // Deep links (e.g. from /admin/activity): ?status=&prompt=&model=
+            // status=ALL selects "All Statuses" (needed by health links).
             const query = new URLSearchParams(window.location.search);
             const qStatus = query.get('status');
-            if (qStatus) this.filters.status = qStatus.toUpperCase();
+            if (qStatus === 'ALL') {
+                this.filters.status = '';
+            } else if (qStatus) {
+                this.filters.status = qStatus.toUpperCase();
+            }
             const qPrompt = query.get('prompt');
             if (qPrompt) this.filters.prompt_id = qPrompt;
             const qModel = query.get('model');
@@ -737,24 +762,61 @@ function ideasApp() {
         startIdeaEdit() {
             if (!this.selectedIdea) return;
             this.editTitle = this.selectedIdea.prompt_title || '';
-            this.editBody = this.selectedIdea.content || '';
+            // Structured mode when the idea has a field dict; otherwise raw.
+            let sc = this.selectedIdea.structured_content;
+            if (typeof sc === 'string') {
+                try { sc = JSON.parse(sc); } catch (e) { sc = null; }
+            }
+            const known = ['elevator_pitch', 'target_audience', 'core_value_proposition', 'monetization_strategy'];
+            if (sc && typeof sc === 'object' && known.some((k) => typeof sc[k] === 'string')) {
+                this.editStructured = true;
+                const fields = {};
+                for (const k of known) fields[k] = typeof sc[k] === 'string' ? sc[k] : '';
+                this.editFields = fields;
+            } else {
+                this.editStructured = false;
+                this.editBody = this.selectedIdea.content || '';
+            }
             this.editingIdea = true;
         },
 
         async saveIdeaEdit() {
             if (!this.selectedIdea) return;
             const title = (this.editTitle || '').trim();
-            const body = (this.editBody || '').trim();
-            if (!title || !body) {
-                alert('Title and body must not be empty.');
+            if (!title) {
+                alert('Title must not be empty.');
                 return;
+            }
+            const payload = { prompt_title: title };
+            if (this.editStructured) {
+                const sc = {};
+                for (const f of this.editFieldDefs) {
+                    const val = (this.editFields[f.key] || '').trim();
+                    if (!val) {
+                        alert(f.label + ' must not be empty.');
+                        return;
+                    }
+                    if (val.length > f.max) {
+                        alert(f.label + ` must be ${f.max} characters or fewer.`);
+                        return;
+                    }
+                    sc[f.key] = val;
+                }
+                payload.structured_content = sc;
+            } else {
+                const body = (this.editBody || '').trim();
+                if (!body) {
+                    alert('Body must not be empty.');
+                    return;
+                }
+                payload.raw_content = body;
             }
             this.editSaving = true;
             try {
                 const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt_title: title, raw_content: body }),
+                    body: JSON.stringify(payload),
                 });
                 if (!res.ok) {
                     const err = await res.json().catch(() => ({}));

@@ -20,6 +20,9 @@ class Idea(db.Model):
     reference_code = db.Column(db.String(20), unique=True, nullable=False, index=True)
     prompt_title = db.Column(db.String(200), nullable=False)
     raw_content = db.Column(db.Text, nullable=False)
+    # NOTE: plain JSON column (no MutableDict). Never mutate the loaded dict
+    # in place and reassign it — SQLAlchemy then compares new-vs-mutated
+    # (equal) and silently skips the UPDATE. Always build a fresh dict.
     structured_content = db.Column(db.JSON)
     status = db.Column(db.Enum(IdeaStatus), default=IdeaStatus.NEW, nullable=False, index=True)
 

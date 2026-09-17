@@ -8,6 +8,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - PRD document generation (`PRD_DOC` action): 7-section PRD with capped open-questions list, answer-and-regenerate loop (reruns replace), per-action tabs in the idea detail modal, admin-generate / view-for-all visibility
 ### Fixed
+- Admin idea edit is WYSIWYG: labeled fields for pitch/audience/value/monetization instead of raw JSON (raw fallback kept for unstructured ideas); fixed silent UPDATE loss from in-place JSON mutation
+- Prompt Health "View ideas" links now show all statuses (`status=ALL`) for tuning, not just active ones
 - Secondary-action outputs cut off mid-JSON by the 1000-token cap: `num_predict` floored at 4000 for analytical actions (a higher per-prompt setting is respected)
 
 ## [0.18.0] - 2026-09-16

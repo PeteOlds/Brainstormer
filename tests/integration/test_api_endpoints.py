@@ -1060,3 +1060,79 @@ class TestIdeaEditEndpoints:
         assert resp.status_code == 200
         history = admin_client.get(f"/api/v1/ideas/{idea_id}").get_json()["data"]["edit_history"]
         assert history == []
+
+    def test_admin_edit_structured_fields(self, admin_client, app, admin_user, admin_prompt):
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+            idea = Idea(
+                reference_code="IDEA-ES",
+                prompt_title="Structured",
+                raw_content='{"elevator_pitch": "Old pitch here"}',
+                structured_content={"elevator_pitch": "Old pitch here",
+                                    "target_audience": "Old audience"},
+                status="NEW",
+                prompt_config_id=prompt.id,
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={
+            "structured_content": {"elevator_pitch": "New pitch here",
+                                   "target_audience": "New audience"},
+        })
+        assert resp.status_code == 200
+
+        detail = admin_client.get(f"/api/v1/ideas/{idea_id}").get_json()["data"]
+        assert detail["idea"]["structured_content"]["elevator_pitch"] == "New pitch here"
+        # Display stays in sync through raw_content.
+        assert "New pitch here" in detail["idea"]["content"]
+        fields = {e["field"]: e for e in detail["edit_history"]}
+        assert fields["structured_content.elevator_pitch"]["old_value"] == "Old pitch here"
+
+    def test_edit_structured_validation(self, admin_client, app, admin_user, admin_prompt):
+        with app.app_context():
+            idea_id = self._make_idea(app, ref="IDEA-EW")
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={
+            "structured_content": "not-an-object",
+        })
+        assert resp.status_code == 400
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={
+            "structured_content": {"bogus_field": "x"},
+        })
+        assert resp.status_code == 400
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={
+            "structured_content": {"elevator_pitch": "x" * 501},
+        })
+        assert resp.status_code == 400
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}", json={
+            "structured_content": {},
+        })
+        assert resp.status_code == 400
+
+    def test_list_ideas_status_all(self, client, auth_user, app, admin_user, admin_prompt):
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User, IdeaStatus
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+            db.session.add(Idea(
+                reference_code="IDEA-ALL1", prompt_title="T", raw_content="c",
+                status="DISCARDED", prompt_config_id=prompt.id))
+            db.session.commit()
+
+        resp = client.get("/api/v1/ideas?status=ALL",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        refs = [i["reference_code"] for i in resp.get_json()["data"]["ideas"]]
+        assert "IDEA-ALL1" in refs
