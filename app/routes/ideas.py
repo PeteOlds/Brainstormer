@@ -225,6 +225,20 @@ def run_action(user, idea_id):
 
     model_override = data.get("model_override")
 
+    # Rerun answers: optional list of user answers to a previous run's open
+    # questions. Only PRD_DOC consumes them; ignored for other actions.
+    answers = data.get("answers") or []
+    if answers and not isinstance(answers, list):
+        return api_error("answers must be a list of strings", status_code=400)
+    answers = [str(a) for a in answers if str(a).strip()]
+
+    # PRD_DOC reruns replace: one current PRD per idea.
+    if action_type == "PRD_DOC":
+        from app.models import SecondaryActionResult
+        SecondaryActionResult.query.filter_by(
+            idea_id=idea.id, action_type="PRD_DOC").delete()
+        db.session.commit()
+
     # Record the run first so it shows as pending immediately.
     from app.models import PromptRun
     run = PromptRun(prompt_config_id=None, action_type=action_type,
@@ -235,7 +249,8 @@ def run_action(user, idea_id):
     # Enqueue action task
     from app.tasks.ollama_tasks import run_secondary_action
     job = run_secondary_action.delay(str(idea_id), action_type, model_override,
-                                     run_id=str(run.id))
+                                     run_id=str(run.id),
+                                     extra_context={"answers": answers} if answers else None)
     run.job_id = job.id
     db.session.commit()
 

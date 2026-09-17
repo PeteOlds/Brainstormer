@@ -1,0 +1,30 @@
+Act as an expert technical product manager and business analyst. Take the product idea below and translate it into a comprehensive, production-ready Product Requirements Document (PRD).
+
+### PRODUCT IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+
+### INSTRUCTIONS:
+1. Structure the PRD with professional rigor across these sections:
+   - Executive Summary & Vision: core problem, proposed solution, target audience, business goals/KPIs.
+   - User Personas & Pain Points: primary profiles, current workflows, pain points eliminated.
+   - Product Scope & Features: MVP scope versus future phases, split into Must-Have and Nice-to-Have.
+   - Functional Requirements & User Stories: detailed user stories with acceptance criteria (Given/When/Then) for core workflows.
+   - Non-Functional Requirements: performance benchmarks, security/compliance, data privacy, scalability, platform constraints.
+   - User Experience & Interface Guidelines: core navigation flows, layout principles, key UX states (loading, empty, error).
+   - Assumptions, Dependencies & Risks: technical dependencies, third-party integrations, assumptions, risks with mitigations.
+2. End with up to 5 open questions: things you could not determine from the idea alone that a human should answer before engineering starts. If there is nothing genuinely unclear, return an empty list.
+3. Output STRICTLY a valid JSON object matching the schema below. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
+
+### OUTPUT JSON SCHEMA:
+{
+  "executive_summary": "string (problem, solution, audience, goals/KPIs)",
+  "user_personas": "string (profiles, workflows, pain points)",
+  "product_scope": "string (MVP vs future phases, must-have vs nice-to-have)",
+  "functional_requirements": "string (user stories with Given/When/Then acceptance criteria)",
+  "non_functional_requirements": "string (performance, security, privacy, scalability, constraints)",
+  "ux_guidelines": "string (navigation, layout, loading/empty/error states)",
+  "assumptions_risks": "string (dependencies, integrations, assumptions, mitigations)",
+  "open_questions": ["question the human should answer", "..."]
+}

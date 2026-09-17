@@ -68,6 +68,18 @@ class PestelOutput(BaseModel):
     recommendations: List[str]
 
 
+class PrdOutput(BaseModel):
+    """PRD document — flat sections plus capped open-questions list."""
+    executive_summary: str = Field(..., min_length=20)
+    user_personas: str = Field(..., min_length=20)
+    product_scope: str = Field(..., min_length=20)
+    functional_requirements: str = Field(..., min_length=20)
+    non_functional_requirements: str = Field(..., min_length=20)
+    ux_guidelines: str = Field(..., min_length=20)
+    assumptions_risks: str = Field(..., min_length=20)
+    open_questions: List[str] = Field(default_factory=list, max_length=5)
+
+
 # Action type to schema mapping
 _ACTION_SCHEMAS = {
     "REFINE": RefineOutput,
@@ -75,6 +87,7 @@ _ACTION_SCHEMAS = {
     "FEASIBILITY_SCORE": FeasibilityOutput,
     "FIVE_FORCES": FiveForcesOutput,
     "PESTEL": PestelOutput,
+    "PRD_DOC": PrdOutput,
 }
 
 

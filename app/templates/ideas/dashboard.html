@@ -279,6 +279,18 @@
                     
                     <div class="border-t border-slate-200 dark:border-slate-700 pt-4"></div>
                     
+                    <div class="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-700" role="tablist" aria-label="Idea sections">
+                        <button @click="activeTab = 'overview'" role="tab" :aria-selected="activeTab === 'overview'" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'overview' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
+                            Overview
+                        </button>
+                        <template x-for="tab in actionTabs()" :key="tab.key">
+                            <button @click="activeTab = tab.key" role="tab" :aria-selected="activeTab === tab.key" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === tab.key ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
+                                <span x-text="tab.label"></span>
+                                <span x-show="actionLoading === tab.key" class="ml-1 inline-block align-middle"><svg class="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span>
+                            </button>
+                        </template>
+                    </div>
+                    <div x-show="activeTab === 'overview'" class="contents">
                     <div>
                         <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Idea Content</h3>
                         <div class="prose prose-slate dark:prose-invert max-w-none" x-html="selectedIdea?.rendered_content"></div>
@@ -349,24 +361,6 @@
                     </template>
                     
                     <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
-                        <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Secondary Actions</h3>
-                        <div class="space-y-4" x-show="selectedIdea?.actions && selectedIdea.actions.length > 0">
-                            <template x-for="action in selectedIdea?.actions" :key="action.action_type + action.executed_at">
-                                <div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="font-medium text-slate-900 dark:text-white capitalize" x-text="action.action_type.toLowerCase().replace('_', ' ')"></span>
-                                        <span class="text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(action.executed_at)"></span>
-                                    </div>
-                                    <div class="prose prose-sm prose-slate dark:prose-invert max-w-none" x-html="action.rendered_output"></div>
-                                </div>
-                            </template>
-                            <div x-show="!selectedIdea?.actions || selectedIdea.actions.length === 0" class="text-center py-8 text-slate-500 dark:text-slate-400">
-                                <svg class="mx-auto h-8 w-8 mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
-                                <p>No secondary actions run yet.</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
                         <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Comments <span class="text-sm font-normal text-slate-500" x-show="commentCount()" x-text="'(' + commentCount() + ')'"></span></h3>
                         <div class="space-y-3">
                             <template x-for="c in flatComments()" :key="c.id">
@@ -406,6 +400,36 @@
                     </div>
                 </div>
                 
+                    </div>
+                    <template x-for="tab in actionTabs()" :key="'panel-' + tab.key">
+                        <div x-show="activeTab === tab.key" class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="tab.label"></h3>
+                                <span class="text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(actionTabResult(tab.key)?.executed_at)"></span>
+                            </div>
+                            <div class="prose prose-sm prose-slate dark:prose-invert max-w-none" x-html="actionTabResult(tab.key)?.rendered_output"></div>
+                            <template x-if="tab.key === 'PRD_DOC'">
+                                <div class="mt-4 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-4">
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Open questions</h4>
+                                    <template x-if="(prdQuestions() || []).length === 0">
+                                        <p class="text-sm text-slate-500 dark:text-slate-400">None — the PRD is complete as far as the model can tell.</p>
+                                    </template>
+                                    <div class="space-y-3">
+                                        <template x-for="(q, i) in (prdQuestions() || [])" :key="i">
+                                            <div>
+                                                <label class="block text-sm text-slate-700 dark:text-slate-300 mb-1" x-text="(i + 1) + '. ' + q"></label>
+                                                <textarea x-model="prdAnswers[i]" rows="2" maxlength="2000" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <button @click="submitPrdAnswers()" :disabled="actionLoading === 'PRD_DOC' || !prdHasAnswers()" class="mt-3 px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                        <span x-show="actionLoading !== 'PRD_DOC'">Answer & regenerate</span>
+                                        <span x-show="actionLoading === 'PRD_DOC'">Regenerating…</span>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
                 <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
                     <button @click="closeDetailModal()" onclick="try{this.closest("[x-show]").style.display="none"}catch(e){}" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Close</button>
                 </div>
@@ -442,6 +466,8 @@ function ideasApp() {
         currentUserId: null,
         lastUpdated: '',
         availableActions: [],
+        activeTab: 'overview',
+        prdAnswers: {},
         filters: { status: 'ACTIVE_ONLY', sort: 'created_at', search: '', prompt_id: '', model: '' },
 
         // Follow-up AI actions come from the server registry
@@ -608,6 +634,8 @@ function ideasApp() {
         
         openDetailModal(idea) {
             this.selectedIdea = { ...idea };
+            this.activeTab = 'overview';
+            this.prdAnswers = {};
             this.loadIdeaDetail(idea.id);
             this.loadComments(idea.id);
             this.detailModalOpen = true;
@@ -786,8 +814,8 @@ function ideasApp() {
         },
         
         get refinedActions() {
-            // 3-dot menu: Refine + Competitors + Five Forces + PESTEL.
-            return (this.availableActions || []).filter((a) => ['REFINE', 'COMPETITORS', 'FIVE_FORCES', 'PESTEL'].includes(a.key));
+            // 3-dot menu: Refine + Competitors + Five Forces + PESTEL + PRD.
+            return (this.availableActions || []).filter((a) => ['REFINE', 'COMPETITORS', 'FIVE_FORCES', 'PESTEL', 'PRD_DOC'].includes(a.key));
         },
 
         async confirmDiscard(idea, close) {
@@ -812,13 +840,13 @@ function ideasApp() {
             }
         },
         
-        async runAction(ideaId, actionType) {
+        async runAction(ideaId, actionType, extra) {
             this.actionLoading = actionType;
             try {
                 const response = await authFetch(`/api/v1/ideas/${ideaId}/actions`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action_type: actionType })
+                    body: JSON.stringify({ action_type: actionType, ...(extra || {}) })
                 });
                 if (!response.ok) throw new Error('Failed to run action');
                 
@@ -850,6 +878,47 @@ function ideasApp() {
             }
         },
         
+        actionTabs() {
+            const seen = [];
+            for (const a of (this.selectedIdea?.actions || [])) {
+                if (!seen.find((t) => t.key === a.action_type)) {
+                    const reg = (this.availableActions || []).find((r) => r.key === a.action_type);
+                    const label = reg ? reg.label : a.action_type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                    seen.push({ key: a.action_type, label });
+                }
+            }
+            return seen;
+        },
+
+        actionTabResult(key) {
+            const rows = (this.selectedIdea?.actions || []).filter((a) => a.action_type === key);
+            return rows[rows.length - 1];
+        },
+
+        prdQuestions() {
+            const row = this.actionTabResult('PRD_DOC');
+            const data = row?.result_data || row?.output;
+            const list = data && typeof data === 'object' ? data.open_questions : null;
+            return Array.isArray(list) ? list : [];
+        },
+
+        prdHasAnswers() {
+            return Object.values(this.prdAnswers || {}).some((v) => String(v || '').trim() !== '');
+        },
+
+        async submitPrdAnswers() {
+            if (!this.selectedIdea || !this.prdHasAnswers()) return;
+            const questions = this.prdQuestions();
+            const answers = questions
+                .map((q, i) => ({ q, a: String(this.prdAnswers[i] || '').trim() }))
+                .filter((x) => x.a !== '')
+                .map((x) => `Q: ${x.q}\nA: ${x.a}`);
+            if (!answers.length) return;
+            await this.runAction(this.selectedIdea.id, 'PRD_DOC', { answers });
+            this.prdAnswers = {};
+            this.activeTab = 'PRD_DOC';
+        },
+
         getStatusClass(status) {
             const classes = {
                 'NEW': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',

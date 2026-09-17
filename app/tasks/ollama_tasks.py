@@ -257,7 +257,7 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
 
 @celery.task(bind=True, base=BaseTask, name="app.tasks.ollama_tasks.run_secondary_action",
              autoretry_for=(Exception,), retry_backoff=True, max_retries=2)
-def run_secondary_action(self, idea_id: str, action_type: str, model_override: str = None, run_id: str | None = None):
+def run_secondary_action(self, idea_id: str, action_type: str, model_override: str = None, run_id: str | None = None, extra_context: dict | None = None):
     """Run a secondary action on an existing idea."""
     from app.models import PromptRun
 
@@ -315,6 +315,14 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         # Get prompt template
         prompt_template = get_prompt_template(action_type)
         user_prompt = prompt_template.render(ORIGINAL_IDEA_CONTENT=idea.raw_content)
+        # Rerun answers (PRD_DOC open questions): appended verbatim so the
+        # model regenerates with the human's input. Ignored if empty.
+        answers = (extra_context or {}).get("answers") or []
+        if answers:
+            numbered = "\n".join(f"{i + 1}. {a}" for i, a in enumerate(answers))
+            user_prompt += (
+                "\n\n### USER ANSWERS (use these to resolve open questions):\n"
+                + numbered)
         base_prompt = get_base_prompt()
         model = model_override or idea.prompt_config.model_name if idea.prompt_config else "llama3:8b"
         prompt_config = idea.prompt_config

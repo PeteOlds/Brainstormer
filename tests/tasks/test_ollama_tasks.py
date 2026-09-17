@@ -375,6 +375,60 @@ class TestSecondaryActionRobustness:
                 idea_id=idea.id, action_type="PESTEL").count() == 1
 
     @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_run_secondary_action_prd_doc(self, mock_client_class, celery_app):
+        import json as _json
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import SecondaryActionResult
+            from app.tasks.ollama_tasks import run_secondary_action
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.generate_sync.return_value = {
+                "response": _json.dumps({
+                    "executive_summary": "Problem X for audience Y with KPI Z clearly stated here.",
+                    "user_personas": "Primary persona works this way and feels that pain daily.",
+                    "product_scope": "MVP must-haves listed, nice-to-haves deferred to phase two.",
+                    "functional_requirements": "Given a user When they act Then the system responds.",
+                    "non_functional_requirements": "99.9% uptime, encrypted data, GDPR compliant posture.",
+                    "ux_guidelines": "Three-step flow with loading, empty and error states covered.",
+                    "assumptions_risks": "Depends on API Q with fallback and mitigation plan.",
+                    "open_questions": ["What is the pricing model?"]}),
+                "done": True}
+            idea = self._seed(db, email="admin_sec6@test.com")
+            run_secondary_action(str(idea.id), "PRD_DOC")
+            assert SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="PRD_DOC").count() == 1
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_run_secondary_action_prd_answers_in_prompt(self, mock_client_class, celery_app):
+        import json as _json
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import SecondaryActionResult
+            from app.tasks.ollama_tasks import run_secondary_action
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.generate_sync.return_value = {
+                "response": _json.dumps({
+                    "executive_summary": "Problem X for audience Y with KPI Z clearly stated here.",
+                    "user_personas": "Primary persona works this way and feels that pain daily.",
+                    "product_scope": "MVP must-haves listed, nice-to-haves deferred to phase two.",
+                    "functional_requirements": "Given a user When they act Then the system responds.",
+                    "non_functional_requirements": "99.9% uptime, encrypted data, GDPR compliant posture.",
+                    "ux_guidelines": "Three-step flow with loading, empty and error states covered.",
+                    "assumptions_risks": "Depends on API Q with fallback and mitigation plan.",
+                    "open_questions": []}),
+                "done": True}
+            idea = self._seed(db, email="admin_sec7@test.com")
+            run_secondary_action(str(idea.id), "PRD_DOC",
+                                 extra_context={"answers": ["Freemium, $9/mo"]})
+            sent = mock_client.generate_sync.call_args.kwargs["prompt"]
+            assert "USER ANSWERS" in sent
+            assert "Freemium, $9/mo" in sent
+            assert SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="PRD_DOC").count() == 1
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
     def test_validation_error_strict_retry(self, mock_client_class, celery_app):
         """First bad schema output triggers one strict retry; success stored."""
         import json as _json

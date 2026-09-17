@@ -213,6 +213,20 @@ class TestOllamaSchemas:
         with pytest.raises(Exception):
             validate_ollama_output("REFINE", "invalid json")
 
+    def test_validate_prd_output(self):
+        from app.schemas.ollama_schemas import PrdOutput
+        json_str = '{"executive_summary": "Problem X for audience Y with KPI Z clearly stated here.", "user_personas": "Primary persona works this way and feels that pain daily.", "product_scope": "MVP must-haves listed, nice-to-haves deferred to phase two.", "functional_requirements": "Given a user When they act Then the system responds accordingly.", "non_functional_requirements": "99.9% uptime, encrypted data, GDPR compliant posture.", "ux_guidelines": "Three-step flow with loading, empty and error states covered.", "assumptions_risks": "Depends on API Q with fallback and mitigation plan.", "open_questions": ["What is the pricing model?", "Which platform first?"]}'
+        result = validate_ollama_output("PRD_DOC", json_str)
+        assert isinstance(result, PrdOutput)
+        assert len(result.open_questions) == 2
+
+    def test_validate_prd_too_many_questions(self):
+        import pytest as _pytest
+        qs = ", ".join(f'"q{i}"' for i in range(6))
+        json_str = '{"executive_summary": "' + "x" * 30 + '", "user_personas": "' + "x" * 30 + '", "product_scope": "' + "x" * 30 + '", "functional_requirements": "' + "x" * 30 + '", "non_functional_requirements": "' + "x" * 30 + '", "ux_guidelines": "' + "x" * 30 + '", "assumptions_risks": "' + "x" * 30 + '", "open_questions": [' + qs + ']}'
+        with _pytest.raises(Exception):
+            validate_ollama_output("PRD_DOC", json_str)
+
 class TestTokenLifetime:
     def test_access_token_honours_config_expiry(self, app):
         """Regression: create_tokens hardcoded 15min, ignoring

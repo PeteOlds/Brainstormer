@@ -617,6 +617,122 @@ class TestActionEndpoints:
             assert resp.status_code == 202
             mock_run.delay.assert_called_once()
 
+    def test_run_action_prd_doc_with_answers(self, admin_client, app, admin_user, admin_prompt):
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-PRD1",
+                prompt_title="Test",
+                raw_content="Test content for prd",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        with patch('app.tasks.ollama_tasks.run_secondary_action') as mock_run:
+            mock_run.delay.return_value.id = "fake-prd-job-id"
+            resp = admin_client.post(f"/api/v1/ideas/{idea_id}/actions", json={
+                "action_type": "PRD_DOC",
+                "answers": ["Freemium, $9/mo"],
+            })
+            assert resp.status_code == 202
+            _, kwargs = mock_run.delay.call_args
+            assert kwargs["extra_context"] == {"answers": ["Freemium, $9/mo"]}
+
+    def test_run_action_prd_rerun_replaces(self, admin_client, app, admin_user, admin_prompt):
+        with app.app_context():
+            from app.models import Idea, PromptConfig, SecondaryActionResult, ActionType, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-PRD2",
+                prompt_title="Test",
+                raw_content="Test content for prd rerun",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            db.session.add(SecondaryActionResult(
+                idea_id=idea.id, action_type=ActionType.PRD_DOC,
+                model_used="test", result_data={"executive_summary": "old"}))
+            db.session.commit()
+            idea_id = idea.id
+
+        with patch('app.tasks.ollama_tasks.run_secondary_action') as mock_run:
+            mock_run.delay.return_value.id = "fake-prd-job-id-2"
+            resp = admin_client.post(f"/api/v1/ideas/{idea_id}/actions", json={
+                "action_type": "PRD_DOC",
+            })
+            assert resp.status_code == 202
+
+        with app.app_context():
+            from app.models import SecondaryActionResult
+            assert SecondaryActionResult.query.filter_by(
+                idea_id=idea_id, action_type="PRD_DOC").count() == 0
+
+    def test_run_action_bad_answers_rejected(self, admin_client, app, admin_user, admin_prompt):
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-PRD3",
+                prompt_title="Test",
+                raw_content="Test content",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        with patch('app.tasks.ollama_tasks.run_secondary_action') as mock_run:
+            resp = admin_client.post(f"/api/v1/ideas/{idea_id}/actions", json={
+                "action_type": "PRD_DOC",
+                "answers": "not-a-list",
+            })
+            assert resp.status_code == 400
+            mock_run.delay.assert_not_called()
+
+    def test_run_action_prd_user_forbidden(self, client, auth_user, app, admin_user, admin_prompt):
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-PRD4",
+                prompt_title="Test",
+                raw_content="Test",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        resp = client.post(f"/api/v1/ideas/{idea_id}/actions", json={
+            "action_type": "PRD_DOC"
+        }, headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 403
+
     def test_run_action_user_forbidden(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
         with app.app_context():

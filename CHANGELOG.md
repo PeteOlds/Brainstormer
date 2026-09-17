@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.19.0] - 2026-09-17
+### Added
+- PRD document generation (`PRD_DOC` action): 7-section PRD with capped open-questions list, answer-and-regenerate loop (reruns replace), per-action tabs in the idea detail modal, admin-generate / view-for-all visibility
+
 ## [0.18.0] - 2026-09-16
 ### Added
 - Idea embeddings for similarity search (PRD §9.3): `embedding` JSON column on ideas, `EmbeddingService` with nomic-embed-text via Ollama, cosine similarity search endpoint, "Similarity" badge in ideas list with link to filtered results

@@ -9,7 +9,6 @@ import logging
 from typing import List, Optional, Tuple
 
 import httpx
-from pgvector import Vector
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -74,6 +73,7 @@ class EmbeddingService:
 
     def cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """Compute cosine similarity between two vectors."""
+        from pgvector import Vector
         v1 = Vector(vec1)
         v2 = Vector(vec2)
         return float(v1.cosine_similarity(v2))

@@ -48,6 +48,13 @@ ACTION_REGISTRY = [
         "template": "pestel",
         "done_label": "Scanned",
     },
+    {
+        "key": "PRD_DOC",
+        "label": "Generate PRD",
+        "description": "Full Product Requirements Document: vision, personas, scope, user stories, NFRs, UX, risks — plus open questions you can answer and rerun.",
+        "template": "prd_doc",
+        "done_label": "Documented",
+    },
 ]
 
 _ACTION_INDEX = {entry["key"]: entry for entry in ACTION_REGISTRY}

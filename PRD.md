@@ -1118,3 +1118,8 @@ screens with touch-sized vote buttons; detail modal becomes a full-screen sheet;
 scroll containers + sticky headers; verified nav behaviour; single-column forms with large inputs;
 viewport-safe toasts/dialogs. Walk every page at 360px and 768px: no horizontal overflow, tap
 targets ≥44px.
+
+
+### Next Up
+Edit should be WYSIWYG, not json
+On /admin/activity   Prompt Health -> View Ideas, show all existing ideas (irrespective of status) to allow tuning
