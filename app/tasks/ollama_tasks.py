@@ -334,6 +334,11 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
             options = {"temperature": 0.3}
         else:
             options["temperature"] = min(options.get("temperature", 0.3), 0.3)
+        # Secondary outputs (competitor lists, 7-section PRDs) are far longer
+        # than ideas: floor output tokens at 4000 so generation isn't cut off
+        # mid-object (truncated JSON fails validation unrecoverably). A higher
+        # per-prompt setting is respected.
+        options["num_predict"] = max(options.get("num_predict") or 0, 4000)
         keep_alive = (prompt_config.keep_alive
                       if prompt_config and prompt_config.keep_alive else "2h")
 

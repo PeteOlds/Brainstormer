@@ -324,6 +324,28 @@ class TestSecondaryActionRobustness:
             assert opts["temperature"] == 0.3
 
     @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_secondary_floors_output_tokens(self, mock_client_class, celery_app):
+        """Long analytical outputs must not be cut off mid-object (default
+        1000 tokens truncates PRD/competitor JSON unrecoverably)."""
+        import json as _json
+        with celery_app.app_context():
+            from app.tasks.ollama_tasks import run_secondary_action
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.generate_sync.return_value = {
+                "response": _json.dumps({
+                    "elevator_pitch": "AI inventory management refined",
+                    "target_audience": "Small retail businesses",
+                    "core_value_proposition": "Automated stock optimization",
+                    "monetization_strategy": "SaaS subscription"}),
+                "done": True}
+            from app.extensions import db
+            idea = self._seed(db, email="admin_sec8@test.com")
+            run_secondary_action(str(idea.id), "REFINE")
+            opts = mock_client.generate_sync.call_args.kwargs["options"]
+            assert opts["num_predict"] >= 4000
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
     def test_run_secondary_action_five_forces(self, mock_client_class, celery_app):
         import json as _json
         with celery_app.app_context():

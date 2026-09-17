@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.19.0] - 2026-09-17
 ### Added
 - PRD document generation (`PRD_DOC` action): 7-section PRD with capped open-questions list, answer-and-regenerate loop (reruns replace), per-action tabs in the idea detail modal, admin-generate / view-for-all visibility
+### Fixed
+- Secondary-action outputs cut off mid-JSON by the 1000-token cap: `num_predict` floored at 4000 for analytical actions (a higher per-prompt setting is respected)
 
 ## [0.18.0] - 2026-09-16
 ### Added
