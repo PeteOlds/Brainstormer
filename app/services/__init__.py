@@ -6,6 +6,7 @@ from .prompt_templates import (
     get_feasibility_prompt,
     get_prompt_template,
 )
+from .embedding_service import EmbeddingService, get_embedding_service
 
 __all__ = [
     "OllamaClient",
@@ -14,4 +15,6 @@ __all__ = [
     "get_competitors_prompt",
     "get_feasibility_prompt",
     "get_prompt_template",
+    "EmbeddingService",
+    "get_embedding_service",
 ]

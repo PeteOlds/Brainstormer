@@ -64,6 +64,36 @@ def list_ideas(user):
     })
 
 
+@bp.route("/ideas/<uuid:idea_id>/similar", methods=["GET"])
+@token_required
+def find_similar_ideas(user, idea_id):
+    """Find ideas similar to the given idea using embedding similarity."""
+    from app.services.embedding_service import get_embedding_service
+
+    idea = Idea.query.get_or_404(idea_id)
+    if not idea.embedding:
+        return api_error("This idea has no embedding yet. Try again later.", status_code=404)
+
+    threshold = request.args.get("threshold", 0.85, type=float)
+    limit = request.args.get("limit", 10, type=int)
+
+    svc = get_embedding_service()
+    similar = svc.find_similar_ideas(idea.id, threshold=threshold, limit=limit)
+
+    similar_data = []
+    for similar_idea, score in similar:
+        data = similar_idea.to_dict()
+        data["similarity_score"] = round(score, 3)
+        similar_data.append(data)
+
+    return api_ok({
+        "idea_id": str(idea_id),
+        "similar_ideas": similar_data,
+        "threshold": threshold,
+        "count": len(similar_data),
+    })
+
+
 @bp.route("/ideas/<uuid:idea_id>", methods=["GET"])
 @token_required
 def get_idea(user, idea_id):

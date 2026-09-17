@@ -31,6 +31,9 @@ class Idea(db.Model):
     # Feasibility score (from secondary evaluator)
     feasibility_score = db.Column(db.Float)
 
+    # Embedding for similarity search (JSON array of floats)
+    embedding = db.Column(db.JSON)
+
     # Foreign keys
     prompt_config_id = db.Column(GUID(), db.ForeignKey("prompt_configs.id"), index=True)
 

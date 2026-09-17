@@ -4,7 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.15.0] - 2026-09-16
+## [0.18.0] - 2026-09-16
+### Added
+- Idea embeddings for similarity search (PRD §9.3): `embedding` JSON column on ideas, `EmbeddingService` with nomic-embed-text via Ollama, cosine similarity search endpoint, "Similarity" badge in ideas list with link to filtered results
+
+## [0.17.0] - 2026-09-16
 ### Added
 - Slack Phase 3c (two-way threads): app comments mirror to Slack threads (for posted ideas), Slack thread replies sync back as comments, loop-guard marker, Socket Mode listener entrypoint (`slack_listener.py`, needs `SLACK_APP_TOKEN`)
 

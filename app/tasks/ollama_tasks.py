@@ -219,6 +219,17 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
         except Exception as e:
             logger.warning("slack_hook_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
 
+        # Generate and store embedding for the new idea (Phase 9.3)
+        try:
+            from app.services.embedding_service import get_embedding_service
+            embedding_service = get_embedding_service()
+            # Combine title and content for richer embedding
+            text_for_embedding = f"{idea.prompt_title}\n\n{idea.raw_content}"
+            embedding = embedding_service.generate_embedding_sync(text_for_embedding)
+            embedding_service.store_embedding(idea.id, embedding)
+        except Exception as e:
+            logger.warning("embedding_generation_failed", idea_id=str(idea.id), error=str(e))
+
     except json.JSONDecodeError as e:
         # One retry with stricter prompt
         if self.request.retries == 0:
@@ -427,3 +438,23 @@ def check_due_prompts():
         enqueued += 1
 
     logger.info("checked_due_prompts", due=len(due_prompts), enqueued=enqueued)
+
+
+@celery.task(
+    bind=True,
+    base=BaseTask,
+    name="app.tasks.ollama_tasks.backfill_embeddings",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    max_retries=3,
+)
+def backfill_embeddings(self, batch_size: int = 10) -> dict:
+    """Generate embeddings for all ideas that don't have them.
+
+    Returns stats: {"processed": int, "succeeded": int, "failed": int}
+    """
+    from app.services.embedding_service import get_embedding_service
+
+    svc = get_embedding_service()
+    return svc.backfill_embeddings(batch_size=batch_size)

@@ -1049,15 +1049,15 @@ Activity panel section.
 
 Acceptance: a prompt with a known-bad week shows the expected flag; flags link to correct targets.
 
-### 9.3 Tier 2 — Similarity flags (embeddings)
+### 9.3 Tier 2 — Similarity flags (embeddings) ✅ COMPLETE
 
 Supersedes the §6 proposal ("Duplicate / Similarity Detection") and §3 "High-Value Expansion" note with
 this concrete design:
 - Embedding model `nomic-embed-text` via local Ollama (`/api/embed`); store vector per idea at insert
-  (new `embedding` column or sidecar table; pgvector if available, else brute-force cosine in Python —
-  idea counts are small).
-- Threshold ~0.85, surfaced as a "possible duplicate of IDEA-xxxx" badge + dashboard filter. **Never
-  auto-discard or auto-retry** — false positives destroy good ideas; the admin decides.
+  (new `embedding` JSON column on ideas, `EmbeddingService` with nomic-embed-text via Ollama).
+- Cosine similarity via Python pgvector, threshold ~0.85, surfaced as a "possible duplicate of IDEA-xxxx"
+  badge + dashboard filter. **Never auto-discard or auto-retry** — false positives destroy good ideas;
+  the admin decides.
 - Backfill existing ideas on deploy (one batched job).
 
 Acceptance: inserting a paraphrase of an existing idea raises the badge linking the original; unrelated
