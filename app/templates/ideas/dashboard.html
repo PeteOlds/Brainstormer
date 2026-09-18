@@ -255,33 +255,40 @@
                     </button>
                 </div>
                 
-                <div class="flex-1 overflow-y-auto p-4 space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Prompt</label>
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200" x-text="selectedIdea?.prompt_title"></span>
+                <div class="flex-1 overflow-y-auto">
+                    <div class="px-4 pt-3">
+                    <div class="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1 py-2 sm:py-0 sm:h-12 min-w-0" aria-label="Idea details">
+                        <div class="min-w-0 max-w-[38%]">
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Prompt</label>
+                            <a href="#"
+                               @click.prevent="window.location.href = '/ideas?prompt=' + selectedIdea.prompt_config_id"
+                               class="block truncate px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 hover:bg-primary-200 dark:hover:bg-primary-800 cursor-pointer"
+                               title="View all ideas for this prompt"
+                               x-text="selectedIdea?.prompt_title"></a>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Generated</label>
-                            <span class="text-sm text-slate-700 dark:text-slate-300" x-text="formatDate(selectedIdea?.created_at)"></span>
+                        <div class="shrink-0">
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Generated</label>
+                            <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap"><span x-text="formatDate(selectedIdea?.created_at)"></span><template x-if="isAdmin && selectedIdea && selectedIdea.generation_seconds !== null && selectedIdea.generation_seconds !== undefined"><span class="text-slate-500 dark:text-slate-400" x-text="' · ' + formatDuration(selectedIdea.generation_seconds)"></span></template></p>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Net Votes</label>
-                            <span class="text-2xl font-bold text-slate-900 dark:text-white" x-text="selectedIdea?.net_votes"></span>
+                        <div class="shrink-0">
+                            <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Net Votes · Comments</span>
+                            <p class="whitespace-nowrap"><span class="text-2xl font-bold text-slate-900 dark:text-white" x-text="selectedIdea?.net_votes"></span><span class="ml-2 text-xs text-slate-500 dark:text-slate-300"><span x-text="commentCount()"></span> comments</span></p>
                         </div>
-                        <template x-if="isAdmin && selectedIdea?.generation_seconds !== null && selectedIdea?.generation_seconds !== undefined">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Generation time <span class="normal-case font-normal">(admin)</span></label>
-                                <span class="text-sm text-slate-700 dark:text-slate-300" x-text="formatDuration(selectedIdea?.generation_seconds)"></span>
-                            </div>
-                        </template>
                     </div>
-                    
-                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4"></div>
-                    
-                    <div class="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-700" role="tablist" aria-label="Idea sections">
-                        <button @click="activeTab = 'overview'" role="tab" :aria-selected="activeTab === 'overview'" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'overview' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
-                            Overview
+                    </div>
+
+                    <div class="sticky top-0 z-10 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                        <div class="flex items-stretch">
+                        <div class="flex items-center gap-1 overflow-x-auto px-4 flex-1 min-w-0" role="tablist" aria-label="Idea sections">
+                        <a href="#"
+                           @click.prevent="window.location.href = '/ideas?prompt=' + selectedIdea.prompt_config_id"
+                           class="shrink-0 inline-flex items-center gap-1 px-3 py-2 min-h-[44px] text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                           title="Back to all ideas for this prompt">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                            <span>Prompt</span>
+                        </a>
+                        <button @click="activeTab = 'overview'" role="tab" :aria-selected="activeTab === 'overview'" :aria-label="'View original idea content'" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'overview' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
+                            Idea
                         </button>
                         <template x-for="tab in actionTabs()" :key="tab.key">
                             <button @click="activeTab = tab.key" role="tab" :aria-selected="activeTab === tab.key" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === tab.key ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
@@ -289,14 +296,34 @@
                                 <span x-show="actionLoading === tab.key" class="ml-1 inline-block align-middle"><svg class="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span>
                             </button>
                         </template>
-                    </div>
-                    <div x-show="activeTab === 'overview'" class="contents">
-                    <div>
+                        </div>
+                        <template x-if="isAdmin">
+                        <div class="shrink-0 relative border-l border-slate-200 dark:border-slate-700" x-data="{ newActionOpen: false }">
+                            <button @click="newActionOpen = !newActionOpen" class="inline-flex items-center gap-1 px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 transition-colors" aria-haspopup="menu" :aria-expanded="newActionOpen" title="Run a new secondary action on this idea">
+                                <span>+ New</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7-7 7-7"></path></svg>
+                            </button>
+                            <div x-show="newActionOpen" @click.outside="newActionOpen = false" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-1 w-72 max-h-80 overflow-y-auto bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50" role="menu" aria-label="Run a new secondary action">
+                                <template x-for="action in availableActions" :key="action.key">
+                                    <button @click="runAction(selectedIdea.id, action.key); newActionOpen = false" :disabled="actionLoading === action.key" :title="action.description" class="flex w-full items-start gap-2 text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50" role="menuitem">
+                                        <span class="font-medium shrink-0" x-text="action.label"></span>
+                                        <span class="ml-auto text-xs text-slate-500 dark:text-slate-400" x-show="(selectedIdea?.actions_run || []).includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
+                                        <svg x-show="actionLoading === action.key" class="animate-spin h-4 w-4 ml-auto shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                        </template>
+                        </div>
+                        </div>
+                    <div class="p-4 space-y-4">
+                    <div x-show="activeTab === 'overview'" class="space-y-4">
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                         <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Idea Content</h3>
                         <div class="prose prose-slate dark:prose-invert max-w-none" x-html="selectedIdea?.rendered_content"></div>
                     </div>
-                    
-                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                         <div class="flex items-center justify-between mb-3">
                             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Voting</h3>
                             <div class="flex items-center space-x-2">
@@ -313,22 +340,15 @@
                     </div>
                     
                     <template x-if="isAdmin">
-                        <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                             <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Admin Actions</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Run a new analysis from the <span class="font-medium">+ New</span> menu in the tab bar above.</p>
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <select @change="changeStatus($event.target.value, selectedIdea.id)" class="flex-1 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" :value="selectedIdea?.status">
                                     <option value="NEW">New</option>
                                     <option value="CONSIDERATION">Consideration</option>
                                     <option value="DISCARDED">Discarded</option>
                                 </select>
-                                <button @click="runAction(selectedIdea.id, 'REFINE')" :disabled="actionLoading === 'REFINE'" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                    <span x-show="actionLoading !== 'REFINE'">Refine Idea</span>
-                                    <span x-show="actionLoading === 'REFINE'" class="flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Refining...</span>
-                                </button>
-                                <button @click="runAction(selectedIdea.id, 'COMPETITORS')" :disabled="actionLoading === 'COMPETITORS'" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                    <span x-show="actionLoading !== 'COMPETITORS'">Competitor Analysis</span>
-                                    <span x-show="actionLoading === 'COMPETITORS'" class="flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Analyzing...</span>
-                                </button>
                                 <button @click="startIdeaEdit()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Edit content</button>
                             </div>
                             <div x-show="editingIdea" class="mt-3 space-y-3">
@@ -372,7 +392,7 @@
                         </div>
                     </template>
                     
-                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                         <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Comments <span class="text-sm font-normal text-slate-500" x-show="commentCount()" x-text="'(' + commentCount() + ')'"></span></h3>
                         <div class="space-y-3">
                             <template x-for="c in flatComments()" :key="c.id">
@@ -411,10 +431,8 @@
                         </div>
                     </div>
                 </div>
-                
-                    </div>
                     <template x-for="tab in actionTabs()" :key="'panel-' + tab.key">
-                        <div x-show="activeTab === tab.key" class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                        <div x-show="activeTab === tab.key" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                             <div class="flex items-center justify-between mb-2">
                                 <h3 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="tab.label"></h3>
                                 <span class="text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(actionTabResult(tab.key)?.executed_at)"></span>
@@ -442,9 +460,11 @@
                             </template>
                         </div>
                     </template>
+                    </div>
                 <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
                     <button @click="closeDetailModal()" onclick="try{this.closest("[x-show]").style.display="none"}catch(e){}" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Close</button>
                 </div>
+            </div>
             </div>
         </div>
     </div>
@@ -876,8 +896,8 @@ function ideasApp() {
         },
         
         get refinedActions() {
-            // 3-dot menu: Refine + Competitors + Five Forces + PESTEL + PRD.
-            return (this.availableActions || []).filter((a) => ['REFINE', 'COMPETITORS', 'FIVE_FORCES', 'PESTEL', 'PRD_DOC'].includes(a.key));
+            // 3-dot menu: all available actions from the registry
+            return this.availableActions || [];
         },
 
         async confirmDiscard(idea, close) {

@@ -1,4 +1,6 @@
-from flask import Blueprint, render_template, request, jsonify, current_app
+from flask import Blueprint, render_template, render_template_string, request, jsonify, current_app
+from app.templates.admin_settings_template import SETTINGS_TEMPLATE
+from app.templates.admin_settings_template import SETTINGS_TEMPLATE
 
 from app.utils.decorators import admin_required
 from app.utils.responses import api_ok, api_error, api_created
@@ -430,3 +432,52 @@ def get_stats(user):
         },
         "prompts": {"total": total_prompts, "active": active_prompts},
     })
+
+
+@bp.route("/admin/settings", methods=["GET"])
+@admin_required
+def admin_settings(user):
+    from app.models import SystemSettings
+    settings = SystemSettings.get_instance()
+    return render_template_string(SETTINGS_TEMPLATE, user=user, current_user=user, settings=settings)
+
+
+@bp.route("/api/v1/admin/settings", methods=["GET"])
+@admin_required
+def get_settings(user):
+    from app.models import SystemSettings
+    settings = SystemSettings.get_instance()
+    return api_ok(settings.to_dict())
+
+
+@bp.route("/api/v1/admin/settings/platform", methods=["PATCH"])
+@admin_required
+def update_platform_settings(user):
+    from app.models import SystemSettings
+    data = request.get_json() or {}
+    settings = SystemSettings.get_instance()
+    settings.update_platform(data)
+    db.session.commit()
+    return api_ok(settings.to_dict())
+
+
+@bp.route("/api/v1/admin/settings/location", methods=["PATCH"])
+@admin_required
+def update_location_settings(user):
+    from app.models import SystemSettings
+    data = request.get_json() or {}
+    settings = SystemSettings.get_instance()
+    settings.update_location(data)
+    db.session.commit()
+    return api_ok(settings.to_dict())
+
+
+@bp.route("/api/v1/admin/settings/ai_connections", methods=["PATCH"])
+@admin_required
+def update_ai_connections_settings(user):
+    from app.models import SystemSettings
+    data = request.get_json() or {}
+    settings = SystemSettings.get_instance()
+    settings.update_ai_connections(data)
+    db.session.commit()
+    return api_ok(settings.to_dict())

@@ -1,0 +1,18 @@
+### BUSINESS IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### INSTRUCTIONS:
+1. You are an expert business analyst and strategic advisor.
+2. Evaluate the idea against the four VRIO criteria to determine if it can achieve sustainable competitive advantage.
+3. Output STRICTLY valid JSON matching the schema below.
+
+### OUTPUT JSON SCHEMA:
+{
+  "value": "string (Does this resource/capability exploit a market opportunity, neutralize a threat, or create distinct value? Specific cost/differentiation advantage.)",
+  "rarity": "string (Is this capability controlled by only a small number of firms, or widespread across the industry?)",
+  "imitability": "string (How difficult/costly/time-consuming to copy? Barriers: patents, trade secrets, unique history, complex social relationships, causal ambiguity.)",
+  "organization": "string (Is the venture structured/equipped to fully absorb and exploit this resource? Processes, tech stack, governance, capital.)",
+  "competitive_implication": "string (One of: Competitive Disadvantage, Competitive Parity, Temporary Competitive Advantage, Unused Competitive Advantage, Sustainable Competitive Advantage)",
+  "recommendations": ["string (2-3 prioritized recommendations to protect, organize, and scale assets yielding strongest edge)"]
+}

@@ -9,6 +9,7 @@ from .idea_edit import IdeaEdit
 from .slack import SlackPost, SlackEvent
 from .secondary_action import SecondaryActionResult, ActionType
 from .status_history import IdeaStatusHistory
+from .system_settings import SystemSettings
 from .types import GUID
 
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "SecondaryActionResult",
     "ActionType",
     "IdeaStatusHistory",
+    "SystemSettings",
     "GUID",
     "RefreshToken",
     "PromptRun",

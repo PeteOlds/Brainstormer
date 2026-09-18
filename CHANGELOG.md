@@ -4,12 +4,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.20.0] - 2026-09-19
+### Added
+- Six new secondary actions: VRIO Framework, 3Cs Analysis, Market Sizing (TAM/SAM/SOM), Business Model Canvas, Hypothesis Test roadmap, GTM Strategy — registry-driven, no UI changes needed; complex actions use `num_predict=8000`
+- System Settings page (`/admin/settings`, linked from admin Quick Actions): Platform (title/description/type checkboxes), Location (country), AI Connections (placeholder)
+### Fixed
+- Idea detail modal redesign: fixed-height meta strip (Prompt link / Generated + admin gen-time / Votes + comment count, breadcrumb folded in), single sticky tab bar with admin-only "+ New" run-action dropdown, every section in its own bordered card — no more overlapping buttons, clipped tabs, or lost navigation
+- Prompt Health "View ideas" links show all statuses (`status=ALL`) for tuning
+
 ## [0.19.0] - 2026-09-17
 ### Added
 - PRD document generation (`PRD_DOC` action): 7-section PRD with capped open-questions list, answer-and-regenerate loop (reruns replace), per-action tabs in the idea detail modal, admin-generate / view-for-all visibility
 ### Fixed
 - Admin idea edit is WYSIWYG: labeled fields for pitch/audience/value/monetization instead of raw JSON (raw fallback kept for unstructured ideas); fixed silent UPDATE loss from in-place JSON mutation
 - Prompt Health "View ideas" links now show all statuses (`status=ALL`) for tuning, not just active ones
+- Secondary action tabs always accessible: sticky tab bar and dynamic `actionTabs()` from API ensure Overview can always be reached; admin can select all secondary actions (PESTEL, Five Forces, Generate PRD etc.) from both the top tab bar and 3-dot menu
 - Secondary-action outputs cut off mid-JSON by the 1000-token cap: `num_predict` floored at 4000 for analytical actions (a higher per-prompt setting is respected)
 
 ## [0.18.0] - 2026-09-16

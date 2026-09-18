@@ -1120,6 +1120,188 @@ viewport-safe toasts/dialogs. Walk every page at 360px and 768px: no horizontal 
 targets ≥44px.
 
 
-### Next Up
-Edit should be WYSIWYG, not json
+### 11 Next up
+
+##### View
 On /admin/activity   Prompt Health -> View Ideas, show all existing ideas (irrespective of status) to allow tuning
+
+
+##### System Settings
+On the Quick Actions menu for Admins, add an option for system settings.
+
+The first three system settings are:
+
+1. Platform:
+
+	Platform: A title (250 characters eg Web Based)
+	Description: A full technology description (A1000)
+	Tickboxes for:
+	- Web Based (Default on)
+	- Android
+	- IOS
+	- Plugin
+	- Standalone
+	- Test Environment
+	- GitHub (default on)
+
+2. Location (drop down of Countries)
+3. AI Connections (placeholder only)
+
+##### VRIO Framework
+
+Add a Secondary Action to do a VRIO Capability Assessment for an Idea, using a prompt like below, and providing all available information
+
+	Act as an expert business analyst and strategic advisor. Conduct a comprehensive VRIO Analysis for my product idea: **[Insert Product/Service Description Here]**, operating within the **[Insert Target Industry/Market Here]** market.
+	
+	Evaluate the internal resources, capabilities, and proprietary assets associated with this product idea against the four VRIO criteria to determine if it can achieve a sustainable competitive advantage:
+	
+	- **Value:** Does this resource or capability exploit a market opportunity, neutralize a major threat, or create distinct value for customers? What specific cost or differentiation advantage does it provide?
+	    
+	- **Rarity:** Is this capability or asset controlled by only a small number of competing firms, or is it widespread across the industry?
+	    
+	- **Inimitability:** How difficult, costly, or time-consuming would it be for competitors to copy, duplicate, or substitute this resource? Analyze barriers such as patents, trade secrets, unique historical conditions, complex social relationships, or causal ambiguity.
+	    
+	- **Organization:** Is the venture structured, equipped, and organized (via processes, technology stack, governance, and capital) to fully absorb and exploit the potential of this resource?
+	    
+	
+	Conclude with a strategic summary that categorizes the product's assets into their resulting competitive implications:
+	
+	1. **Competitive Disadvantage** (Lacks Value)
+	    
+	2. **Competitive Parity** (Valuable, but Common)
+	    
+	3. **Temporary Competitive Advantage** (Valuable & Rare, but Imitable)
+	    
+	4. **Unused Competitive Advantage** (Valuable, Rare & Inimitable, but Unorganized)
+	    
+	5. **Sustainable Competitive Advantage** (Passes all four VRIO criteria)
+	    
+	
+	Provide two to three prioritized recommendations to protect, organize, and scale the assets that yield the strongest competitive edge.
+
+
+##### 3Cs Analysis
+
+Add a Secondary Action to do a 3Cs Assessment for an Idea, using a prompt like below, and providing all available information
+
+	Act as an expert business analyst and strategic advisor. Conduct a comprehensive 3Cs Strategic Analysis for my product idea: **[Insert Product/Service Description Here]**, operating within the **[Insert Target Industry/Market Here]** market.
+	
+	 Evaluate the strategic positioning of the product across Kenichi Ohmae's 3Cs framework with specific, actionable depth:
+	 
+	- **Customer:** Analyze the target market segments, core jobs-to-be-done, key pain points, price sensitivity, purchasing behaviors, and shifting demographic trends. Identify what drives their decision to adopt or reject a solution.
+	- **Competitor:** Identify direct, indirect, and potential substitute competitors. Examine their market share, core strengths, strategic vulnerabilities, pricing structures, and typical tactical responses to new entrants.
+	- **Company:** Assess our internal capabilities, core competencies, brand positioning, technology stack, operational capacity, and resource constraints. Pinpoint what unique value or cost advantage we possess that competitors cannot easily match.
+	 
+	Conclude with a strategic alignment summary that details where these three vectors overlap (our "sweet spot" for market entry), highlighting two to three prioritized recommendations to establish a defensible market position.
+
+
+##### Market Sizing
+
+Add a Secondary Action to do a Market Sizing for an Idea, using a prompt like below, and providing all available information
+
+	Act as an expert business analyst and financial strategist. Conduct a detailed top-down and bottom-up market sizing analysis (TAM, SAM, and SOM) for my product idea: **[Insert Product/Service Description Here]**, operating within the **[Insert Target Industry/Market Here]** market.
+	
+	Break down the market sizing into three granular layers using explicit formulas, logical assumptions, and data sources:
+	
+	- **1. Total Addressable Market (TAM):**
+	  
+	    - Calculate the total global or regional market demand for this overall product/service category if 100% market share were achieved.    
+	    - Provide both a **Top-Down approach** (leveraging industry benchmark reports or total industry expenditure) and a **Bottom-Up approach** (Total Potential Customers $\times$ Average Annual Revenue Per User/Account).
+	        
+	- **2. Serviceable Addressable Market (SAM):**
+	    - Filter the TAM down to the specific segment targeted by our current product design, geographical boundaries, target customer tier (e.g., SMB vs. Enterprise), and distribution channel constraints.
+	    - Clearly define the filtering criteria used to narrow TAM to SAM.
+	        
+	- **3. Serviceable Obtainable Market (SOM):**
+	    - Determine the realistic portion of SAM that can be captured within the next 3 to 5 years.
+	    - Factor in operational capacity, marketing/sales acquisition run-rates, competitor presence, pricing models, and realistic conversion rates.
+	
+	Conclude with a summary table presenting the financial estimates for TAM, SAM, and SOM, along with a list of key risk factors or core assumptions that could shift these projections up or down.
+
+
+##### Business Model Canvas
+
+Add a Secondary Action to create a Business Market Canvas for an Idea, using a prompt like below, and providing all available information
+
+	Act as an expert business analyst and strategic advisor. Construct a comprehensive, production-ready Business Model Canvas for my product idea: **[Insert Product/Service Description Here]**, operating within the **[Insert Target Industry/Market Here]** market.
+	
+	Systematically map out all nine building blocks with specific, actionable detail:
+	- **1. Value Propositions:** Define the unique value, core benefits, and specific pain points solved for each target segment. What makes this offering distinctly better than existing alternatives?
+	- **2. Customer Segments:** Detail the primary and secondary target user profiles, customer personas, key demographics, and niche markets targeted.
+	- **3. Channels:** Outline the primary marketing, sales, and distribution channels used to reach, acquire, and deliver value to customers (e.g., direct sales, self-serve web, partners, app stores).
+	- **4. Customer Relationships:** Specify the nature of interactions with each segment across their lifecycle (e.g., dedicated personal assistance, automated self-service, community-driven, co-creation).
+	- **5. Revenue Streams:** Break down how the business generates revenue (e.g., recurring subscriptions, transactional fees, freemium upsells, licensing) including proposed pricing tiers and willingness-to-pay assumptions.
+	- **6. Key Resources:** List the essential physical, intellectual, human, and financial assets required to create, deliver, and maintain the value proposition.
+	- **7. Key Activities:** Detail the most critical operational, engineering, marketing, and distribution actions the company must execute daily to make the business model function.
+	- **8. Key Partnerships:** Identify the strategic alliances, key suppliers, platform integrations, and joint ventures necessary to optimize the business model and reduce operational risk.
+	- **9. Cost Structure:** Itemize the most significant fixed and variable costs inherent to the business model (e.g., R&D, hosting infrastructure, customer acquisition, salaries). Highlight whether the model is cost-driven or value-driven.
+	    
+	Conclude with a summary table mapping all nine blocks, followed by a brief analysis of the top two strategic vulnerabilities in this canvas and recommended experiments to validate those assumptions quickly.
+
+
+##### Hypothesis Test
+
+Add a Secondary Action to create a build a experiment and hypothesis testing roadmap for an Idea, using a prompt like below, and providing all available information
+
+	Act as an expert product strategist and Lean Startup advisor. Design a rigorous, phase-gated Experiment & Hypothesis Testing Roadmap for my product idea: **[Insert Product/Service Description Here]**, operating within the **[Insert Target Industry/Market Here]** market.
+	  
+	Translate the core assumptions of this venture into testable hypotheses and structured experiments using the following framework:
+	
+	- **1. Risk-Ranked Assumption Mapping:**
+	    - Identify and categorize key implicit assumptions into four core categories: **Desirability** (do users want it?), **Viability** (will they pay for it?), **Feasibility** (can we build it?), and **Usability** (can they use it?).
+	    - Map these onto a $2 \times 2$ matrix prioritizing high impact versus low certainty to isolate the top critical risks (Riskiest Assumptions).
+	        
+	- **2. Hypothesis Formulation:**
+	       - Convert the top 3–5 riskiest assumptions into formal, measurable hypotheses using the structure:
+	        
+	        _“We believe that [Target Segment] will [Expected Action/Behavior] because [Core Reason]. We will know this is true when [Quantitative Metric/Threshold] is met within [Timeframe].”_
+	        
+	- **3. Experiment Design Matrix:**
+	    - For each formulated hypothesis, design a specific, low-cost experiment (e.g., concierge MVP, Smoke test/landing page, Wizard of Oz, fake door test, paper prototype).
+	        
+	    - Specify:
+	        - **Target Sample Size:** Number of users or testers required.
+	        - **Primary Metric & Success Criteria:** Exact quantitative threshold for a "Pass" result.
+	        - **Required Assets & Tools:** Landing pages, ad spend, mockups, or manual scripts.
+	            
+	- **4. Phased Execution Roadmap:**
+	      
+	    - Organize tests into sequential phases (Phase 1: Problem/Market Fit $\rightarrow$ Phase 2: Solution/Product Fit $\rightarrow$ Phase 3: Commercial Viability).
+	    - Outline clear **Pivot or Persevere** decision gates at the end of each phase to determine whether to advance, iterate, or abort.
+	        
+	Conclude with a summary table displaying the Phase, Hypothesis, Experiment Type, Success Metric, and Target Timeframe.
+
+##### GTM Execution Strategy
+
+Add a Secondary Action to create a build a Goto To Market Strategy for an Idea, using a prompt like below, and providing all available information
+
+	Act as an expert Go-To-Market (GTM) strategist and growth advisor. Draft a complete, highly actionable Go-To-Market Strategy for my product idea: **[Insert Product/Service Description Here]**, targeting the **[Insert Target Industry/Market Here]** market.
+	
+	Structure the GTM plan into six execution-focused pillars:
+	- **1. Market & Audience Segmentation:**
+	    - Define the Ideal Customer Profile (ICP) and high-value user personas.
+	    - Outline their primary jobs-to-be-done, core pain points, trigger events that drive purchase intent, and key buying criteria.
+	- **2. Value Proposition & Positioning:**
+	       - Craft the core positioning statement (For [Target Audience], who [Need/Pain Point], [Product Name] is a [Category] that [Primary Benefit], unlike [Primary Competitor]).
+	    - Detail key messaging pillars, differentiation factors, and objection-handling tactics.
+	- **3. Pricing & Packaging Strategy:**
+		- Define the monetization model (e.g., freemium, usage-based, tiered SaaS, seat-based) and value metrics. 
+		- Outline recommended price points, tier structures, and introductory offer strategies.
+	- **4. Acquisition & Distribution Channels:**
+	    - Map out the primary inbound and outbound acquisition channels (e.g., organic search, content marketing, paid ads, product-led growth loops, direct outbound, channel partnerships). 
+	    - Specify the unit economics target expectations (CAC payback targets, conversion benchmarks).
+	- **5. Marketing & Launch Plan:**
+		- Detail a phased launch timeline: **Pre-launch** (waitlists, beta testing, founder led sales), **Launch Day/Week** (PR, community launches, webinars, event pushes), and **Post-launch** (nurture campaigns, retention loops).
+	    - Outline key collateral needed (landing pages, sales decks, battlecards, demo videos).
+	- **6. Success Metrics & Enablement:**
+	    - Establish North Star metrics and performance indicators across the funnel (AARRR: Acquisition, Activation, Retention, Revenue, Referral).
+	    - Define internal enablement requirements for sales, marketing, and support teams.
+	        
+	Conclude with a executive summary launch roadmap table outlining actions, owners, and timelines across the Pre-Launch, Launch, and Post-Launch phases.
+
+
+### Add Ideas manually
+
+Add the ability to add ideas manually
+The format should be the same as existing ideas
+The functionality should be available to all users by default - but there should be an option on each user to disable that functionality just for them

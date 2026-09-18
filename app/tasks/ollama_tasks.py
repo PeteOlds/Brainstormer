@@ -338,7 +338,10 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         # than ideas: floor output tokens at 4000 so generation isn't cut off
         # mid-object (truncated JSON fails validation unrecoverably). A higher
         # per-prompt setting is respected.
-        options["num_predict"] = max(options.get("num_predict") or 0, 4000)
+        # Complex actions (BMC, GTM, Hypothesis, Market Sizing) need more tokens.
+        complex_actions = {"BUSINESS_MODEL_CANVAS", "GTM_STRATEGY", "HYPOTHESIS_TEST", "MARKET_SIZING"}
+        min_tokens = 8000 if action_type in complex_actions else 4000
+        options["num_predict"] = max(options.get("num_predict") or 0, min_tokens)
         keep_alive = (prompt_config.keep_alive
                       if prompt_config and prompt_config.keep_alive else "2h")
 
