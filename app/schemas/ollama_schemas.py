@@ -186,6 +186,28 @@ def _coerce_scalar_lists(obj, schema):
                      if isinstance(v, (str, int, float)) and str(v).strip()]
             if texts:
                 obj[name] = " ".join(texts)
+        elif ann is str and isinstance(val, dict):
+            # Model emitted an object where text belongs (recorded prod
+            # shape: MarketSizing `tam: {'$1.4B ...': '...ue per user...'}`).
+            # Join all string leaves; leave untouched if none.
+            leaves = []
+
+            def _walk(node):
+                if isinstance(node, str) and node.strip():
+                    leaves.append(node.strip())
+                elif isinstance(node, (int, float)):
+                    leaves.append(str(node))
+                elif isinstance(node, dict):
+                    for k, v in node.items():
+                        _walk(k)
+                        _walk(v)
+                elif isinstance(node, list):
+                    for v in node:
+                        _walk(v)
+
+            _walk(val)
+            if leaves:
+                obj[name] = " ".join(leaves)
         elif get_origin(ann) is list and get_args(ann) == (str,) and isinstance(val, list):
             strs = [str(v).strip() for v in val
                     if isinstance(v, (str, int, float)) and str(v).strip()]

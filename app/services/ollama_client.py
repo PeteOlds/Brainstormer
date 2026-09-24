@@ -40,17 +40,9 @@ class OllamaClient:
         models = self.list_models_sync()
         return any(m.get("name") == model for m in models)
 
-    async def generate(
-        self,
-        model: str,
-        prompt: str,
-        system: str | None = None,
-        format: str = "json",
-        stream: bool = False,
-        options: dict | None = None,
-        keep_alive: str | None = None,
-    ) -> dict[str, Any]:
-        """Generate completion from Ollama."""
+    @staticmethod
+    def _build_payload(model, prompt, system=None, format="json",
+                       stream=False, options=None, keep_alive=None) -> dict[str, Any]:
         payload = {
             "model": model,
             "prompt": prompt,
@@ -63,6 +55,20 @@ class OllamaClient:
             payload["options"] = options
         if keep_alive:
             payload["keep_alive"] = keep_alive
+        return payload
+
+    async def generate(
+        self,
+        model: str,
+        prompt: str,
+        system: str | None = None,
+        format: str = "json",
+        stream: bool = False,
+        options: dict | None = None,
+        keep_alive: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate completion from Ollama."""
+        payload = self._build_payload(model, prompt, system, format, stream, options, keep_alive)
 
         try:
             response = await self._client.post(f"{self.base_url}/api/generate", json=payload)
@@ -79,7 +85,9 @@ class OllamaClient:
     async def close(self):
         await self._client.aclose()
 
-    # Sync wrapper for Celery tasks (with error handling for diagnosis)
+    # Sync generate for Celery tasks. Uses a plain sync httpx.Client per
+    # call on purpose: sharing one AsyncClient across asyncio.run() calls
+    # reuses a pool bound to a closed loop ("Event loop is closed").
     def generate_sync(
         self,
         model: str,
@@ -89,9 +97,12 @@ class OllamaClient:
         options: dict | None = None,
         keep_alive: str | None = None,
     ) -> dict[str, Any]:
-        import asyncio
+        payload = self._build_payload(model, prompt, system, format, False, options, keep_alive)
         try:
-            return asyncio.run(self.generate(model, prompt, system, format, False, options, keep_alive))
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(f"{self.base_url}/api/generate", json=payload)
+                response.raise_for_status()
+                return response.json()
         except httpx.HTTPStatusError as e:
             body = e.response.text if e.response else None
             raise OllamaError(

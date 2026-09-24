@@ -65,7 +65,7 @@ class EmbeddingService:
     def generate_embedding_sync(self, text: str) -> List[float]:
         """Synchronous version for use in Celery tasks."""
         try:
-            response = self.ollama_client.generate_sync_with_error_handling(
+            response = self.ollama_client.generate_sync(
                 model=self.EMBEDDING_MODEL,
                 prompt=text,
                 format="json",

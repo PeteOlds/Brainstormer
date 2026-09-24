@@ -517,7 +517,8 @@ def backfill_embeddings(self, batch_size: int = 10) -> dict:
 
     Returns stats: {"processed": int, "succeeded": int, "failed": int}
     """
+    import asyncio
     from app.services.embedding_service import get_embedding_service
 
     svc = get_embedding_service()
-    return svc.backfill_embeddings(batch_size=batch_size)
+    return asyncio.run(svc.backfill_embeddings(batch_size=batch_size))

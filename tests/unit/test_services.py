@@ -61,10 +61,54 @@ class TestOllamaClient:
                 await client.generate(model="llama3:8b", prompt="Test")
 
     def test_generate_sync(self, client):
-        with patch.object(client, 'generate', new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = {"response": "test", "done": True}
+        import httpx as _httpx
+        mock_response = Mock()
+        mock_response.json.return_value = {"response": "test", "done": True}
+        mock_response.raise_for_status = Mock()
+        mock_client = Mock()
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client.post = Mock(return_value=mock_response)
+        with patch.object(_httpx, 'Client', return_value=mock_client):
             result = client.generate_sync(model="llama3:8b", prompt="Test")
             assert result == {"response": "test", "done": True}
+            assert mock_client.post.call_args.kwargs["json"]["model"] == "llama3:8b"
+
+    def test_generate_sync_twice_no_loop_error(self, client):
+        """Regression: reusing one client across calls must not hit a
+        closed event loop (prod: strict-retry second call died)."""
+        import httpx as _httpx
+        mock_response = Mock()
+        mock_response.json.return_value = {"response": "{}", "done": True}
+        mock_response.raise_for_status = Mock()
+        mock_client = Mock()
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client.post = Mock(return_value=mock_response)
+        with patch.object(_httpx, 'Client', return_value=mock_client):
+            client.generate_sync(model="llama3:8b", prompt="first")
+            result = client.generate_sync(model="llama3:8b", prompt="second")
+            assert result["done"] is True
+            assert mock_client.post.call_count == 2
+
+    def test_generate_sync_http_error_carries_body(self, client):
+        import httpx as _httpx
+        from app.services.ollama_client import OllamaError
+        request = Mock()
+        response = Mock()
+        response.status_code = 404
+        response.reason_phrase = "Not Found"
+        response.text = '{"error": "model \'x\' not found"}'
+        err = _httpx.HTTPStatusError("404", request=request, response=response)
+        mock_client = Mock()
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_client.post = Mock(side_effect=err)
+        with patch.object(_httpx, 'Client', return_value=mock_client):
+            with pytest.raises(OllamaError) as exc_info:
+                client.generate_sync(model="x", prompt="Test")
+            assert exc_info.value.status_code == 404
+            assert "not found" in exc_info.value.response_body
 
 
 class TestPromptTemplates:
@@ -265,6 +309,20 @@ class TestOllamaSchemas:
         result = validate_ollama_output("REFINE", json_str)
         assert isinstance(result, RefineOutput)
         assert result.elevator_pitch == "A focused elevator pitch long enough here"
+
+    def test_validate_coerces_dict_shaped_market_sizing(self):
+        """Recorded prod failure: MarketSizing `tam` arrived as a dict."""
+        json_str = (
+            '{"tam": {"$1.4B Total Addressable Market": "500M users times average revenue per user account"}, '
+            '"sam": "Serviceable market slice defined by geography and segment targeting.", '
+            '"som": "Obtainable share within three years given sales capacity constraints.", '
+            '"summary_table": "TAM 1.4B, SAM 300M, SOM 40M with stated formulas.", '
+            '"key_assumptions": ["Pricing holds"]}'
+        )
+        from app.schemas.ollama_schemas import MarketSizingOutput
+        result = validate_ollama_output("MARKET_SIZING", json_str)
+        assert isinstance(result, MarketSizingOutput)
+        assert "1.4B" in result.tam
 
     def test_validate_truncated_json_still_fails_honestly(self):
         """Recorded prod failure: truncated FIVE_FORCES JSON must still raise
