@@ -234,6 +234,54 @@ class TestOllamaSchemas:
         assert isinstance(result, CompetitorsOutput)
         assert result.direct_competitors == []
 
+    def test_validate_coerces_list_shaped_pestel(self):
+        """Recorded prod failure: PESTEL `political` arrived as a list of
+        junk objects. Usable strings are joined; the run survives."""
+        from app.schemas.ollama_schemas import PestelOutput
+        long_text = "Stable policy environment with supportive startup rules."
+        json_str = (
+            '{"political": [{"_id": "governance_stub"}, "Stable policy environment with supportive startup rules."], '
+            '"economic": "Moderate inflation with steady consumer spending power overall.", '
+            '"social": "Growing sustainability culture among younger demographics today.", '
+            '"technological": "Rapid AI tooling advances lower build costs significantly.", '
+            '"environmental": "Tightening packaging rules raise compliance costs somewhat.", '
+            '"legal": "Standard consumer protection plus GDPR-style privacy duties.", '
+            '"opportunities": ["Green subsidies"], "threats": ["Recession"], '
+            '"recommendations": ["Launch in subsidised regions"]}'
+        )
+        result = validate_ollama_output("PESTEL", json_str)
+        assert isinstance(result, PestelOutput)
+        assert long_text in result.political
+
+    def test_validate_coerces_list_shaped_refine(self):
+        """Recorded prod failure: Refine `elevator_pitch` arrived as a list."""
+        from app.schemas.ollama_schemas import RefineOutput
+        json_str = (
+            '{"elevator_pitch": ["A focused elevator pitch long enough here"], '
+            '"target_audience": "Developers", '
+            '"core_value_proposition": "A core value prop long enough", '
+            '"monetization_strategy": "SaaS model"}'
+        )
+        result = validate_ollama_output("REFINE", json_str)
+        assert isinstance(result, RefineOutput)
+        assert result.elevator_pitch == "A focused elevator pitch long enough here"
+
+    def test_validate_truncated_json_still_fails_honestly(self):
+        """Recorded prod failure: truncated FIVE_FORCES JSON must still raise
+        (so the retry path engages) rather than validate garbage."""
+        import pytest as _pytest
+        with _pytest.raises(Exception):
+            validate_ollama_output("FIVE_FORCES", '{"competitive_rivalry": "Several entrenched')
+
+    def test_validate_unknown_action_lists_known(self):
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="NO_SUCH_ACTION"):
+            validate_ollama_output("NO_SUCH_ACTION", '{}')
+        try:
+            validate_ollama_output("NO_SUCH_ACTION", '{}')
+        except ValueError as e:
+            assert "REFINE" in str(e) and "VRIO" in str(e)
+
     def test_validate_ollama_output_invalid(self):
         with pytest.raises(Exception):
             validate_ollama_output("REFINE", "invalid json")
@@ -251,6 +299,28 @@ class TestOllamaSchemas:
         json_str = '{"executive_summary": "' + "x" * 30 + '", "user_personas": "' + "x" * 30 + '", "product_scope": "' + "x" * 30 + '", "functional_requirements": "' + "x" * 30 + '", "non_functional_requirements": "' + "x" * 30 + '", "ux_guidelines": "' + "x" * 30 + '", "assumptions_risks": "' + "x" * 30 + '", "open_questions": [' + qs + ']}'
         with _pytest.raises(Exception):
             validate_ollama_output("PRD_DOC", json_str)
+
+    def test_embedding_text_uses_excerpt_not_raw_json(self):
+        """Similarity quality: embedded text must be the human-readable
+        pitch, not the raw JSON blob (shared schema keys inflate scores
+        between unrelated same-prompt ideas)."""
+        import json as _json
+        from app.models import Idea
+        from app.services.embedding_service import embedding_text
+        idea = Idea(
+            prompt_title="Weekend Activities",
+            raw_content=_json.dumps({
+                "elevator_pitch": "Guided night walks through Pakuranga forest",
+                "target_audience": "Local families",
+                "core_value_proposition": "Safe outdoor fun",
+                "monetization_strategy": "Ticket sales",
+            }),
+        )
+        text = embedding_text(idea)
+        assert "Guided night walks through Pakuranga forest" in text
+        assert "Weekend Activities" in text
+        assert '"elevator_pitch"' not in text
+        assert '"target_audience"' not in text
 
 class TestTokenLifetime:
     def test_access_token_honours_config_expiry(self, app):

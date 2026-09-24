@@ -17,7 +17,7 @@ ${SUPPORTING_MATERIAL}
    - Bargaining Power of Buyers: customer concentration, price sensitivity, switching costs.
    - Bargaining Power of Suppliers: reliance on critical vendors, platform dependencies, key resources.
 2. Conclude with a strategic summary: overall market attractiveness, primary risk factors, and two to three actionable recommendations for a sustainable competitive advantage.
-3. Output STRICTLY a valid JSON object matching the schema below. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
+3. Output STRICTLY a valid JSON object matching the schema below. Text fields are plain strings — never lists or objects. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
 
 ### OUTPUT JSON SCHEMA:
 {

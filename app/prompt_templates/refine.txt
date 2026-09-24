@@ -9,7 +9,7 @@ ${SUPPORTING_MATERIAL}
 ### INSTRUCTIONS:
 1. Strip away fluff and focus on clarity.
 2. Incorporate relevant insights from the Supporting Material above.
-3. Output STRICTLY valid JSON matching the schema below.
+3. Output STRICTLY valid JSON matching the schema below. Text fields are plain strings — never lists or objects.
 
 ### OUTPUT JSON SCHEMA:
 {

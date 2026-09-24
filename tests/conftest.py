@@ -37,13 +37,14 @@ def celery_app():
 @pytest.fixture(scope="function")
 def user_with_token(app):
     with app.app_context():
+        from app.utils.auth import create_tokens
         user = User.query.filter_by(email="test@example.com").first()
         if user is None:
             user = User(email="test@example.com")
             user.set_password("password123")
             db.session.add(user)
             db.session.commit()
-        tokens = user.get_token()
+        tokens = create_tokens(str(user.id), user.role.value, user.email)
         return {"email": user.email, "token": tokens["access_token"]}
 
 

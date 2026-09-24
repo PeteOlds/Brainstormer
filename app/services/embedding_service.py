@@ -21,6 +21,16 @@ import structlog
 logger = structlog.get_logger()
 
 
+def embedding_text(idea) -> str:
+    """Text embedded for similarity search.
+
+    Uses the human-readable excerpt (elevator pitch/summary) instead of the
+    raw JSON blob: shared schema keys and boilerplate otherwise inflate
+    cosine scores between unrelated ideas from the same prompt.
+    """
+    return f"{idea.prompt_title}\n\n{idea.excerpt(limit=500)}"
+
+
 class EmbeddingService:
     """Service for generating and managing idea embeddings."""
 
@@ -163,9 +173,7 @@ class EmbeddingService:
         for idea in ideas:
             stats["processed"] += 1
             try:
-                # Combine title and content for embedding
-                text = f"{idea.prompt_title}\n\n{idea.raw_content}"
-                embedding = await self.generate_embedding(text)
+                embedding = await self.generate_embedding(embedding_text(idea))
                 if self.store_embedding(idea.id, embedding):
                     stats["succeeded"] += 1
                 else:

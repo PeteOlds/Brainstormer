@@ -238,11 +238,9 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
 
         # Generate and store embedding for the new idea (Phase 9.3)
         try:
-            from app.services.embedding_service import get_embedding_service
+            from app.services.embedding_service import get_embedding_service, embedding_text
             embedding_service = get_embedding_service()
-            # Combine title and content for richer embedding
-            text_for_embedding = f"{idea.prompt_title}\n\n{idea.raw_content}"
-            embedding = embedding_service.generate_embedding_sync(text_for_embedding)
+            embedding = embedding_service.generate_embedding_sync(embedding_text(idea))
             embedding_service.store_embedding(idea.id, embedding)
         except Exception as e:
             logger.warning("embedding_generation_failed", idea_id=str(idea.id), error=str(e))
@@ -383,8 +381,9 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         # mid-object (truncated JSON fails validation unrecoverably). A higher
         # per-prompt setting is respected.
         # Complex actions (BMC, GTM, Hypothesis, Market Sizing, Competitors)
-        # need more tokens.
-        complex_actions = {"BUSINESS_MODEL_CANVAS", "GTM_STRATEGY", "HYPOTHESIS_TEST", "MARKET_SIZING", "COMPETITORS"}
+        # need more tokens. Five Forces and PESTEL also run long on verbose
+        # models (truncated JSON observed in prod) — same floor.
+        complex_actions = {"BUSINESS_MODEL_CANVAS", "GTM_STRATEGY", "HYPOTHESIS_TEST", "MARKET_SIZING", "COMPETITORS", "FIVE_FORCES", "PESTEL"}
         min_tokens = 8000 if action_type in complex_actions else 4000
         options["num_predict"] = max(options.get("num_predict") or 0, min_tokens)
         keep_alive = (prompt_config.keep_alive

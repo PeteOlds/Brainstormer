@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, get_args, get_origin
 from pydantic import BaseModel, Field, ValidationError
 from enum import Enum
 import json
@@ -161,20 +161,61 @@ _ACTION_SCHEMAS = {
 }
 
 
+def _coerce_scalar_lists(obj, schema):
+    """Join list-shaped values into strings where the schema expects str.
+
+    Small models frequently emit arrays (sometimes of junk objects) for
+    text fields — e.g. PESTEL `political: [{'_id': ...}]`, Refine
+    `elevator_pitch: ['Ollam...']`. Join usable string items; leave the
+    value untouched when nothing usable remains so validation still fails
+    honestly and the strict-retry path engages.
+    """
+    if not isinstance(obj, dict):
+        return obj
+    try:
+        fields = schema.model_fields
+    except Exception:
+        return obj
+    for name, field in fields.items():
+        if name not in obj:
+            continue
+        val = obj[name]
+        ann = field.annotation
+        if ann is str and isinstance(val, list):
+            texts = [str(v).strip() for v in val
+                     if isinstance(v, (str, int, float)) and str(v).strip()]
+            if texts:
+                obj[name] = " ".join(texts)
+        elif get_origin(ann) is list and get_args(ann) == (str,) and isinstance(val, list):
+            strs = [str(v).strip() for v in val
+                    if isinstance(v, (str, int, float)) and str(v).strip()]
+            if strs != val:
+                obj[name] = strs
+    return obj
+
+
 def validate_ollama_output(action_type: str, raw_json: str):
     """Validate Ollama JSON output against the appropriate Pydantic schema."""
     schema = _ACTION_SCHEMAS.get(action_type)
     if not schema:
-        raise ValueError(f"Unknown action type: {action_type}")
+        raise ValueError(
+            f"Unknown action type: {action_type}. "
+            f"Known: {sorted(_ACTION_SCHEMAS)}")
     try:
         return schema.model_validate_json(raw_json)
     except JSONDecodeError:
         # Re-raise as JSONDecodeError so Celery retry logic works
         raise
-    except ValidationError:
-        # Pydantic validation error - re-raise as ValidationError, not JSONDecodeError
-        # so the task doesn't incorrectly retry on validation errors
-        raise
+    except ValidationError as first:
+        # One coercion attempt for list-shaped scalars before giving up.
+        try:
+            coerced = _coerce_scalar_lists(json.loads(raw_json), schema)
+            return schema.model_validate(coerced)
+        except (ValueError, ValidationError):
+            raise first
+        except Exception as e:
+            # For any other exception, re-raise as JSONDecodeError
+            raise JSONDecodeError(str(e), raw_json, 0)
     except Exception as e:
         # For any other exception, re-raise as JSONDecodeError
         raise JSONDecodeError(str(e), raw_json, 0)

@@ -92,7 +92,6 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Prompt</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Summary</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Similarity</th>
                         <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Comments</th>
                         <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Votes</th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
@@ -131,27 +130,19 @@
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="idea.status"></span>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <template x-if="idea.embedding && idea.embedding.length">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" :title="idea.embedding ? 'Has embedding' : 'No embedding'">
-                                        <svg class="mr-1 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                        <span class="ml-1" x-text="'Similar'"></span>
-                                    </span>
-                                </template>
-                                <template x-if="!idea.embedding || !idea.embedding.length">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                                        <svg class="mr-1 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                        <span class="ml-1">No match</span>
-                                    </span>
-                                </template>
-                            </td>
-                            <td class="px-6 py-4 text-center">
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="idea.comments_count"></span>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <div class="flex items-center justify-center space-x-1">
-                                    <span class="text-xs text-emerald-600 dark:text-emerald-400" x-text="'👍 ' + idea.upvotes_count"></span>
-                                    <span class="text-lg font-bold text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
-                                    <span class="text-xs text-red-600 dark:text-red-400" x-text="'👎 ' + idea.downvotes_count"></span>
+                                <div class="flex items-center justify-center gap-1">
+                                    <button @click="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Upvote">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                    </button>
+                                    <span class="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400" x-text="'▲ ' + idea.upvotes_count"></span>
+                                    <span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
+                                    <span class="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400" x-text="'▼ ' + idea.downvotes_count"></span>
+                                    <button @click="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Downvote">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    </button>
                                 </div>
                                 <span class="text-xs text-slate-500 dark:text-slate-400" x-show="idea.user_vote === 1 || idea.user_vote === -1" x-text="idea.user_vote === 1 ? 'You upvoted' : 'You downvoted'"></span>
                             </td>
@@ -195,14 +186,14 @@
                         </tr>
                     </template>
                     <tr x-show="filteredIdeas.length === 0 && !loading">
-                        <td colspan="7" class="px-6 py-12 text-center">
+                        <td :colspan="isAdmin ? 9 : 8" class="px-6 py-12 text-center">
                             <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No ideas found</h3>
                             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">No ideas match your current filters.</p>
                         </td>
                     </tr>
                     <tr x-show="loading">
-                        <td colspan="7" class="px-6 py-12 text-center">
+                        <td :colspan="isAdmin ? 9 : 8" class="px-6 py-12 text-center">
                             <svg class="animate-spin mx-auto h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
                             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Loading ideas...</p>
                         </td>
@@ -237,9 +228,9 @@
                             <button @click="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" :disabled="voteLoading === idea.id" aria-label="Upvote">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
                             </button>
-                            <span class="text-xs text-emerald-600 dark:text-emerald-400" x-text="'👍 ' + idea.upvotes_count"></span>
+                            <span class="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400" x-text="'▲ ' + idea.upvotes_count"></span>
                             <span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
-                            <span class="text-xs text-red-600 dark:text-red-400" x-text="'👎 ' + idea.downvotes_count"></span>
+                            <span class="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400" x-text="'▼ ' + idea.downvotes_count"></span>
                             <button @click="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" :disabled="voteLoading === idea.id" aria-label="Downvote">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
@@ -754,6 +745,9 @@ function ideasApp() {
             const qModel = query.get('model');
             if (qModel) this.filters.model = qModel;
             await Promise.all([this.loadIdeas(), this.loadTotalIdeas(), this.loadPrompts(), this.checkAdmin(), this.loadActions(), this.loadUserSettings()]);
+            // Deep link from admin activity: ?idea=<id> opens the detail modal.
+            const qIdea = query.get('idea');
+            if (qIdea) await this.openIdeaById(qIdea);
             // Live updates: refresh the list every 30s while the page is
             // visible and no modal is open, so new ideas appear by themselves.
             setInterval(() => {
@@ -912,6 +906,18 @@ function ideasApp() {
             this.loadIdeaDetail(idea.id);
             this.loadComments(idea.id);
             this.detailModalOpen = true;
+        },
+
+        async openIdeaById(ideaId) {
+            try {
+                const res = await authFetch(`/api/v1/ideas/${ideaId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const idea = (data.data || data).idea;
+                if (idea) this.openDetailModal(idea);
+            } catch (e) {
+                console.error('Failed to open linked idea:', e);
+            }
         },
         
         closeDetailModal() {
@@ -1184,10 +1190,14 @@ function ideasApp() {
                 if (idea) {
                     idea.net_votes = payload.net_votes;
                     idea.user_vote = payload.current_user_vote;
+                    if (payload.upvotes_count !== undefined) idea.upvotes_count = payload.upvotes_count;
+                    if (payload.downvotes_count !== undefined) idea.downvotes_count = payload.downvotes_count;
                 }
                 if (this.selectedIdea?.id === ideaId) {
                     this.selectedIdea.net_votes = payload.net_votes;
                     this.selectedIdea.user_vote = payload.current_user_vote;
+                    if (payload.upvotes_count !== undefined) this.selectedIdea.upvotes_count = payload.upvotes_count;
+                    if (payload.downvotes_count !== undefined) this.selectedIdea.downvotes_count = payload.downvotes_count;
                 }
             } catch (error) {
                 alert('Failed to vote: ' + error.message);

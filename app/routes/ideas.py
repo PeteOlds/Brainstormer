@@ -324,6 +324,8 @@ def vote_idea(user, idea_id):
     return api_ok({
         "idea_id": str(idea_id),
         "net_votes": idea.net_score,
+        "upvotes_count": idea.upvotes_count,
+        "downvotes_count": idea.downvotes_count,
         "current_user_vote": user_vote,
     })
 

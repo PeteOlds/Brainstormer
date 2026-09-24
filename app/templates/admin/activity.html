@@ -87,6 +87,15 @@
                             <div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
                                 <div class="h-full rounded-full bg-emerald-500" :style="'width: ' + barWidthCount(p.ideas)"></div>
                             </div>
+                            <div class="mt-1 flex items-center gap-2 text-xs">
+                                <span class="font-medium tabular-nums text-emerald-600 dark:text-emerald-400" x-text="'✓ ' + (p.runs_success || 0)"></span>
+                                <span class="font-medium tabular-nums text-red-600 dark:text-red-400" x-text="'✗ ' + (p.runs_failed || 0)"></span>
+                                <span class="text-slate-400 dark:text-slate-500">runs</span>
+                            </div>
+                            <div x-show="(p.runs_success || 0) + (p.runs_failed || 0) > 0" class="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden flex">
+                                <div class="h-full bg-emerald-500" :style="'width: ' + (100 * (p.runs_success || 0) / ((p.runs_success || 0) + (p.runs_failed || 0))) + '%'"></div>
+                                <div class="h-full bg-red-500" :style="'width: ' + (100 * (p.runs_failed || 0) / ((p.runs_success || 0) + (p.runs_failed || 0))) + '%'"></div>
+                            </div>
                         </a>
                     </template>
                     <p x-show="!loading && (!popularity.prompts || !popularity.prompts.length)" class="text-sm text-slate-500">No prompts yet.</p>
@@ -240,7 +249,12 @@
                     <li class="relative pl-7">
                         <span class="absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white dark:border-slate-800" :class="dotClass(run.status)"></span>
                         <div class="flex items-baseline justify-between gap-2">
-                            <p class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="run.prompt_title"></p>
+                            <template x-if="runUrl(run)">
+                                <a :href="runUrl(run)" class="text-sm font-medium text-slate-900 dark:text-white truncate hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline" x-text="run.prompt_title"></a>
+                            </template>
+                            <template x-if="!runUrl(run)">
+                                <p class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="run.prompt_title"></p>
+                            </template>
                             <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400" x-text="timeAgo(run.created_at)"></span>
                         </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -253,6 +267,13 @@
                 </template>
                 <li x-show="!loading && filteredRuns.length === 0" class="pl-7 text-sm text-slate-500" x-text="(statusFilter || modelFilter) ? 'No runs match this filter.' : 'No runs yet — press Run Now on a prompt.'"></li>
             </ol>
+            <div x-show="!loading && runPages > 1" class="mt-4 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-4">
+                <p class="text-xs text-slate-500 dark:text-slate-400">Page <span x-text="runPage"></span> of <span x-text="runPages"></span> · <span x-text="runTotal"></span> runs</p>
+                <div class="flex space-x-2">
+                    <button @click="prevRunsPage()" :disabled="runPage === 1" class="px-3 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                    <button @click="nextRunsPage()" :disabled="runPage === runPages" class="px-3 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+                </div>
+            </div>
         </div>
 
         <!-- Live now: pending runs -->
@@ -302,6 +323,10 @@ function activityApp() {
         loadError: false,
         statusFilter: '',
         modelFilter: '',
+        runPage: 1,
+        runPages: 1,
+        runTotal: 0,
+        runPageSize: 20,
         lastUpdated: '',
 
         async init() {
@@ -309,6 +334,7 @@ function activityApp() {
             const params = new URLSearchParams(window.location.search);
             this.statusFilter = (params.get('run_status') || '').toUpperCase();
             this.modelFilter = params.get('model') || '';
+            this.runPage = Math.max(parseInt(params.get('page') || '1', 10) || 1, 1);
             await this.load();
             setInterval(() => {
                 if (document.visibilityState === 'visible' && !this.loading) this.load();
@@ -324,6 +350,8 @@ function activityApp() {
                 const params = new URLSearchParams();
                 if (this.statusFilter) params.append('run_status', this.statusFilter);
                 if (this.modelFilter) params.append('model', this.modelFilter);
+                params.append('page', this.runPage);
+                params.append('limit', this.runPageSize);
                 const qs = params.toString();
                 const res = await authFetch('/api/v1/admin/activity/stats' + (qs ? '?' + qs : ''));
                 if (res.status === 403) { window.location.href = '/ideas'; return; }
@@ -331,6 +359,10 @@ function activityApp() {
                 const data = await res.json();
                 const payload = data.data || data;
                 this.runs = payload.recent_runs || [];
+                const pg = payload.recent_runs_pagination || {};
+                this.runPage = pg.page || 1;
+                this.runPages = Math.max(pg.pages || 1, 1);
+                this.runTotal = pg.total || this.runs.length;
                 this.pendingRuns = payload.pending_runs || [];
                 this.queues = payload.queues || { ollama: null, default: null };
                 this.workersAlive = (payload.workers_alive !== undefined) ? payload.workers_alive : null;
@@ -374,8 +406,31 @@ function activityApp() {
         clearFilters() {
             this.statusFilter = '';
             this.modelFilter = '';
+            this.runPage = 1;
             window.history.replaceState(null, '', '/admin/activity');
             this.load();
+        },
+
+        async prevRunsPage() {
+            if (this.runPage > 1) {
+                this.runPage--;
+                await this.load();
+            }
+        },
+
+        async nextRunsPage() {
+            if (this.runPage < this.runPages) {
+                this.runPage++;
+                await this.load();
+            }
+        },
+
+        runUrl(run) {
+            // Deep-link: idea detail modal when the run belongs to an idea,
+            // otherwise the prompt's filtered ideas list.
+            if (run && run.idea_id) return '/ideas?idea=' + run.idea_id + '&status=ALL';
+            if (run && run.prompt_config_id) return '/ideas?prompt=' + run.prompt_config_id + '&status=ALL';
+            return null;
         },
 
         dotClass(status) {

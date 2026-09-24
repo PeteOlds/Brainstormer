@@ -769,6 +769,45 @@ class TestIdeaEndpoints:
         assert resp.status_code == 200
         assert resp.get_json()["data"]["net_votes"] == 0
 
+    def test_vote_response_includes_breakdown(self, client, auth_user, app, admin_user, admin_prompt):
+        """Vote response must carry up/down counts so the UI refreshes the
+        breakdown without reload (UI regression: stale counts)."""
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-0001",
+                prompt_title="Test",
+                raw_content="Test",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        resp = client.post(f"/api/v1/ideas/{idea_id}/vote", json={"direction": 1}, headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert data["upvotes_count"] == 1
+        assert data["downvotes_count"] == 0
+        assert data["net_votes"] == 1
+
+        reg = client.post("/api/v1/register", json={
+            "email": "voter2@test.com", "password": "password123"})
+        token2 = reg.get_json()["data"]["access_token"]
+        resp = client.post(f"/api/v1/ideas/{idea_id}/vote", json={"direction": -1}, headers={"Authorization": f"Bearer {token2}"})
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert data["upvotes_count"] == 1
+        assert data["downvotes_count"] == 1
+        assert data["net_votes"] == 0
+
     def test_vote_invalid_direction(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
         with app.app_context():
@@ -1142,6 +1181,68 @@ class TestAdminEndpoints:
         data = resp.get_json()["data"]
         assert len(data["recent_runs"]) >= 1
         assert any(r.get("idea_reference") == "IDEA-0001" for r in data["recent_runs"])
+
+    def test_activity_stats_prompt_run_health(self, admin_client, app, admin_user, admin_prompt):
+        """Per-prompt success/failed run counts for the green/red UI."""
+        with app.app_context():
+            from app.models import Idea, PromptConfig, PromptRun, PromptRunStatus, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-0001",
+                prompt_title="Test",
+                raw_content="Test content",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            db.session.add_all([
+                PromptRun(prompt_config_id=prompt.id, triggered_by="manual",
+                          status=PromptRunStatus.SUCCESS),
+                PromptRun(prompt_config_id=prompt.id, triggered_by="manual",
+                          status=PromptRunStatus.FAILED),
+                PromptRun(action_type="REFINE", triggered_by="manual",
+                          idea_id=idea.id, status=PromptRunStatus.SUCCESS),
+            ])
+            db.session.commit()
+
+        resp = admin_client.get("/api/v1/admin/activity/stats")
+        assert resp.status_code == 200
+        prompts = resp.get_json()["data"]["popularity"]["prompts"]
+        row = next(p for p in prompts if p["title"] == "Fixture Prompt")
+        assert row["runs_success"] == 2
+        assert row["runs_failed"] == 1
+
+    def test_activity_stats_runs_pagination(self, admin_client, app, admin_user, admin_prompt):
+        """Server pagination contract the activity UI relies on."""
+        with app.app_context():
+            from app.models import PromptConfig, PromptRun, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            db.session.add_all([
+                PromptRun(prompt_config_id=prompt.id, triggered_by="manual")
+                for _ in range(3)
+            ])
+            db.session.commit()
+
+        resp = admin_client.get("/api/v1/admin/activity/stats?page=1&limit=2")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert len(data["recent_runs"]) == 2
+        assert data["recent_runs_pagination"]["page"] == 1
+        assert data["recent_runs_pagination"]["total"] == 3
+
+        resp = admin_client.get("/api/v1/admin/activity/stats?page=2&limit=2")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert len(data["recent_runs"]) == 1
 
 
 class TestHealthEndpoints:

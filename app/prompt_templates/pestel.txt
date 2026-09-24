@@ -18,7 +18,7 @@ ${SUPPORTING_MATERIAL}
    - Environmental: ecological regulations, climate impacts, sustainability expectations, waste mandates, carbon footprint.
    - Legal: consumer protection laws, data privacy regulations (e.g. GDPR/privacy acts), employment standards, industry compliance.
 2. Conclude with a strategic risk summary: top external opportunities and threats, plus two to three prioritized recommendations for navigating these macro-environmental factors.
-3. Output STRICTLY a valid JSON object matching the schema below. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
+3. Output STRICTLY a valid JSON object matching the schema below. Text fields are plain strings — never lists or objects. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
 
 ### OUTPUT JSON SCHEMA:
 {

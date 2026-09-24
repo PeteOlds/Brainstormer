@@ -377,6 +377,35 @@ def activity_stats(user):
     popular_prompts = [{"id": str(pid), "title": title, "ideas": ideas, "net_votes": int(votes or 0)}
                        for pid, title, ideas, votes in popular_rows]
 
+    # Runs by prompt (success vs failed): scheduled runs grouped directly,
+    # follow-up actions attributed via their idea's prompt.
+    def _bucket(mapping, pid, status, cnt):
+        entry = mapping.setdefault(str(pid), {"success": 0, "failed": 0})
+        val = getattr(status, "value", status)
+        if val == "SUCCESS":
+            entry["success"] += cnt
+        elif val == "FAILED":
+            entry["failed"] += cnt
+
+    prompt_run_health = {}
+    for pid, status, cnt in (
+            db.session.query(PromptRun.prompt_config_id, PromptRun.status,
+                             func.count(PromptRun.id))
+            .filter(PromptRun.prompt_config_id.isnot(None))
+            .group_by(PromptRun.prompt_config_id, PromptRun.status).all()):
+        _bucket(prompt_run_health, pid, status, cnt)
+    for pid, status, cnt in (
+            db.session.query(Idea.prompt_config_id, PromptRun.status,
+                             func.count(PromptRun.id))
+            .join(PromptRun, PromptRun.idea_id == Idea.id)
+            .filter(Idea.prompt_config_id.isnot(None))
+            .group_by(Idea.prompt_config_id, PromptRun.status).all()):
+        _bucket(prompt_run_health, pid, status, cnt)
+    for p in popular_prompts:
+        health = prompt_run_health.get(p["id"], {"success": 0, "failed": 0})
+        p["runs_success"] = health["success"]
+        p["runs_failed"] = health["failed"]
+
     # Ideas by Model (count DISTINCT ideas: the join to runs fans out
     # one row per idea x successful run, which inflated the counts).
     model_rows = (
