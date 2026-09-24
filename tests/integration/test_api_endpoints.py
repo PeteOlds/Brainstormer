@@ -399,6 +399,237 @@ class TestIdeaEndpoints:
         data = resp.get_json()["data"]
         assert all(i["status"] == "NEW" for i in data["ideas"])
 
+    def test_list_ideas_new_statuses(self, client, auth_user, app, admin_user, admin_prompt):
+        """Filter must work for HOLD/DEVELOPMENT/COMPLETE (UI regression)."""
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            db.session.add_all([
+                Idea(reference_code="IDEA-H1", prompt_title="T", raw_content="c",
+                     status="HOLD", prompt_config_id=prompt.id),
+                Idea(reference_code="IDEA-D1", prompt_title="T", raw_content="c",
+                     status="DEVELOPMENT", prompt_config_id=prompt.id),
+                Idea(reference_code="IDEA-C1", prompt_title="T", raw_content="c",
+                     status="COMPLETE", prompt_config_id=prompt.id),
+            ])
+            db.session.commit()
+
+        for status, ref in [("HOLD", "IDEA-H1"), ("DEVELOPMENT", "IDEA-D1"), ("COMPLETE", "IDEA-C1")]:
+            resp = client.get(f"/api/v1/ideas?status={status}",
+                              headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 200
+            ideas = resp.get_json()["data"]["ideas"]
+            assert [i["reference_code"] for i in ideas] == [ref]
+
+    def test_list_ideas_search(self, client, auth_user, app, admin_user, admin_prompt):
+        """?search= must filter server-side (ref, title, content)."""
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            db.session.add_all([
+                Idea(reference_code="IDEA-S1", prompt_title="Meal planner",
+                     raw_content="Plan weekly meals", prompt_config_id=prompt.id),
+                Idea(reference_code="IDEA-S2", prompt_title="Fitness app",
+                     raw_content="Track workouts", prompt_config_id=prompt.id),
+            ])
+            db.session.commit()
+
+        resp = client.get("/api/v1/ideas?search=meal",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        assert [i["reference_code"] for i in resp.get_json()["data"]["ideas"]] == ["IDEA-S1"]
+
+        resp = client.get("/api/v1/ideas?search=IDEA-S2",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        assert [i["reference_code"] for i in resp.get_json()["data"]["ideas"]] == ["IDEA-S2"]
+
+        resp = client.get("/api/v1/ideas?search=no-such-idea-xyz",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["ideas"] == []
+
+    def test_list_ideas_sort_oldest_first(self, client, auth_user, app, admin_user, admin_prompt):
+        """?sort_by=-created_at must return oldest first."""
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            db.session.add_all([
+                Idea(reference_code="IDEA-O1", prompt_title="T", raw_content="c",
+                     prompt_config_id=prompt.id),
+                Idea(reference_code="IDEA-O2", prompt_title="T", raw_content="c",
+                     prompt_config_id=prompt.id),
+            ])
+            db.session.commit()
+
+        resp = client.get("/api/v1/ideas?sort_by=-created_at",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        refs = [i["reference_code"] for i in resp.get_json()["data"]["ideas"]]
+        assert refs == ["IDEA-O1", "IDEA-O2"]
+
+    def test_list_ideas_pagination_contract(self, client, auth_user, app, admin_user, admin_prompt):
+        """Server pagination contract the /ideas UI relies on: page/limit
+        slices rows while total/pages describe the full filtered set."""
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            db.session.add_all([
+                Idea(reference_code=f"IDEA-P{i:02d}", prompt_title="T",
+                     raw_content="c", prompt_config_id=prompt.id)
+                for i in range(12)
+            ])
+            db.session.commit()
+
+        resp = client.get("/api/v1/ideas?page=1&limit=10",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert len(data["ideas"]) == 10
+        assert data["total"] == 12
+        assert data["pages"] == 2
+
+        resp = client.get("/api/v1/ideas?page=2&limit=10",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert len(data["ideas"]) == 2
+        assert data["total"] == 12
+
+    def test_list_ideas_includes_counts(self, client, auth_user, app, admin_user, admin_prompt):
+        """List/detail payloads must carry comments_count + vote breakdown
+        (UI regression: columns rendered empty when the field was missing)."""
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-0001",
+                prompt_title="Test",
+                raw_content="Test content",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        client.post(f"/api/v1/ideas/{idea_id}/comments", json={"body": "Nice"},
+                    headers={"Authorization": f"Bearer {token}"})
+
+        resp = client.get("/api/v1/ideas", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        row = resp.get_json()["data"]["ideas"][0]
+        assert row["comments_count"] == 1
+        assert row["upvotes_count"] == 0
+        assert row["downvotes_count"] == 0
+        assert row["net_votes"] == 0
+
+        resp = client.get(f"/api/v1/ideas/{idea_id}",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["idea"]["comments_count"] == 1
+
+    def test_comments_count_soft_delete(self, client, app, admin_user, admin_prompt):
+        """Deleting (soft) a top-level comment decrements the count;
+        replies never affect it (matches listener semantics)."""
+        reg = client.post("/api/v1/register", json={
+            "email": "counter@test.com", "password": "password123"})
+        token = reg.get_json()["data"]["access_token"]
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-0001",
+                prompt_title="Test",
+                raw_content="Test content",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        def count():
+            r = client.get("/api/v1/ideas", headers={"Authorization": f"Bearer {token}"})
+            assert r.status_code == 200
+            return r.get_json()["data"]["ideas"][0]["comments_count"]
+
+        r1 = client.post(f"/api/v1/ideas/{idea_id}/comments", json={"body": "Top"},
+                         headers={"Authorization": f"Bearer {token}"})
+        top_id = r1.get_json()["data"]["comment"]["id"]
+        assert count() == 1
+
+        client.post(f"/api/v1/ideas/{idea_id}/comments",
+                    json={"body": "Reply", "parent_id": top_id},
+                    headers={"Authorization": f"Bearer {token}"})
+        assert count() == 1
+
+        client.delete(f"/api/v1/comments/{top_id}",
+                      headers={"Authorization": f"Bearer {token}"})
+        assert count() == 0
+
+    def test_bulk_status_update_to_development(self, admin_client, app, admin_user, admin_prompt):
+        """Bulk status change to a new-enum value must succeed end to end
+        (UI regression: 'Failed to bulk update status')."""
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            db.session.add_all([
+                Idea(reference_code="IDEA-B1", prompt_title="T", raw_content="c",
+                     status="NEW", prompt_config_id=prompt.id),
+                Idea(reference_code="IDEA-B2", prompt_title="T", raw_content="c",
+                     status="NEW", prompt_config_id=prompt.id),
+            ])
+            db.session.commit()
+            ids = [str(i.id) for i in Idea.query.filter(
+                Idea.reference_code.in_(["IDEA-B1", "IDEA-B2"])).all()]
+
+        resp = admin_client.patch("/api/v1/ideas/bulk-status", json={
+            "idea_ids": ids, "status": "DEVELOPMENT"})
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert data["updated_count"] == 2
+        assert data["status"] == "DEVELOPMENT"
+
+        with app.app_context():
+            from app.models import Idea
+            statuses = {i.status.value for i in Idea.query.filter(
+                Idea.reference_code.in_(["IDEA-B1", "IDEA-B2"])).all()}
+            assert statuses == {"DEVELOPMENT"}
+
     def test_get_idea_detail(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
         with app.app_context():
@@ -448,6 +679,33 @@ class TestIdeaEndpoints:
         })
         assert resp.status_code == 200
         assert resp.get_json()["data"]["status"] == "CONSIDERATION"
+
+    def test_update_idea_status_new_values(self, admin_client, app, admin_user, admin_prompt):
+        """Status updates must accept HOLD/DEVELOPMENT/COMPLETE (UI regression)."""
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-0001",
+                prompt_title="Test",
+                raw_content="Test",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        for status in ("HOLD", "DEVELOPMENT", "COMPLETE"):
+            resp = admin_client.patch(f"/api/v1/ideas/{idea_id}/status", json={
+                "status": status
+            })
+            assert resp.status_code == 200
+            assert resp.get_json()["data"]["status"] == status
 
     def test_update_idea_status_user_forbidden(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
@@ -558,7 +816,8 @@ class TestActionEndpoints:
         with patch('app.tasks.ollama_tasks.run_secondary_action') as mock_run:
             mock_run.delay.return_value.id = "fake-action-job-id"
             resp = admin_client.post(f"/api/v1/ideas/{idea_id}/actions", json={
-                "action_type": "REFINE"
+                "action_type": "REFINE",
+                "confirm": True
             })
             assert resp.status_code == 202
             mock_run.delay.assert_called_once()
@@ -641,6 +900,7 @@ class TestActionEndpoints:
             resp = admin_client.post(f"/api/v1/ideas/{idea_id}/actions", json={
                 "action_type": "PRD_DOC",
                 "answers": ["Freemium, $9/mo"],
+                "confirm": True,
             })
             assert resp.status_code == 202
             _, kwargs = mock_run.delay.call_args
@@ -673,6 +933,7 @@ class TestActionEndpoints:
             mock_run.delay.return_value.id = "fake-prd-job-id-2"
             resp = admin_client.post(f"/api/v1/ideas/{idea_id}/actions", json={
                 "action_type": "PRD_DOC",
+                "confirm": True,
             })
             assert resp.status_code == 202
 
@@ -704,6 +965,7 @@ class TestActionEndpoints:
             resp = admin_client.post(f"/api/v1/ideas/{idea_id}/actions", json={
                 "action_type": "PRD_DOC",
                 "answers": "not-a-list",
+                "confirm": True,
             })
             assert resp.status_code == 400
             mock_run.delay.assert_not_called()
@@ -835,6 +1097,51 @@ class TestAdminEndpoints:
         _email, token = auth_user
         resp = client.get("/api/v1/admin/stats", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 403
+
+    def test_admin_settings_page_admin(self, admin_client):
+        """Admin HTML settings page must render (UI regression: 404)."""
+        resp = admin_client.get("/admin/settings")
+        assert resp.status_code == 200
+        assert "System Settings" in resp.get_data(as_text=True)
+
+    def test_admin_settings_page_user_forbidden(self, client, auth_user):
+        _email, token = auth_user
+        resp = client.get("/admin/settings", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 403
+
+    def test_admin_settings_page_anonymous(self, client):
+        resp = client.get("/admin/settings")
+        assert resp.status_code == 401
+
+    def test_activity_stats_with_idea_runs(self, admin_client, app, admin_user, admin_prompt):
+        """Activity stats must load when runs reference ideas (UI regression:
+        'Couldn't load activity data' — full-row idea fetch failed)."""
+        with app.app_context():
+            from app.models import Idea, PromptConfig, PromptRun, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-0001",
+                prompt_title="Test",
+                raw_content="Test content",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            db.session.add(PromptRun(
+                prompt_config_id=prompt.id, action_type="REFINE",
+                triggered_by="manual", idea_id=idea.id))
+            db.session.commit()
+
+        resp = admin_client.get("/api/v1/admin/activity/stats")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert len(data["recent_runs"]) >= 1
+        assert any(r.get("idea_reference") == "IDEA-0001" for r in data["recent_runs"])
 
 
 class TestHealthEndpoints:

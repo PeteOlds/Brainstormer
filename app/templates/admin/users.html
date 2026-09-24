@@ -86,31 +86,31 @@
             </tbody>
         </table>
         </div>
-        
-        {% if pagination.pages > 1 %}
-        <div class="px-4 py-4 border-t border-slate-200 dark:border-slate-700">
-            <nav class="flex items-center justify-between">
-                <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Page {{ pagination.page }} of {{ pagination.pages }} ({{ pagination.total }} total)
-                </p>
-                <div class="flex space-x-2">
-                    {% if pagination.has_prev %}
-                    <a href="?page={{ pagination.prev_num }}{% if search %}&search={{ search }}{% endif %}" 
-                        class="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
-                        Previous
-                    </a>
-                    {% endif %}
-                    {% if pagination.has_next %}
-                    <a href="?page={{ pagination.next_num }}{% if search %}&search={{ search }}{% endif %}" 
-                        class="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
-                        Next
-                    </a>
-                    {% endif %}
-                </div>
-            </nav>
-        </div>
-        {% endif %}
     </div>
+
+    {% if pagination.pages > 1 %}
+    <div class="px-4 py-4 border-t border-slate-200 dark:border-slate-700">
+        <nav class="flex items-center justify-between">
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Page {{ pagination.page }} of {{ pagination.pages }} ({{ pagination.total }} total)
+            </p>
+            <div class="flex space-x-2">
+                {% if pagination.has_prev %}
+                <a href="?page={{ pagination.prev_num }}{% if search %}&search={{ search }}{% endif %}" 
+                    class="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                    Previous
+                </a>
+                {% endif %}
+                {% if pagination.has_next %}
+                <a href="?page={{ pagination.next_num }}{% if search %}&search={{ search }}{% endif %}" 
+                    class="px-3 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                    Next
+                </a>
+                {% endif %}
+            </div>
+        </nav>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 

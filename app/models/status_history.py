@@ -1,15 +1,9 @@
 import uuid
 from datetime import datetime, timezone
-from enum import Enum
 
 from app.extensions import db
 from app.models.types import GUID
-
-
-class IdeaStatus(str, Enum):
-    NEW = "NEW"
-    CONSIDERATION = "CONSIDERATION"
-    DISCARDED = "DISCARDED"
+from app.models.enums import IdeaStatus
 
 
 class IdeaStatusHistory(db.Model):

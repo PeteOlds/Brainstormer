@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.extensions import db
 from app.models import Idea
-from app.services.ollama_client import OllamaClient
+from app.services.ollama_client import OllamaClient, OllamaError
 
 import structlog
 
@@ -28,8 +28,8 @@ class EmbeddingService:
     EMBEDDING_DIM = 768  # nomic-embed-text produces 768-dim vectors
     SIMILARITY_THRESHOLD = 0.85  # Cosine similarity threshold for "similar" ideas
 
-    def __init__(self, ollama_client: Optional[OllamaClient] = None):
-        self.ollama_client = ollama_client or OllamaClient()
+    def __init__(self, base_url: str | None = None):
+        self.ollama_client = OllamaClient(base_url=base_url)
 
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for a single text using nomic-embed-text."""
@@ -45,14 +45,40 @@ class EmbeddingService:
             if not embedding or len(embedding) != self.EMBEDDING_DIM:
                 raise ValueError(f"Invalid embedding dimension: {len(embedding) if embedding else 0}")
             return embedding
+        except OllamaError as e:
+            logger.error("embedding_generation_failed", base_url=self.ollama_client.base_url, model=self.EMBEDDING_MODEL, status=e.status_code, body=e.response_body)
+            raise
         except Exception as e:
             logger.error("embedding_generation_failed", error=str(e))
             raise
 
     def generate_embedding_sync(self, text: str) -> List[float]:
         """Synchronous version for use in Celery tasks."""
-        import asyncio
-        return asyncio.run(self.generate_embedding(text))
+        try:
+            response = self.ollama_client.generate_sync_with_error_handling(
+                model=self.EMBEDDING_MODEL,
+                prompt=text,
+                format="json",
+                options={"temperature": 0.0},
+            )
+            # nomic-embed-text returns embedding in response["embedding"]
+            embedding = response.get("embedding")
+            if not embedding or len(embedding) != self.EMBEDDING_DIM:
+                raise ValueError(f"Invalid embedding dimension: {len(embedding) if embedding else 0}")
+            return embedding
+        except OllamaError as e:
+            logger.error("embedding_generation_failed", base_url=self.ollama_client.base_url, model=self.EMBEDDING_MODEL, status=e.status_code, body=e.response_body)
+            raise
+        except Exception as e:
+            logger.error("embedding_generation_failed", error=str(e))
+            raise
+            embedding = data.get("embedding")
+            if not embedding or len(embedding) != self.EMBEDDING_DIM:
+                raise ValueError(f"Invalid embedding dimension: {len(embedding) if embedding else 0}")
+            return embedding
+        except Exception as e:
+            logger.error("embedding_generation_failed", error=str(e))
+            raise
 
     def store_embedding(self, idea_id: uuid.UUID, embedding: List[float]) -> bool:
         """Store embedding for an idea."""

@@ -2,6 +2,10 @@
 ${ORIGINAL_IDEA_CONTENT}
 
 ---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
 ### INSTRUCTIONS:
 1. You are an expert product strategist and Lean Startup advisor.
 2. Design a rigorous, phase-gated Experiment & Hypothesis Testing Roadmap.

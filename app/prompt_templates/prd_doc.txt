@@ -4,6 +4,10 @@ Act as an expert technical product manager and business analyst. Take the produc
 ${ORIGINAL_IDEA_CONTENT}
 
 ---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
 
 ### INSTRUCTIONS:
 1. Structure the PRD with professional rigor across these sections:

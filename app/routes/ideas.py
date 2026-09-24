@@ -1,10 +1,13 @@
 from flask import Blueprint, request
-from sqlalchemy import func, desc, asc
+from sqlalchemy import func, desc, asc, or_
 import json
 import uuid
+import random
+import string
 
 from app.extensions import db
 from app.models import Idea, Vote, SecondaryActionResult, IdeaStatusHistory, User, Comment, IdeaEdit
+from app.models.enums import IdeaStatus
 from app.utils.decorators import token_required, admin_required
 from app.utils.responses import api_ok, api_error, api_created
 
@@ -25,6 +28,7 @@ def list_ideas(user):
     limit = request.args.get("limit", 20, type=int)
     status = request.args.get("status")
     sort_by = request.args.get("sort_by", "created_at")
+    search = request.args.get("search")
     prompt_config_id = request.args.get("prompt_config_id", type=lambda x: uuid.UUID(x) if x else None)
     model = request.args.get("model")
 
@@ -36,6 +40,14 @@ def list_ideas(user):
         # ACTIVE_ONLY is a frontend-only filter - exclude DISCARDED ideas
         query = query.filter(Idea.status != 'DISCARDED')
     # 'ALL' (or absent) means no status filter.
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(
+            Idea.reference_code.ilike(like),
+            Idea.prompt_title.ilike(like),
+            Idea.raw_content.ilike(like),
+        ))
+    # 'ALL' (or absent) means no status filter.
     if prompt_config_id:
         query = query.filter(Idea.prompt_config_id == prompt_config_id)
     if model:
@@ -43,11 +55,13 @@ def list_ideas(user):
         query = query.join(PromptConfig, Idea.prompt_config_id == PromptConfig.id).filter(
             PromptConfig.model_name == model)
 
-    # Sorting
+    # Sorting (matches the dashboard sort dropdown values)
     if sort_by == "votes":
         query = query.order_by(desc(Idea.net_score), desc(Idea.created_at))
-    elif sort_by == "created_at":
-        query = query.order_by(desc(Idea.created_at))
+    elif sort_by == "-votes":
+        query = query.order_by(asc(Idea.net_score), desc(Idea.created_at))
+    elif sort_by == "-created_at":
+        query = query.order_by(asc(Idea.created_at))
     else:
         query = query.order_by(desc(Idea.created_at))
 
@@ -64,6 +78,80 @@ def list_ideas(user):
         "page": pagination.page,
         "pages": pagination.pages,
     })
+
+
+@bp.route("/ideas", methods=["POST"])
+@token_required
+def create_idea(user):
+    """Create a new idea manually.
+    
+    Available to all users with can_create_ideas=True (default).
+    Format matches generated ideas: prompt_title, raw_content, structured_content (optional).
+    """
+    if not user.can_create_ideas:
+        return api_error("Manual idea creation is disabled for your account.", status_code=403)
+    
+    data = request.get_json() or {}
+    
+    prompt_title = (data.get("prompt_title") or "").strip()
+    raw_content = (data.get("raw_content") or "").strip()
+    structured_content = data.get("structured_content")
+    
+    if not prompt_title:
+        return api_error("prompt_title is required.", status_code=400)
+    if len(prompt_title) > 200:
+        return api_error("prompt_title must be 200 characters or fewer.", status_code=400)
+    if not raw_content:
+        return api_error("raw_content is required.", status_code=400)
+    
+    # Validate structured_content if provided
+    if structured_content is not None:
+        if not isinstance(structured_content, dict):
+            return api_error("structured_content must be an object.", status_code=400)
+        allowed = {
+            "elevator_pitch": 500,
+            "target_audience": 300,
+            "core_value_proposition": 500,
+            "monetization_strategy": 300,
+        }
+        unknown = [k for k in structured_content if k not in allowed]
+        if unknown:
+            return api_error(f"Unknown structured fields: {', '.join(unknown)}.", status_code=400)
+        cleaned = {}
+        for key, cap in allowed.items():
+            if key not in structured_content:
+                continue
+            val = structured_content[key]
+            if not isinstance(val, str) or not val.strip():
+                return api_error(f"{key} must be a non-empty string.", status_code=400)
+            if len(val.strip()) > cap:
+                return api_error(f"{key} must be {cap} characters or fewer.", status_code=400)
+            cleaned[key] = val.strip()
+        if not cleaned:
+            return api_error("structured_content must include at least one known field.", status_code=400)
+        structured_content = cleaned
+    
+    # Generate reference code (IDEA-XXXX format)
+    import random
+    import string
+    while True:
+        ref_code = f"IDEA-{''.join(random.choices(string.digits, k=4))}"
+        if not Idea.query.filter_by(reference_code=ref_code).first():
+            break
+    
+    idea = Idea(
+        reference_code=ref_code,
+        prompt_title=prompt_title,
+        raw_content=raw_content,
+        structured_content=structured_content,
+        status="NEW",
+        prompt_config_id=None,  # Manual ideas have no associated prompt config
+    )
+    
+    db.session.add(idea)
+    db.session.commit()
+    
+    return api_created(idea.to_dict(user_vote=None))
 
 
 @bp.route("/ideas/<uuid:idea_id>/similar", methods=["GET"])
@@ -161,6 +249,47 @@ def update_idea_status(user, idea_id):
     return api_ok(idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)))
 
 
+@bp.route("/ideas/bulk-status", methods=["PATCH"])
+@admin_required
+def bulk_update_idea_status(user):
+    """Update status for multiple ideas at once (Admin only)."""
+    data = request.get_json() or {}
+    idea_ids = data.get("idea_ids", [])
+    new_status = data.get("status")
+
+    if not idea_ids:
+        return api_error("Missing required field: idea_ids", status_code=400)
+    if not new_status:
+        return api_error("Missing required field: status", status_code=400)
+
+    try:
+        new_status_enum = IdeaStatus[new_status.upper()]
+    except KeyError:
+        return api_error(f"Invalid status: {new_status}", status_code=400)
+
+    ideas = Idea.query.filter(Idea.id.in_(idea_ids)).all()
+    updated_count = 0
+    for idea in ideas:
+        if idea.status != new_status_enum:
+            history = IdeaStatusHistory(
+                idea_id=idea.id,
+                changed_by_id=user.id,
+                old_status=idea.status,
+                new_status=new_status_enum,
+            )
+            db.session.add(history)
+            idea.status = new_status_enum
+            updated_count += 1
+
+    db.session.commit()
+
+    return api_ok({
+        "updated_count": updated_count,
+        "total_selected": len(idea_ids),
+        "status": new_status_enum.value
+    })
+
+
 @bp.route("/ideas/<uuid:idea_id>/vote", methods=["POST"])
 @token_required
 def vote_idea(user, idea_id):
@@ -212,6 +341,7 @@ def list_actions(user):
 def run_action(user, idea_id):
     """Run a secondary action on an idea (Admin only)."""
     from app.services.secondary_actions import get_action, list_actions as registry_actions
+    from app.models import Comment
 
     idea = Idea.query.get_or_404(idea_id)
     data = request.get_json() or {}
@@ -224,6 +354,22 @@ def run_action(user, idea_id):
         known = [a["key"] for a in registry_actions()]
         return api_error(f"Unknown action_type: {action_type}. Known: {', '.join(known)}", status_code=400)
     action_type = entry["key"]
+
+    # Confirmation check for Refine and PRD (PRD §13.33-13.38)
+    # If no comments and <3 secondary actions done, require explicit confirmation
+    confirm = data.get("confirm", False)
+    actions_done = idea.actions_run or []
+    comment_count = Comment.query.filter_by(idea_id=idea.id).count()
+    if (action_type in ("REFINE", "PRD_DOC")
+            and comment_count == 0
+            and len(actions_done) < 3
+            and not confirm):
+        return api_error(
+            "Are you sure you want to continue? This idea doesn't have much more additional information yet",
+            status_code=409,
+            error_code="CONFIRMATION_REQUIRED",
+            errors={"action_type": action_type}
+        )
 
     model_override = data.get("model_override")
 

@@ -9,6 +9,13 @@ from app.extensions import db
 from app.models import User, UserRole, Idea, PromptConfig
 
 
+# Blueprint for admin HTML pages (no URL prefix)
+admin_pages_bp = Blueprint("admin_pages", __name__)
+
+# Blueprint for admin API routes (with /api/v1 prefix)
+admin_api_bp = Blueprint("admin_api", __name__)
+
+
 def _queue_depths():
     """Redis list lengths for the celery queues (instant, no worker needed)."""
     depths = {"ollama": None, "default": None}
@@ -44,14 +51,14 @@ bp = Blueprint("admin", __name__)
 
 
 
-@bp.route("/admin", methods=["GET"])
+@admin_pages_bp.route("/admin", methods=["GET"])
 @admin_required
 def admin_dashboard(user):
     """Admin dashboard page."""
     return render_template("admin/dashboard.html", user=user, current_user=user)
 
 
-@bp.route("/admin/users", methods=["GET"])
+@admin_pages_bp.route("/admin/users", methods=["GET"])
 @admin_required
 def admin_users(user):
     """User management page."""
@@ -78,7 +85,7 @@ def admin_users(user):
     return render_template("admin/users.html", user=user, current_user=user, pagination=pagination, search=search)
 
 
-@bp.route("/admin/users/<uuid:user_id>", methods=["PATCH"])
+@admin_pages_bp.route("/admin/users/<uuid:user_id>", methods=["PATCH"])
 @admin_required
 def admin_update_user(user, user_id):
     """Update user (promote/demote, activate/deactivate)."""
@@ -96,7 +103,7 @@ def admin_update_user(user, user_id):
     return api_ok(target_user.to_dict())
 
 
-@bp.route("/admin/users/<uuid:user_id>", methods=["DELETE"])
+@admin_pages_bp.route("/admin/users/<uuid:user_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_user(user, user_id):
     """Delete a user (soft delete - deactivate)."""
@@ -108,7 +115,7 @@ def admin_delete_user(user, user_id):
     return api_ok({"message": "User deactivated successfully"})
 
 
-@bp.route("/admin/users/create", methods=["POST"])
+@admin_pages_bp.route("/admin/users/create", methods=["POST"])
 @admin_required
 def admin_create_user(user):
     """Create a new user."""
@@ -133,7 +140,7 @@ def admin_create_user(user):
     return api_created(new_user.to_dict())
 
 
-@bp.route("/admin/prompts/health", methods=["GET"])
+@admin_api_bp.route("/admin/prompts/health", methods=["GET"])
 @admin_required
 def prompts_health(user):
     """Per-prompt health over the trailing 7 days (PRD §9.2).
@@ -198,7 +205,7 @@ def _prompts_health():
     return report
 
 
-@bp.route("/admin/prompts", methods=["GET"])
+@admin_pages_bp.route("/admin/prompts", methods=["GET"])
 @admin_required
 def admin_prompts(user):
     """Prompt management page.
@@ -208,14 +215,14 @@ def admin_prompts(user):
     """
     return render_template("prompts/list.html", user=user, current_user=user)
 
-@bp.route("/admin/activity", methods=["GET"])
+@admin_pages_bp.route("/admin/activity", methods=["GET"])
 @admin_required
 def activity_page(user):
     """Activity & performance dashboard page (Admin only)."""
     return render_template("admin/activity.html", user=user, current_user=user)
 
 
-@bp.route("/admin/activity/stats", methods=["GET"])
+@admin_api_bp.route("/admin/activity/stats", methods=["GET"])
 @admin_required
 def activity_stats(user):
     """Activity, performance and popularity stats for the admin dashboard."""
@@ -228,17 +235,26 @@ def activity_stats(user):
     if status_filter and status_filter not in ("PENDING", "RUNNING", "SUCCESS", "FAILED"):
         return api_error("Invalid run_status filter", status_code=400)
     model_filter = request.args.get("model") or None
-    run_limit = 50 if (status_filter or model_filter) else 20
+
+    # Pagination params (PRD: 20 items per page)
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("limit", 20, type=int)
+    per_page = min(max(per_page, 1), 100)  # Clamp 1-100
 
     # --- Recent runs (activity stream, generations + follow-up actions) ---
     live_statuses = [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
     recent_runs = []
     idea_ids = set()
     prompt_ids = set()
+
     run_query = PromptRun.query.order_by(PromptRun.created_at.desc())
     if status_filter:
         run_query = run_query.filter(PromptRun.status == status_filter)
-    for run in run_query.limit(200).all():
+
+    # Paginate the base query (before model filter which requires Python)
+    pagination = run_query.paginate(page=page, per_page=per_page, error_out=False)
+
+    for run in pagination.items:
         item = run.to_dict()
         item["prompt_title"] = run.display_title
         recent_runs.append(item)
@@ -246,12 +262,14 @@ def activity_stats(user):
             idea_ids.add(run.idea_id)
         if run.prompt_config_id:
             prompt_ids.add(run.prompt_config_id)
+
     idea_refs = {}
     ideas_by_id = {}
     if idea_ids:
         for idea in Idea.query.filter(Idea.id.in_(list(idea_ids))).all():
             idea_refs[str(idea.id)] = idea.reference_code
             ideas_by_id[str(idea.id)] = idea
+
     # Model per run (for ?model= filtering): via the run's own prompt, else
     # via the linked idea's prompt (follow-up actions).
     prompt_ids.update(
@@ -262,6 +280,7 @@ def activity_stats(user):
         for pc in PromptConfig.query.filter(
                 PromptConfig.id.in_(list(prompt_ids))).all():
             model_by_prompt[str(pc.id)] = pc.model_name
+
     for item in recent_runs:
         model = None
         if item["prompt_config_id"] and str(item["prompt_config_id"]) in model_by_prompt:
@@ -271,9 +290,20 @@ def activity_stats(user):
             if idea.prompt_config_id and str(idea.prompt_config_id) in model_by_prompt:
                 model = model_by_prompt[str(idea.prompt_config_id)]
         item["model"] = model
+
+    # Apply model filter in Python (requires enriched data)
     if model_filter:
         recent_runs = [r for r in recent_runs if r["model"] == model_filter]
-    recent_runs = recent_runs[:run_limit]
+        # Note: model filter may reduce count below per_page; this is acceptable
+        # for filtered views. Total count reflects pre-filter for simplicity.
+
+    for item in recent_runs:
+        if item["idea_id"] and item["idea_id"] in idea_refs:
+            item["idea_reference"] = idea_refs[item["idea_id"]]
+            if item["action_type"]:
+                item["prompt_title"] = (
+                    f"{item['action_type'].title().replace('_', ' ')}"
+                    f" on {idea_refs[item['idea_id']]}")
 
     # Per-run timings for the model timing graph (?model= only): successful
     # runs with a measured duration, newest first.
@@ -387,6 +417,14 @@ def activity_stats(user):
 
     return api_ok({
         "recent_runs": recent_runs,
+        "recent_runs_pagination": {
+            "page": pagination.page,
+            "per_page": pagination.per_page,
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "has_next": pagination.has_next,
+            "has_prev": pagination.has_prev,
+        },
         "pending_runs": pending_runs,
         "queues": _queue_depths(),
         "workers_alive": _workers_alive(),
@@ -410,7 +448,7 @@ def activity_stats(user):
     })
 
 
-@bp.route("/admin/stats", methods=["GET"])
+@admin_api_bp.route("/admin/stats", methods=["GET"])
 @admin_required
 def get_stats(user):
     """Get system statistics (Admin only)."""
@@ -434,7 +472,7 @@ def get_stats(user):
     })
 
 
-@bp.route("/admin/settings", methods=["GET"])
+@admin_pages_bp.route("/admin/settings", methods=["GET"])
 @admin_required
 def admin_settings(user):
     from app.models import SystemSettings
@@ -442,7 +480,7 @@ def admin_settings(user):
     return render_template_string(SETTINGS_TEMPLATE, user=user, current_user=user, settings=settings)
 
 
-@bp.route("/api/v1/admin/settings", methods=["GET"])
+@admin_api_bp.route("/admin/settings", methods=["GET"])
 @admin_required
 def get_settings(user):
     from app.models import SystemSettings
@@ -450,7 +488,7 @@ def get_settings(user):
     return api_ok(settings.to_dict())
 
 
-@bp.route("/api/v1/admin/settings/platform", methods=["PATCH"])
+@admin_api_bp.route("/admin/settings/platform", methods=["PATCH"])
 @admin_required
 def update_platform_settings(user):
     from app.models import SystemSettings
@@ -461,7 +499,7 @@ def update_platform_settings(user):
     return api_ok(settings.to_dict())
 
 
-@bp.route("/api/v1/admin/settings/location", methods=["PATCH"])
+@admin_api_bp.route("/admin/settings/location", methods=["PATCH"])
 @admin_required
 def update_location_settings(user):
     from app.models import SystemSettings
@@ -472,7 +510,7 @@ def update_location_settings(user):
     return api_ok(settings.to_dict())
 
 
-@bp.route("/api/v1/admin/settings/ai_connections", methods=["PATCH"])
+@admin_api_bp.route("/admin/settings/ai_connections", methods=["PATCH"])
 @admin_required
 def update_ai_connections_settings(user):
     from app.models import SystemSettings

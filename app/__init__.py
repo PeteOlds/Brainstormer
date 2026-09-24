@@ -52,7 +52,7 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     from .routes.ollama import bp as ollama_bp
     from .routes.prompts import bp as prompts_bp
     from .routes.ideas import bp as ideas_bp
-    from .routes.admin import bp as admin_bp
+    from .routes.admin import admin_pages_bp, admin_api_bp
 
     app.register_blueprint(pages_bp)
     app.register_blueprint(health_bp)
@@ -60,7 +60,8 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     app.register_blueprint(ollama_bp, url_prefix="/api/v1")
     app.register_blueprint(prompts_bp, url_prefix="/api/v1")
     app.register_blueprint(ideas_bp, url_prefix="/api/v1")
-    app.register_blueprint(admin_bp, url_prefix="/api/v1")
+    app.register_blueprint(admin_pages_bp)
+    app.register_blueprint(admin_api_bp, url_prefix="/api/v1")
 
     # API error handlers
     @app.errorhandler(404)

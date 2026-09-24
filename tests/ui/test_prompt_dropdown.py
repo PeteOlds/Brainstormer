@@ -211,7 +211,7 @@ def test_secondary_action_creates_pending_run(logged_in_client, app):
     with patch("app.tasks.ollama_tasks.run_secondary_action.delay") as mock_delay:
         mock_delay.return_value.id = "fake-action-job"
         res = client.post(f"/api/v1/ideas/{idea_id}/actions",
-                          json={"action_type": "REFINE"}, headers=headers)
+                          json={"action_type": "REFINE", "confirm": True}, headers=headers)
     assert res.status_code == 202
     assert res.get_json()["data"]["run"]["action_type"] == "REFINE"
 

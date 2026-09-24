@@ -2,6 +2,10 @@
 ${ORIGINAL_IDEA_CONTENT}
 
 ---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
 ### INSTRUCTIONS:
 1. You are an expert business analyst and financial strategist.
 2. Conduct a detailed top-down and bottom-up market sizing analysis (TAM, SAM, SOM).

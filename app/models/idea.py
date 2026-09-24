@@ -1,16 +1,10 @@
 import json
 import uuid
 from datetime import datetime, timezone
-from enum import Enum
 
 from app.extensions import db
 from app.models.types import GUID
-
-
-class IdeaStatus(str, Enum):
-    NEW = "NEW"
-    CONSIDERATION = "CONSIDERATION"
-    DISCARDED = "DISCARDED"
+from app.models.enums import IdeaStatus
 
 
 class Idea(db.Model):
@@ -29,6 +23,7 @@ class Idea(db.Model):
     # Cached voting metrics
     upvotes_count = db.Column(db.Integer, default=0, nullable=False)
     downvotes_count = db.Column(db.Integer, default=0, nullable=False)
+    comments_count = db.Column(db.Integer, default=0, nullable=False)
     net_score = db.Column(db.Integer, default=0, nullable=False, index=True)
 
     # Feasibility score (from secondary evaluator)
@@ -45,6 +40,7 @@ class Idea(db.Model):
 
     # Relationships
     votes = db.relationship("Vote", backref="idea", lazy="dynamic", cascade="all, delete-orphan")
+    comments = db.relationship("Comment", backref="idea", lazy="dynamic", cascade="all, delete-orphan")
     actions = db.relationship("SecondaryActionResult", backref="idea", lazy="dynamic", cascade="all, delete-orphan")
     status_history = db.relationship("IdeaStatusHistory", backref="idea", lazy="dynamic", cascade="all, delete-orphan")
 
@@ -86,6 +82,7 @@ class Idea(db.Model):
         }
         if user_vote is not None:
             data["user_vote"] = user_vote
+        data["comments_count"] = self.comments_count
         if include_content:
             data["content"] = self.raw_content
             data["structured_content"] = self.structured_content
@@ -103,6 +100,11 @@ class Idea(db.Model):
         self.upvotes_count = counts[0] or 0
         self.downvotes_count = counts[1] or 0
         self.net_score = counts[2] or 0
+
+    @property
+    def actions_run(self):
+        """List of action types that have been run on this idea."""
+        return [a.action_type for a in self.actions]
 
     def __repr__(self):
         return f"<Idea {self.reference_code}>"

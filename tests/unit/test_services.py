@@ -209,6 +209,31 @@ class TestOllamaSchemas:
         assert isinstance(result, PestelOutput)
         assert result.opportunities == ["Green subsidies"]
 
+    def test_validate_competitors_output(self):
+        from app.schemas.ollama_schemas import CompetitorsOutput
+        json_str = '{"direct_competitors": [{"name": "Acme", "description": "Market leader", "advantage_over_idea": "Brand recognition"}], "indirect_competitors": ["Spreadsheets"], "differentiator": "Local focus", "barriers_to_entry": ["Network effects"]}'
+        result = validate_ollama_output("COMPETITORS", json_str)
+        assert isinstance(result, CompetitorsOutput)
+        assert result.direct_competitors[0].name == "Acme"
+
+    def test_validate_competitors_partial_output(self):
+        """Small models omit fields — partial output must validate with
+        defaults rather than fail the run (UI regression)."""
+        from app.schemas.ollama_schemas import CompetitorsOutput
+        result = validate_ollama_output(
+            "COMPETITORS",
+            '{"direct_competitors": [{"name": "Acme"}], "differentiator": "Local focus"}')
+        assert isinstance(result, CompetitorsOutput)
+        assert result.direct_competitors[0].description == ""
+        assert result.indirect_competitors == []
+        assert result.barriers_to_entry == []
+
+    def test_validate_competitors_empty_output(self):
+        from app.schemas.ollama_schemas import CompetitorsOutput
+        result = validate_ollama_output("COMPETITORS", '{}')
+        assert isinstance(result, CompetitorsOutput)
+        assert result.direct_competitors == []
+
     def test_validate_ollama_output_invalid(self):
         with pytest.raises(Exception):
             validate_ollama_output("REFINE", "invalid json")

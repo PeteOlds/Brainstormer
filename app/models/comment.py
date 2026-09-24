@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from app.extensions import db
 from app.models.types import GUID
+from sqlalchemy import event
 
 
 class Comment(db.Model):
@@ -42,3 +43,67 @@ class Comment(db.Model):
 
     def __repr__(self):
         return f"<Comment {self.id} idea={self.idea_id} parent={self.parent_id}>"
+
+
+@event.listens_for(Comment, "after_insert")
+def _increment_comment_count(mapper, connection, target):
+    from app.models import Idea
+    from app.extensions import db
+    # Only count top-level comments (not replies) and non-deleted
+    if not target.parent_id and not target.is_deleted:
+        db.session.execute(
+            Idea.__table__.update()
+            .where(Idea.id == target.idea_id)
+            .values(comments_count=Idea.comments_count + 1)
+        )
+
+
+@event.listens_for(Comment, "after_delete")
+def _decrement_comment_count(mapper, connection, target):
+    from app.models import Idea
+    from app.extensions import db
+    # Only count top-level comments (not replies)
+    if not target.parent_id:
+        db.session.execute(
+            Idea.__table__.update()
+            .where(Idea.id == target.idea_id)
+            .values(comments_count=Idea.comments_count - 1)
+        )
+
+
+@event.listens_for(Comment, "before_update")
+def _handle_soft_delete(mapper, connection, target):
+    from app.models import Idea
+    from app.extensions import db
+    from sqlalchemy.orm.attributes import get_history
+    # Handle soft-delete: if is_deleted changed from False to True
+    try:
+        history = get_history(target, "is_deleted")
+        if history.has_changes() and history.added and history.added[0] is True:
+            if target.is_deleted and not target.parent_id:
+                db.session.execute(
+                    Idea.__table__.update()
+                    .where(Idea.id == target.idea_id)
+                    .values(comments_count=Idea.comments_count - 1)
+                )
+    except Exception:
+        pass  # Ignore history errors for detached instances
+
+
+@event.listens_for(Comment, "before_update")
+def _handle_soft_restore(mapper, connection, target):
+    from app.models import Idea
+    from app.extensions import db
+    from sqlalchemy.orm.attributes import get_history
+    # Handle soft-restore: if is_deleted changed from True to False
+    try:
+        history = get_history(target, "is_deleted")
+        if history.has_changes() and history.deleted and history.deleted[0] is True:
+            if not target.is_deleted and not target.parent_id:
+                db.session.execute(
+                    Idea.__table__.update()
+                    .where(Idea.id == target.idea_id)
+                    .values(comments_count=Idea.comments_count + 1)
+                )
+    except Exception:
+        pass  # Ignore history errors for detached instances

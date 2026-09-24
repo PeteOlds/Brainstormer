@@ -19,16 +19,18 @@ class RefineOutput(BaseModel):
 
 
 class Competitor(BaseModel):
-    name: str
-    description: str
-    advantage_over_idea: str
+    # Defaults (not required): small models often omit fields or return
+    # partial objects — a partial analysis beats a FAILED run.
+    name: str = ""
+    description: str = ""
+    advantage_over_idea: str = ""
 
 
 class CompetitorsOutput(BaseModel):
-    direct_competitors: List[Competitor]
-    indirect_competitors: List[str]
-    differentiator: str
-    barriers_to_entry: List[str]
+    direct_competitors: List[Competitor] = Field(default_factory=list)
+    indirect_competitors: List[str] = Field(default_factory=list)
+    differentiator: str = ""
+    barriers_to_entry: List[str] = Field(default_factory=list)
 
 
 class FeasibilityScore(BaseModel):

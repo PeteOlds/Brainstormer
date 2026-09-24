@@ -106,6 +106,22 @@ def me(current_user):
     return api_ok({"user": current_user.to_dict()})
 
 
+@bp.route("/me/settings", methods=["PATCH"])
+@token_required
+def update_user_settings(current_user):
+    """Update user-specific settings."""
+    data = request.get_json(silent=True) or {}
+    
+    if "can_create_ideas" in data:
+        value = data["can_create_ideas"]
+        if not isinstance(value, bool):
+            return api_error("can_create_ideas must be a boolean.", status_code=400)
+        current_user.can_create_ideas = value
+        db.session.commit()
+    
+    return api_ok({"user": current_user.to_dict()})
+
+
 @bp.route("/logout", methods=["POST"])
 @token_required
 def logout(current_user):

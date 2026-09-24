@@ -4,6 +4,10 @@ Act as an expert business analyst and strategic advisor. Conduct a comprehensive
 ${ORIGINAL_IDEA_CONTENT}
 
 ---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
 
 ### INSTRUCTIONS:
 1. Evaluate the macro-environmental landscape across each of the six dimensions with specific, actionable depth:

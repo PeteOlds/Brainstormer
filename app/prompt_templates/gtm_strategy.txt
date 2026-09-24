@@ -2,6 +2,10 @@
 ${ORIGINAL_IDEA_CONTENT}
 
 ---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
 ### INSTRUCTIONS:
 1. You are an expert Go-To-Market strategist and growth advisor.
 2. Draft a complete, highly actionable GTM Strategy structured into six execution-focused pillars.

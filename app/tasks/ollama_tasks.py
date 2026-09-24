@@ -6,7 +6,7 @@ import structlog
 from pydantic import ValidationError
 
 from app.tasks import celery, BaseTask
-from app.services.ollama_client import OllamaClient
+from app.services.ollama_client import OllamaClient, OllamaError
 from app.services.prompt_templates import get_base_prompt, get_prompt_template
 from app.schemas.ollama_schemas import validate_ollama_output
 from app.extensions import db
@@ -14,10 +14,6 @@ from app.models import PromptConfig, Idea, IdeaStatus, SecondaryActionResult
 from app.utils.crypto import decrypt
 
 logger = structlog.get_logger()
-
-
-class OllamaError(Exception):
-    pass
 
 
 def _generate_reference_code() -> str:
@@ -97,11 +93,15 @@ def _record_failure(run_id: str | None, error) -> None:
 
     Pass the exception object (not str): exceptions with empty messages
     (e.g. httpx ConnectTimeout) otherwise record a useless "Unknown error".
+    Include Ollama response body if available for diagnosis.
     """
     from app.models import PromptRun
 
     if isinstance(error, BaseException):
         text = f"{type(error).__name__}: {error}" if str(error) else type(error).__name__
+        # Include Ollama response body if available
+        if isinstance(error, OllamaError) and error.response_body:
+            text += f" | Body: {error.response_body[:500]}"
     else:
         text = str(error) if error else "Unknown error"
     db.session.rollback()
@@ -149,6 +149,19 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
         return self.request.retries >= max_retries
 
     client = OllamaClient(timeout=600.0)
+    model = prompt_config.model_name
+    logger.info("ollama_task_start", task="generate_idea", base_url=client.base_url, model=model, prompt_id=prompt_config_id)
+
+    # Pre-flight: verify model exists in this Ollama instance
+    if not client.is_model_available(model):
+        err_msg = f"Model '{model}' not installed at {client.base_url}"
+        logger.error("ollama_model_missing", base_url=client.base_url, model=model, prompt_id=prompt_config_id)
+        run = _get_run()
+        if run is not None:
+            run.mark_failed(err_msg)
+            db.session.commit()
+        return
+
     try:
         # Render prompt
         base_prompt = get_base_prompt()
@@ -167,14 +180,18 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
             MEMORY_EXPLORE=explore)
         
         # Call Ollama with the prompt's generation params.
-        response = client.generate_sync(
-            model=prompt_config.model_name,
-            prompt=prompt_text,
-            system=base_prompt,
-            format="json",
-            options=_generation_options(prompt_config),
-            keep_alive=prompt_config.keep_alive or "2h",
-        )
+        try:
+            response = client.generate_sync(
+                model=model,
+                prompt=prompt_text,
+                system=base_prompt,
+                format="json",
+                options=_generation_options(prompt_config),
+                keep_alive=prompt_config.keep_alive or "2h",
+            )
+        except OllamaError as e:
+            logger.error("ollama_generate_failed", base_url=client.base_url, model=model, status=e.status_code, body=e.response_body)
+            raise
         
         # Validate response
         structured = validate_ollama_output("REFINE", response["response"])
@@ -240,6 +257,9 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
             run.mark_failed(f"Invalid model output: {e}")
             db.session.commit()
         raise
+    except OllamaError:
+        # Re-raise OllamaError so autoretry can handle it; _record_failure will include body on final attempt
+        raise
     except Exception as e:
         logger.error("ollama_error", prompt_id=prompt_config_id, error=str(e))
         # Only record FAILED on the final attempt; intermediate failures
@@ -288,6 +308,18 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         db.session.commit()
 
     client = OllamaClient(timeout=600.0)
+    model = model_override or idea.prompt_config.model_name if idea.prompt_config else "llama3:8b"
+    logger.info("ollama_task_start", task="run_secondary_action", base_url=client.base_url, model=model, action_type=action_type, idea_id=idea_id)
+
+    # Pre-flight: verify model exists in this Ollama instance
+    if not client.is_model_available(model):
+        err_msg = f"Model '{model}' not installed at {client.base_url}"
+        logger.error("ollama_model_missing", base_url=client.base_url, model=model, action_type=action_type, idea_id=idea_id)
+        run = _get_run()
+        if run is not None:
+            run.mark_failed(err_msg)
+            db.session.commit()
+        return
 
     def _retries_so_far():
         try:
@@ -297,14 +329,18 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
 
     def _call_and_validate(prompt_text):
         import re
-        response = client.generate_sync(
-            model=model,
-            prompt=prompt_text,
-            system=base_prompt,
-            format="json",
-            options=options,
-            keep_alive=keep_alive,
-        )
+        try:
+            response = client.generate_sync(
+                model=model,
+                prompt=prompt_text,
+                system=base_prompt,
+                format="json",
+                options=options,
+                keep_alive=keep_alive,
+            )
+        except OllamaError as e:
+            logger.error("ollama_generate_failed", base_url=client.base_url, model=model, action_type=action_type, status=e.status_code, body=e.response_body)
+            raise
         text = (response["response"] or "").strip()
         # Strip markdown fences small models love to add.
         text = re.sub(r"^```(?:json)?\s*", "", text)
@@ -314,7 +350,15 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
     try:
         # Get prompt template
         prompt_template = get_prompt_template(action_type)
-        user_prompt = prompt_template.render(ORIGINAL_IDEA_CONTENT=idea.raw_content)
+        
+        # Build supporting material for all secondary actions (they all now use it)
+        from app.services.action_context import build_idea_context
+        supporting_material = build_idea_context(idea)
+        
+        user_prompt = prompt_template.render(
+            ORIGINAL_IDEA_CONTENT=idea.raw_content,
+            SUPPORTING_MATERIAL=supporting_material
+        )
         # Rerun answers (PRD_DOC open questions): appended verbatim so the
         # model regenerates with the human's input. Ignored if empty.
         answers = (extra_context or {}).get("answers") or []
@@ -338,8 +382,9 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         # than ideas: floor output tokens at 4000 so generation isn't cut off
         # mid-object (truncated JSON fails validation unrecoverably). A higher
         # per-prompt setting is respected.
-        # Complex actions (BMC, GTM, Hypothesis, Market Sizing) need more tokens.
-        complex_actions = {"BUSINESS_MODEL_CANVAS", "GTM_STRATEGY", "HYPOTHESIS_TEST", "MARKET_SIZING"}
+        # Complex actions (BMC, GTM, Hypothesis, Market Sizing, Competitors)
+        # need more tokens.
+        complex_actions = {"BUSINESS_MODEL_CANVAS", "GTM_STRATEGY", "HYPOTHESIS_TEST", "MARKET_SIZING", "COMPETITORS"}
         min_tokens = 8000 if action_type in complex_actions else 4000
         options["num_predict"] = max(options.get("num_predict") or 0, min_tokens)
         keep_alive = (prompt_config.keep_alive
@@ -389,6 +434,9 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
         if run is not None:
             run.mark_failed(f"Invalid model output: {e}")
             db.session.commit()
+        raise
+    except OllamaError:
+        # Re-raise OllamaError so autoretry can handle it; _record_failure will include body on final attempt
         raise
     except Exception as e:
         logger.error("secondary_action_error", idea_id=idea_id, action_type=action_type, error=str(e))
