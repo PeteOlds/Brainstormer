@@ -82,6 +82,17 @@ class PrdOutput(BaseModel):
     open_questions: List[str] = Field(default_factory=list, max_length=5)
 
 
+class DesignDocOutput(BaseModel):
+    """Design document — build-ready blueprint derived from the PRD:
+    architecture, screens/components, data model, API contracts."""
+    architecture: str = Field(..., min_length=20)
+    screens: str = Field(..., min_length=20)
+    data_model: str = Field(..., min_length=20)
+    api_contracts: str = Field(..., min_length=20)
+    build_notes: str = Field(..., min_length=20)
+    open_questions: List[str] = Field(default_factory=list, max_length=5)
+
+
 class VrioOutput(BaseModel):
     """VRIO Framework — 4 criteria + 5-tier classification + recommendations."""
     value: str = Field(..., min_length=20)
@@ -152,6 +163,7 @@ _ACTION_SCHEMAS = {
     "FIVE_FORCES": FiveForcesOutput,
     "PESTEL": PestelOutput,
     "PRD_DOC": PrdOutput,
+    "DESIGN_DOC": DesignDocOutput,
     "VRIO": VrioOutput,
     "THREE_CS": ThreeCsOutput,
     "MARKET_SIZING": MarketSizingOutput,
@@ -214,6 +226,11 @@ def _coerce_scalar_lists(obj, schema):
             if strs != val:
                 obj[name] = strs
     return obj
+
+
+def get_action_schema(action_type: str):
+    """Pydantic schema for an action type, or None if unknown."""
+    return _ACTION_SCHEMAS.get(action_type)
 
 
 def validate_ollama_output(action_type: str, raw_json: str):

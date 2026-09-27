@@ -56,6 +56,13 @@ ACTION_REGISTRY = [
         "done_label": "Documented",
     },
     {
+        "key": "DESIGN_DOC",
+        "label": "Generate Design",
+        "description": "Build-ready design document from the PRD: architecture, screens and components, data model, API contracts, build notes. Requires an existing PRD and Design stage.",
+        "template": "design_doc",
+        "done_label": "Designed",
+    },
+    {
         "key": "VRIO",
         "label": "VRIO Framework",
         "description": "VRIO Capability Assessment: Value, Rarity, Imitability, Organization — classify competitive implication and prioritize recommendations.",

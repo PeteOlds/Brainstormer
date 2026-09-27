@@ -47,6 +47,7 @@ def get_prompt_template(action_type: str) -> PromptTemplate:
         "FIVE_FORCES": "forces",
         "PESTEL": "pestel",
         "PRD_DOC": "prd_doc",
+        "DESIGN_DOC": "design_doc",
         "VRIO": "vrio",
         "THREE_CS": "three_cs",
         "MARKET_SIZING": "market_sizing",

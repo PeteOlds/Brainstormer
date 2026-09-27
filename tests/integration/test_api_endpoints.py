@@ -400,7 +400,7 @@ class TestIdeaEndpoints:
         assert all(i["status"] == "NEW" for i in data["ideas"])
 
     def test_list_ideas_new_statuses(self, client, auth_user, app, admin_user, admin_prompt):
-        """Filter must work for HOLD/DEVELOPMENT/COMPLETE (UI regression)."""
+        """Filter must work for HOLD/DESIGN/BUILD/COMPLETE (UI regression)."""
         _email, token = auth_user
         with app.app_context():
             from app.models import Idea, PromptConfig, User
@@ -413,18 +413,46 @@ class TestIdeaEndpoints:
                 Idea(reference_code="IDEA-H1", prompt_title="T", raw_content="c",
                      status="HOLD", prompt_config_id=prompt.id),
                 Idea(reference_code="IDEA-D1", prompt_title="T", raw_content="c",
-                     status="DEVELOPMENT", prompt_config_id=prompt.id),
+                     status="DESIGN", prompt_config_id=prompt.id),
+                Idea(reference_code="IDEA-B1", prompt_title="T", raw_content="c",
+                     status="BUILD", prompt_config_id=prompt.id),
                 Idea(reference_code="IDEA-C1", prompt_title="T", raw_content="c",
                      status="COMPLETE", prompt_config_id=prompt.id),
             ])
             db.session.commit()
 
-        for status, ref in [("HOLD", "IDEA-H1"), ("DEVELOPMENT", "IDEA-D1"), ("COMPLETE", "IDEA-C1")]:
+        for status, ref in [("HOLD", "IDEA-H1"), ("DESIGN", "IDEA-D1"), ("BUILD", "IDEA-B1"), ("COMPLETE", "IDEA-C1")]:
             resp = client.get(f"/api/v1/ideas?status={status}",
                               headers={"Authorization": f"Bearer {token}"})
             assert resp.status_code == 200
             ideas = resp.get_json()["data"]["ideas"]
             assert [i["reference_code"] for i in ideas] == [ref]
+
+    def test_design_status_filter_and_update(self, client, auth_user, admin_client, app, admin_user, admin_prompt):
+        """DESIGN status filters and updates end to end."""
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-DES1", prompt_title="T", raw_content="c",
+                status="CONSIDERATION", prompt_config_id=prompt.id)
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}/status", json={"status": "DESIGN"})
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["status"] == "DESIGN"
+
+        resp = client.get("/api/v1/ideas?status=DESIGN",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        assert [i["reference_code"] for i in resp.get_json()["data"]["ideas"]] == ["IDEA-DES1"]
 
     def test_list_ideas_search(self, client, auth_user, app, admin_user, admin_prompt):
         """?search= must filter server-side (ref, title, content)."""
@@ -554,6 +582,40 @@ class TestIdeaEndpoints:
         assert resp.status_code == 200
         assert resp.get_json()["data"]["idea"]["comments_count"] == 1
 
+    def test_list_ideas_actions_run_includes_all_types(self, client, auth_user, app, admin_user, admin_prompt):
+        """List rows must expose every completed action type (UI regression:
+        chips only showed the five hardcoded actions)."""
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, SecondaryActionResult, ActionType, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-0001",
+                prompt_title="Test",
+                raw_content="Test content",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            for action in (ActionType.FIVE_FORCES, ActionType.COMPETITORS,
+                           ActionType.PESTEL, ActionType.VRIO,
+                           ActionType.GTM_STRATEGY):
+                db.session.add(SecondaryActionResult(
+                    idea_id=idea.id, action_type=action,
+                    model_used="m", result_data={}))
+            db.session.commit()
+
+        resp = client.get("/api/v1/ideas", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        row = resp.get_json()["data"]["ideas"][0]
+        assert set(row["actions_run"]) == {
+            "FIVE_FORCES", "COMPETITORS", "PESTEL", "VRIO", "GTM_STRATEGY"}
+
     def test_comments_count_soft_delete(self, client, app, admin_user, admin_prompt):
         """Deleting (soft) a top-level comment decrements the count;
         replies never affect it (matches listener semantics)."""
@@ -597,7 +659,7 @@ class TestIdeaEndpoints:
                       headers={"Authorization": f"Bearer {token}"})
         assert count() == 0
 
-    def test_bulk_status_update_to_development(self, admin_client, app, admin_user, admin_prompt):
+    def test_bulk_status_update_to_build(self, admin_client, app, admin_user, admin_prompt):
         """Bulk status change to a new-enum value must succeed end to end
         (UI regression: 'Failed to bulk update status')."""
         with app.app_context():
@@ -618,17 +680,17 @@ class TestIdeaEndpoints:
                 Idea.reference_code.in_(["IDEA-B1", "IDEA-B2"])).all()]
 
         resp = admin_client.patch("/api/v1/ideas/bulk-status", json={
-            "idea_ids": ids, "status": "DEVELOPMENT"})
+            "idea_ids": ids, "status": "BUILD"})
         assert resp.status_code == 200
         data = resp.get_json()["data"]
         assert data["updated_count"] == 2
-        assert data["status"] == "DEVELOPMENT"
+        assert data["status"] == "BUILD"
 
         with app.app_context():
             from app.models import Idea
             statuses = {i.status.value for i in Idea.query.filter(
                 Idea.reference_code.in_(["IDEA-B1", "IDEA-B2"])).all()}
-            assert statuses == {"DEVELOPMENT"}
+            assert statuses == {"BUILD"}
 
     def test_get_idea_detail(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
@@ -681,7 +743,7 @@ class TestIdeaEndpoints:
         assert resp.get_json()["data"]["status"] == "CONSIDERATION"
 
     def test_update_idea_status_new_values(self, admin_client, app, admin_user, admin_prompt):
-        """Status updates must accept HOLD/DEVELOPMENT/COMPLETE (UI regression)."""
+        """Status updates must accept HOLD/DESIGN/BUILD/COMPLETE (UI regression)."""
         with app.app_context():
             from app.models import Idea, PromptConfig, User
             from app.extensions import db
@@ -700,12 +762,42 @@ class TestIdeaEndpoints:
             db.session.commit()
             idea_id = idea.id
 
-        for status in ("HOLD", "DEVELOPMENT", "COMPLETE"):
+        for status in ("HOLD", "DESIGN", "BUILD", "COMPLETE"):
             resp = admin_client.patch(f"/api/v1/ideas/{idea_id}/status", json={
                 "status": status
             })
             assert resp.status_code == 200
             assert resp.get_json()["data"]["status"] == status
+
+    def test_retired_development_status_rejected(self, admin_client, app, admin_user, admin_prompt):
+        """DEVELOPMENT was retired from the pipeline: single + bulk updates
+        must reject it as invalid."""
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-0001",
+                prompt_title="Test",
+                raw_content="Test",
+                status="NEW",
+                prompt_config_id=prompt.id
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        resp = admin_client.patch(f"/api/v1/ideas/{idea_id}/status", json={
+            "status": "DEVELOPMENT"
+        })
+        assert resp.status_code == 400
+
+        resp = admin_client.patch("/api/v1/ideas/bulk-status", json={
+            "idea_ids": [str(idea_id)], "status": "DEVELOPMENT"})
+        assert resp.status_code == 400
 
     def test_update_idea_status_user_forbidden(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
@@ -927,7 +1019,7 @@ class TestActionEndpoints:
                 reference_code="IDEA-PRD1",
                 prompt_title="Test",
                 raw_content="Test content for prd",
-                status="NEW",
+                status="DESIGN",
                 prompt_config_id=prompt.id
             )
             db.session.add(idea)
@@ -946,6 +1038,8 @@ class TestActionEndpoints:
             assert kwargs["extra_context"] == {"answers": ["Freemium, $9/mo"]}
 
     def test_run_action_prd_rerun_replaces(self, admin_client, app, admin_user, admin_prompt):
+        """PRD reruns no longer delete history: the route enqueues and the
+        task appends a new version (superseding, not replacing)."""
         with app.app_context():
             from app.models import Idea, PromptConfig, SecondaryActionResult, ActionType, User
             from app.extensions import db
@@ -957,7 +1051,7 @@ class TestActionEndpoints:
                 reference_code="IDEA-PRD2",
                 prompt_title="Test",
                 raw_content="Test content for prd rerun",
-                status="NEW",
+                status="DESIGN",
                 prompt_config_id=prompt.id
             )
             db.session.add(idea)
@@ -978,8 +1072,9 @@ class TestActionEndpoints:
 
         with app.app_context():
             from app.models import SecondaryActionResult
+            # History preserved: the pre-existing v1 row is untouched by enqueue.
             assert SecondaryActionResult.query.filter_by(
-                idea_id=idea_id, action_type="PRD_DOC").count() == 0
+                idea_id=idea_id, action_type="PRD_DOC").count() == 1
 
     def test_run_action_bad_answers_rejected(self, admin_client, app, admin_user, admin_prompt):
         with app.app_context():
@@ -1092,6 +1187,133 @@ class TestActionEndpoints:
         assert resp.status_code == 200
         assert len(resp.get_json()["data"]["results"]) == 1
 
+    def _make_design_idea(self, app, ref="IDEA-DOC1", status="DESIGN"):
+        from app.models import Idea, PromptConfig, User
+        from app.extensions import db
+
+        admin = User.query.filter_by(email="admin@test.com").first()
+        prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+        idea = Idea(
+            reference_code=ref, prompt_title="Test", raw_content="Test content",
+            status=status, prompt_config_id=prompt.id)
+        db.session.add(idea)
+        db.session.commit()
+        return idea.id
+    def test_doc_action_gating(self, admin_client, app, admin_user, admin_prompt):
+        """PRD/DESIGN runs require DESIGN status; DESIGN_DOC requires a PRD."""
+        from unittest.mock import MagicMock, patch as _patch
+        with app.app_context():
+            new_id = self._make_design_idea(app, ref="IDEA-G1", status="NEW")
+            design_id = self._make_design_idea(app, ref="IDEA-G2", status="DESIGN")
+
+        resp = admin_client.post(f"/api/v1/ideas/{new_id}/actions",
+                                 json={"action_type": "PRD_DOC", "confirm": True})
+        assert resp.status_code == 400
+
+        resp = admin_client.post(f"/api/v1/ideas/{design_id}/actions",
+                                 json={"action_type": "DESIGN_DOC", "confirm": True})
+        assert resp.status_code == 400
+
+        job = MagicMock()
+        job.id = "job-gating"
+        with _patch("app.tasks.ollama_tasks.run_secondary_action") as mock_task:
+            mock_task.delay.return_value = job
+            resp = admin_client.post(f"/api/v1/ideas/{design_id}/actions",
+                                     json={"action_type": "PRD_DOC", "confirm": True})
+        assert resp.status_code == 202
+
+    def test_design_doc_allowed_with_prd(self, admin_client, app, admin_user, admin_prompt):
+        from unittest.mock import MagicMock, patch as _patch
+        from app.models import SecondaryActionResult, ActionType
+        from app.extensions import db
+
+        with app.app_context():
+            design_id = self._make_design_idea(app, ref="IDEA-G3", status="DESIGN")
+            db.session.add(SecondaryActionResult(
+                idea_id=design_id, action_type=ActionType.PRD_DOC,
+                model_used="m", result_data={}))
+            db.session.commit()
+
+        job = MagicMock()
+        job.id = "job-design"
+        with _patch("app.tasks.ollama_tasks.run_secondary_action") as mock_task:
+            mock_task.delay.return_value = job
+            resp = admin_client.post(f"/api/v1/ideas/{design_id}/actions",
+                                     json={"action_type": "DESIGN_DOC", "confirm": True})
+        assert resp.status_code == 202
+
+    def test_doc_comment_thread_isolation(self, client, app, admin_user, admin_prompt):
+        """Doc threads are scoped per result; idea thread untouched."""
+        token = self._auth(client, "docuser@test.com") if hasattr(self, "_auth") else None
+        if token is None:
+            reg = client.post("/api/v1/register", json={
+                "email": "docuser@test.com", "password": "password123"})
+            token = reg.get_json()["data"]["access_token"]
+        from app.models import SecondaryActionResult, ActionType
+        from app.extensions import db
+
+        with app.app_context():
+            design_id = self._make_design_idea(app, ref="IDEA-G4", status="DESIGN")
+            db.session.add(SecondaryActionResult(
+                idea_id=design_id, action_type=ActionType.PRD_DOC,
+                model_used="m", result_data={}))
+            db.session.commit()
+            res = SecondaryActionResult.query.filter_by(idea_id=design_id).first()
+            result_id = res.id
+
+        headers = {"Authorization": f"Bearer {token}"}
+        r1 = client.post(f"/api/v1/actions/{result_id}/comments",
+                         json={"body": "Doc note"}, headers=headers)
+        assert r1.status_code == 201
+        r2 = client.post(f"/api/v1/ideas/{design_id}/comments",
+                         json={"body": "Idea note"}, headers=headers)
+        assert r2.status_code == 201
+
+        doc = client.get(f"/api/v1/actions/{result_id}/comments", headers=headers)
+        assert [c["body"] for c in doc.get_json()["data"]["comments"]] == ["Doc note"]
+        idea = client.get(f"/api/v1/ideas/{design_id}/comments", headers=headers)
+        assert [c["body"] for c in idea.get_json()["data"]["comments"]] == ["Idea note"]
+
+    def test_edit_action_creates_version(self, admin_client, app, admin_user, admin_prompt):
+        """Manual edit stores a new version; history preserved."""
+        from app.models import SecondaryActionResult, ActionType
+        from app.extensions import db
+
+        with app.app_context():
+            design_id = self._make_design_idea(app, ref="IDEA-G5", status="DESIGN")
+            db.session.add(SecondaryActionResult(
+                idea_id=design_id, action_type=ActionType.PRD_DOC,
+                model_used="m", result_data={
+                    "executive_summary": "Original summary text here yes.",
+                    "user_personas": "Personas text here yes indeed.",
+                    "product_scope": "Scope text here yes indeed.",
+                    "functional_requirements": "Functional text here yes indeed.",
+                    "non_functional_requirements": "NFR text here yes indeed.",
+                    "ux_guidelines": "UX text here yes indeed.",
+                    "assumptions_risks": "Risks text here yes indeed."}))
+            db.session.commit()
+            res = SecondaryActionResult.query.filter_by(idea_id=design_id).first()
+            result_id = res.id
+
+        edited = {
+            "executive_summary": "Edited summary text here yes.",
+            "user_personas": "Personas text here yes indeed.",
+            "product_scope": "Scope text here yes indeed.",
+            "functional_requirements": "Functional text here yes indeed.",
+            "non_functional_requirements": "NFR text here yes indeed.",
+            "ux_guidelines": "UX text here yes indeed.",
+            "assumptions_risks": "Risks text here yes indeed."}
+        resp = admin_client.patch(f"/api/v1/actions/{result_id}", json={"result_data": edited})
+        assert resp.status_code == 200
+        assert resp.get_json()["data"]["version"] == 2
+
+        with app.app_context():
+            rows = SecondaryActionResult.query.filter_by(idea_id=design_id).order_by(
+                SecondaryActionResult.version).all()
+            assert [r.version for r in rows] == [1, 2]
+            assert [r.is_current for r in rows] == [False, True]
+            assert rows[1].edited_by_id is not None
+
 
 class TestAdminEndpoints:
     def test_get_stats_admin(self, admin_client):
@@ -1151,6 +1373,16 @@ class TestAdminEndpoints:
     def test_admin_settings_page_anonymous(self, client):
         resp = client.get("/admin/settings")
         assert resp.status_code == 401
+
+    def test_discovery_endpoint(self, admin_client, client, auth_user):
+        resp = admin_client.get("/api/v1/discovery")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert "skills" in data and "guidelines" in data
+
+        _email, token = auth_user
+        resp = client.get("/api/v1/discovery", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 403
 
     def test_activity_stats_with_idea_runs(self, admin_client, app, admin_user, admin_prompt):
         """Activity stats must load when runs reference ideas (UI regression:

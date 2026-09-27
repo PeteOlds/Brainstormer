@@ -5,7 +5,8 @@ class IdeaStatus(str, Enum):
     NEW = "NEW"
     CONSIDERATION = "CONSIDERATION"
     HOLD = "HOLD"
-    DEVELOPMENT = "DEVELOPMENT"
+    DESIGN = "DESIGN"
+    BUILD = "BUILD"
     COMPLETE = "COMPLETE"
     DISCARDED = "DISCARDED"
 

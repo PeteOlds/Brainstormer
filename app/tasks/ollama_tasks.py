@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -222,28 +223,50 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
 
         logger.info("idea_generated", idea_id=str(idea.id), prompt_id=str(prompt_config.id))
 
-        # Slack Phase 3a: best-effort post, never blocks generation.
-        try:
-            from flask import current_app
-            from app.services import slack_service
-            channel = (prompt_config.slack_channel or "").strip()
-            if channel:
-                slack_service.post_idea(
-                    channel,
-                    idea.to_dict(),
-                    current_app.config.get("APP_BASE_URL", "http://localhost:8000"),
-                )
-        except Exception as e:
-            logger.warning("slack_hook_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
-
-        # Generate and store embedding for the new idea (Phase 9.3)
+        # Generate and store embedding for the new idea (Phase 9.3),
+        # then auto-discard near-duplicates so users are never asked
+        # about the same idea twice.
+        duplicate_of = None
+        duplicate_score = None
         try:
             from app.services.embedding_service import get_embedding_service, embedding_text
             embedding_service = get_embedding_service()
             embedding = embedding_service.generate_embedding_sync(embedding_text(idea))
             embedding_service.store_embedding(idea.id, embedding)
+            try:
+                dedup_threshold = float(os.getenv("DEDUP_SIMILARITY_THRESHOLD", "0.97"))
+            except ValueError:
+                dedup_threshold = 0.97
+            matches = embedding_service.find_similar_to_embedding(
+                embedding, threshold=dedup_threshold, limit=1,
+                exclude_id=idea.id)
+            if matches:
+                duplicate_of, duplicate_score = matches[0]
+                idea.status = "DISCARDED"
+                db.session.commit()
+                logger.info("idea_auto_discarded",
+                            idea_id=str(idea.id),
+                            reference_code=idea.reference_code,
+                            duplicate_of=duplicate_of.reference_code,
+                            score=round(float(duplicate_score), 4))
         except Exception as e:
             logger.warning("embedding_generation_failed", idea_id=str(idea.id), error=str(e))
+
+        if duplicate_of is None:
+            # Slack Phase 3a: best-effort post, never blocks generation.
+            # Duplicates stay silent: nothing new to announce.
+            try:
+                from flask import current_app
+                from app.services import slack_service
+                channel = (prompt_config.slack_channel or "").strip()
+                if channel:
+                    slack_service.post_idea(
+                        channel,
+                        idea.to_dict(),
+                        current_app.config.get("APP_BASE_URL", "http://localhost:8000"),
+                    )
+            except Exception as e:
+                logger.warning("slack_hook_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
 
     except json.JSONDecodeError as e:
         # One retry with stricter prompt
@@ -271,6 +294,48 @@ def generate_idea(self, prompt_config_id: str, run_id: str | None = None):
         raise
     finally:
         client.close()
+
+
+def _drop_answered_questions(validated, idea_id, action_type):
+    """Remove regenerated open questions already answered on prior versions.
+
+    Stored answers look like "Q: <question>\\nA: <answer>". A new question
+    matching an answered one (SequenceMatcher >= 0.8) is dropped, so users
+    are never asked the same thing twice. Returns the (possibly copied)
+    validated model; an empty list is valid (means: nothing left unclear).
+    """
+    from difflib import SequenceMatcher
+
+    from app.models import SecondaryActionResult
+
+    questions = list(getattr(validated, "open_questions", None) or [])
+    if not questions:
+        return validated
+
+    answered = []
+    prior = SecondaryActionResult.query.filter_by(
+        idea_id=idea_id, action_type=action_type).all()
+    for row in prior:
+        for entry in row.answers or []:
+            first_line = str(entry).splitlines()[0] if str(entry).strip() else ""
+            q = first_line[2:].strip() if first_line.startswith("Q:") else first_line.strip()
+            if q:
+                answered.append(q)
+    if not answered:
+        return validated
+
+    def _is_repeat(q):
+        qn = " ".join(str(q).lower().split())
+        return any(SequenceMatcher(None, qn, " ".join(a.lower().split())).ratio() >= 0.8
+                   for a in answered)
+
+    kept = [q for q in questions if not _is_repeat(q)]
+    if len(kept) != len(questions):
+        logger.info("open_questions_deduped", idea_id=str(idea_id),
+                    action_type=action_type,
+                    dropped=len(questions) - len(kept))
+        validated = validated.model_copy(update={"open_questions": kept})
+    return validated
 
 
 @celery.task(bind=True, base=BaseTask, name="app.tasks.ollama_tasks.run_secondary_action",
@@ -365,6 +430,38 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
             user_prompt += (
                 "\n\n### USER ANSWERS (use these to resolve open questions):\n"
                 + numbered)
+        # Selected opencode skills + guideline docs (admin run dialog).
+        # Injected after the brief so they steer generation; capped so a
+        # large selection cannot blow the context window.
+        skill_names = (extra_context or {}).get("skills") or []
+        guideline_names = (extra_context or {}).get("guidelines") or []
+        if skill_names or guideline_names:
+            from app.services.discovery import read_skill_body, read_guideline
+            injection_budget = 6000
+            chunks = []
+            for name in list(dict.fromkeys(skill_names))[:20]:
+                body = (read_skill_body(name) or "")[:injection_budget]
+                if not body:
+                    continue
+                chunks.append(f"Skill '{name}':\n{body}")
+                injection_budget -= len(chunks[-1])
+                if injection_budget <= 0:
+                    break
+            for name in list(dict.fromkeys(guideline_names))[:20]:
+                if injection_budget <= 0:
+                    break
+                body = (read_guideline(name) or "")[:injection_budget]
+                if not body:
+                    continue
+                chunks.append(f"Guideline '{name}':\n{body}")
+                injection_budget -= len(chunks[-1])
+            if chunks:
+                user_prompt += (
+                    "\n\n### SELECTED SKILLS & GUIDELINES "
+                    "(follow these while generating):\n" + "\n\n".join(chunks))
+            logger.info("action_context_injected", idea_id=idea_id,
+                        action_type=action_type, skills=skill_names,
+                        guidelines=guideline_names)
         base_prompt = get_base_prompt()
         model = model_override or idea.prompt_config.model_name if idea.prompt_config else "llama3:8b"
         prompt_config = idea.prompt_config
@@ -406,12 +503,31 @@ def run_secondary_action(self, idea_id: str, action_type: str, model_override: s
                 + "\nOutput ONLY valid JSON matching the schema. No prose, no markdown fences.")
             validated = _call_and_validate(strict_prompt)
 
-        # Store result
+        # Drop re-asked questions: anything already answered on a prior
+        # version must not come back (models repeat them despite prompt
+        # instructions). Deterministic, independent of model compliance.
+        if action_type in ("PRD_DOC", "DESIGN_DOC"):
+            validated = _drop_answered_questions(validated, idea.id, action_type)
+
+        # Store result. PRD/DESIGN_DOC are versioned: supersede the
+        # current version instead of deleting history, so per-document
+        # comment threads stay pinned to their version.
+        if action_type in ("PRD_DOC", "DESIGN_DOC"):
+            current = SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type=action_type, is_current=True).all()
+            next_version = max([r.version for r in current], default=0) + 1
+            for r in current:
+                r.is_current = False
+        else:
+            next_version = 1
         result = SecondaryActionResult(
             idea_id=idea.id,
             action_type=action_type,
             model_used=model,
             result_data=validated.model_dump(),
+            version=next_version,
+            is_current=True,
+            answers=answers or None,
         )
         db.session.add(result)
 

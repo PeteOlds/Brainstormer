@@ -110,6 +110,18 @@ class TestOllamaClient:
             assert exc_info.value.status_code == 404
             assert "not found" in exc_info.value.response_body
 
+    @pytest.mark.asyncio
+    async def test_embeddings_uses_embeddings_endpoint(self, client):
+        """Regression: embedding models 400 on /api/generate — the client
+        must POST /api/embeddings (prod: every embedding failed)."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"embedding": [0.1] * 768}
+        mock_response.raise_for_status = Mock()
+        with patch.object(client._client, 'post', return_value=mock_response) as mock_post:
+            result = await client.embeddings(model="nomic-embed-text", prompt="hi")
+            assert result["embedding"] == [0.1] * 768
+            assert mock_post.call_args.args[0].endswith("/api/embeddings")
+
 
 class TestPromptTemplates:
     def test_base_prompt(self):
@@ -379,6 +391,65 @@ class TestOllamaSchemas:
         assert "Weekend Activities" in text
         assert '"elevator_pitch"' not in text
         assert '"target_audience"' not in text
+
+
+class TestDiscovery:
+    def _skill(self, base, dirname, name, desc):
+        d = base / dirname
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: {desc}\n---\n\n# {name}\nBody here.\n")
+        return d
+
+    def test_list_skills_parses_frontmatter(self, tmp_path, monkeypatch):
+        from app.services.discovery import list_skills
+        self._skill(tmp_path / "skills", "ux", "ux-pro", "Design help.")
+        monkeypatch.setenv("SKILLS_DIRS", str(tmp_path / "skills"))
+        assert list_skills() == [{
+            "name": "ux-pro", "description": "Design help.",
+            "source": str(tmp_path / "skills")}]
+
+    def test_list_skills_missing_dir_is_empty(self, tmp_path, monkeypatch):
+        from app.services.discovery import list_skills
+        monkeypatch.setenv("SKILLS_DIRS", str(tmp_path / "nope"))
+        assert list_skills() == []
+
+    def test_read_skill_body(self, tmp_path, monkeypatch):
+        from app.services.discovery import read_skill_body
+        self._skill(tmp_path / "skills", "ux", "ux-pro", "Design help.")
+        monkeypatch.setenv("SKILLS_DIRS", str(tmp_path / "skills"))
+        assert "# ux-pro" in read_skill_body("ux-pro")
+        assert read_skill_body("missing") is None
+
+    def test_list_and_read_guidelines(self, tmp_path, monkeypatch):
+        from app.services import discovery as disc
+        (tmp_path / "tone.md").write_text("# Tone\nBe crisp.\n")
+        monkeypatch.setenv("GUIDELINES_DIR", str(tmp_path))
+        assert disc.list_guidelines() == [
+            {"name": "tone", "file": "tone.md", "size": (tmp_path / "tone.md").stat().st_size}]
+        assert "Be crisp" in disc.read_guideline("tone")
+
+    def test_read_guideline_rejects_traversal(self, tmp_path, monkeypatch):
+        from app.services import discovery as disc
+        monkeypatch.setenv("GUIDELINES_DIR", str(tmp_path))
+        assert disc.read_guideline("../secret") is None
+        assert disc.read_guideline(".hidden") is None
+        assert disc.read_guideline("missing") is None
+
+    def test_validate_design_doc_output(self):
+        json_str = (
+            '{"architecture": "Single service with Postgres and Redis backing it up.", '
+            '"screens": "Dashboard list plus detail modal with tabbed sections.", '
+            '"data_model": "Ideas table with status enum plus comment threads.", '
+            '"api_contracts": "GET list with filters plus PATCH status endpoint.", '
+            '"build_notes": "Build list first, then modal, then background jobs.", '
+            '"open_questions": ["Which auth provider?"]}'
+        )
+        from app.schemas.ollama_schemas import DesignDocOutput
+        result = validate_ollama_output("DESIGN_DOC", json_str)
+        assert isinstance(result, DesignDocOutput)
+        assert result.open_questions == ["Which auth provider?"]
+
 
 class TestTokenLifetime:
     def test_access_token_honours_config_expiry(self, app):

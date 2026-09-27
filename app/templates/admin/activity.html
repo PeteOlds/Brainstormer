@@ -87,6 +87,7 @@
                             <div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
                                 <div class="h-full rounded-full bg-emerald-500" :style="'width: ' + barWidthCount(p.ideas)"></div>
                             </div>
+                            <p class="mt-0.5 text-right text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">ideas vs largest prompt</p>
                             <div class="mt-1 flex items-center gap-2 text-xs">
                                 <span class="font-medium tabular-nums text-emerald-600 dark:text-emerald-400" x-text="'✓ ' + (p.runs_success || 0)"></span>
                                 <span class="font-medium tabular-nums text-red-600 dark:text-red-400" x-text="'✗ ' + (p.runs_failed || 0)"></span>
@@ -96,6 +97,7 @@
                                 <div class="h-full bg-emerald-500" :style="'width: ' + (100 * (p.runs_success || 0) / ((p.runs_success || 0) + (p.runs_failed || 0))) + '%'"></div>
                                 <div class="h-full bg-red-500" :style="'width: ' + (100 * (p.runs_failed || 0) / ((p.runs_success || 0) + (p.runs_failed || 0))) + '%'"></div>
                             </div>
+                            <p x-show="(p.runs_success || 0) + (p.runs_failed || 0) > 0" class="mt-0.5 text-right text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">run outcomes for this prompt</p>
                         </a>
                     </template>
                     <p x-show="!loading && (!popularity.prompts || !popularity.prompts.length)" class="text-sm text-slate-500">No prompts yet.</p>
@@ -124,7 +126,7 @@
     <div x-show="!modelFilter" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas by Status</h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">New, under consideration or discarded — click a row to filter the Ideas page</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Idea lifecycle stages — click a row to filter the Ideas page</p>
         <div class="space-y-3">
             <template x-for="s in ideaStatuses" :key="s.status">
                 <a :href="'/ideas?status=' + s.status" class="block cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 transition-colors">
@@ -384,7 +386,7 @@ function activityApp() {
         },
 
         get ideaStatuses() {
-            const order = ['NEW', 'CONSIDERATION', 'DISCARDED'];
+            const order = ['NEW', 'CONSIDERATION', 'HOLD', 'DESIGN', 'BUILD', 'COMPLETE', 'DISCARDED'];
             return order.map((s) => ({ status: s, count: (this.ideasByStatus || {})[s] || 0 }));
         },
 
@@ -441,6 +443,10 @@ function activityApp() {
                 'FAILED': 'bg-red-500',
                 'NEW': 'bg-sky-500',
                 'CONSIDERATION': 'bg-violet-500',
+                'HOLD': 'bg-purple-500',
+                'DESIGN': 'bg-cyan-500',
+                'BUILD': 'bg-indigo-500',
+                'COMPLETE': 'bg-emerald-500',
                 'DISCARDED': 'bg-slate-400',
             }[status] || 'bg-slate-400';
         },

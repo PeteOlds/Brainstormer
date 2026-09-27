@@ -333,9 +333,20 @@ def vote_idea(user, idea_id):
 @bp.route("/actions", methods=["GET"])
 @token_required
 def list_actions(user):
-    """List available follow-up AI actions (driven by the registry)."""
+    """List all follow-up AI actions (driven by the registry)."""
     from app.services.secondary_actions import list_actions as registry_actions
     return api_ok({"actions": registry_actions()})
+
+
+@bp.route("/discovery", methods=["GET"])
+@admin_required
+def discovery(user):
+    """Discoverable opencode skills + guideline docs for run customization."""
+    from app.services.discovery import list_skills, list_guidelines
+    return api_ok({
+        "skills": list_skills(),
+        "guidelines": list_guidelines(),
+    })
 
 
 @bp.route("/ideas/<uuid:idea_id>/actions", methods=["POST"])
@@ -357,6 +368,17 @@ def run_action(user, idea_id):
         return api_error(f"Unknown action_type: {action_type}. Known: {', '.join(known)}", status_code=400)
     action_type = entry["key"]
 
+    # PRD/Design docs are Design-stage only.
+    if action_type in ("PRD_DOC", "DESIGN_DOC") and idea.status.value != "DESIGN":
+        return api_error("PRD and Design actions require the idea to be in DESIGN status.", status_code=400)
+    # Design doc requires an existing PRD (pipeline order: PRD first).
+    if action_type == "DESIGN_DOC":
+        from app.models import SecondaryActionResult
+        has_prd = SecondaryActionResult.query.filter_by(
+            idea_id=idea.id, action_type="PRD_DOC").first() is not None
+        if not has_prd:
+            return api_error("Design requires an existing PRD for this idea.", status_code=400)
+
     # Confirmation check for Refine and PRD (PRD §13.33-13.38)
     # If no comments and <3 secondary actions done, require explicit confirmation
     confirm = data.get("confirm", False)
@@ -375,6 +397,14 @@ def run_action(user, idea_id):
 
     model_override = data.get("model_override")
 
+    # Optional run customization: opencode skills + guideline docs to inject.
+    skills = data.get("skills") or []
+    guidelines = data.get("guidelines") or []
+    if not isinstance(skills, list) or not isinstance(guidelines, list):
+        return api_error("skills and guidelines must be lists of names", status_code=400)
+    skills = [str(s) for s in skills if str(s).strip()][:20]
+    guidelines = [str(g) for g in guidelines if str(g).strip()][:20]
+
     # Rerun answers: optional list of user answers to a previous run's open
     # questions. Only PRD_DOC consumes them; ignored for other actions.
     answers = data.get("answers") or []
@@ -382,12 +412,8 @@ def run_action(user, idea_id):
         return api_error("answers must be a list of strings", status_code=400)
     answers = [str(a) for a in answers if str(a).strip()]
 
-    # PRD_DOC reruns replace: one current PRD per idea.
-    if action_type == "PRD_DOC":
-        from app.models import SecondaryActionResult
-        SecondaryActionResult.query.filter_by(
-            idea_id=idea.id, action_type="PRD_DOC").delete()
-        db.session.commit()
+    # NOTE: PRD_DOC/DESIGN_DOC reruns no longer delete history — the task
+    # appends a new version (is_current flip) so doc threads stay pinned.
 
     # Record the run first so it shows as pending immediately.
     from app.models import PromptRun
@@ -398,9 +424,16 @@ def run_action(user, idea_id):
 
     # Enqueue action task
     from app.tasks.ollama_tasks import run_secondary_action
+    extra = {}
+    if answers:
+        extra["answers"] = answers
+    if skills:
+        extra["skills"] = skills
+    if guidelines:
+        extra["guidelines"] = guidelines
     job = run_secondary_action.delay(str(idea_id), action_type, model_override,
                                      run_id=str(run.id),
-                                     extra_context={"answers": answers} if answers else None)
+                                     extra_context=extra or None)
     run.job_id = job.id
     db.session.commit()
 
@@ -420,6 +453,109 @@ def get_actions(user, idea_id):
     actions = SecondaryActionResult.query.filter_by(idea_id=idea_id).order_by(SecondaryActionResult.executed_at).all()
     return api_ok({"results": [a.to_dict() for a in actions]})
 
+
+def _doc_comment_tree(result):
+    """Threaded comments scoped to one document version, oldest first."""
+    comments = (Comment.query.filter_by(action_result_id=result.id, scope="doc")
+                .order_by(Comment.created_at).all())
+    authors = {}
+    user_ids = {c.user_id for c in comments}
+    if user_ids:
+        for u in User.query.filter(User.id.in_(list(user_ids))).all():
+            authors[u.id] = u.name or u.email
+    by_parent = {}
+    for c in comments:
+        by_parent.setdefault(c.parent_id, []).append(c)
+
+    def build(node):
+        return [child.to_dict(
+            author_name=authors.get(child.user_id, "Unknown"),
+            children=build(child),
+        ) for child in by_parent.get(node.id if node else None, [])]
+
+    return build(None)
+
+
+@bp.route("/actions/<uuid:result_id>/comments", methods=["GET"])
+@token_required
+def list_doc_comments(user, result_id):
+    """Comment thread for one PRD/Design document version."""
+    result = SecondaryActionResult.query.get_or_404(result_id)
+    return api_ok({"comments": _doc_comment_tree(result)})
+
+
+@bp.route("/actions/<uuid:result_id>/comments", methods=["POST"])
+@token_required
+def create_doc_comment(user, result_id):
+    """Post a comment (or reply) on one PRD/Design document version."""
+    result = SecondaryActionResult.query.get_or_404(result_id)
+    data = request.get_json() or {}
+    body = (data.get("body") or "").strip()
+    if not body:
+        return api_error("Comment body is required.", status_code=400)
+    if len(body) > 2000:
+        return api_error("Comment body must be 2000 characters or fewer.", status_code=400)
+
+    parent = None
+    if data.get("parent_id"):
+        try:
+            parent = Comment.query.get(uuid.UUID(str(data["parent_id"])))
+        except (ValueError, TypeError):
+            return api_error("Invalid parent_id.", status_code=400)
+        if (not parent or parent.action_result_id != result.id
+                or parent.scope != "doc"):
+            return api_error("parent_id must belong to this document thread.", status_code=400)
+
+    comment = Comment(idea_id=result.idea_id, user_id=user.id,
+                      parent_id=parent.id if parent else None, body=body,
+                      scope="doc", action_result_id=result.id)
+    db.session.add(comment)
+    db.session.commit()
+    return api_created({"comment": comment.to_dict(
+        author_name=user.name or user.email)})
+
+
+@bp.route("/actions/<uuid:result_id>", methods=["PATCH"])
+@admin_required
+def edit_action_result(user, result_id):
+    """Manually edit a PRD/Design document (Admin only).
+
+    Stores the edited content as a NEW version (history preserved,
+    threads stay pinned to their version) and flips is_current.
+    """
+    result = SecondaryActionResult.query.get_or_404(result_id)
+    if result.action_type not in ("PRD_DOC", "DESIGN_DOC"):
+        return api_error("Only PRD and Design documents are editable.", status_code=400)
+    data = request.get_json() or {}
+    edited = data.get("result_data")
+    if not isinstance(edited, dict):
+        return api_error("result_data must be a JSON object.", status_code=400)
+
+    from app.schemas.ollama_schemas import get_action_schema
+    from pydantic import ValidationError as PydanticValidationError
+    schema = get_action_schema(result.action_type)
+    try:
+        validated = schema.model_validate(edited)
+    except PydanticValidationError as e:
+        return api_error(f"Edited content fails validation: {e}", status_code=400)
+
+    for old in SecondaryActionResult.query.filter_by(
+            idea_id=result.idea_id, action_type=result.action_type,
+            is_current=True).all():
+        old.is_current = False
+    new_result = SecondaryActionResult(
+        idea_id=result.idea_id,
+        action_type=result.action_type,
+        model_used=result.model_used,
+        result_data=validated.model_dump(),
+        version=result.version + 1,
+        is_current=True,
+        edited_by_id=user.id,
+    )
+    db.session.add(new_result)
+    db.session.commit()
+    return api_ok(new_result.to_dict())
+
 def _edit_history(idea_id):
     """Audit trail newest-first with editor names."""
     edits = (IdeaEdit.query.filter_by(idea_id=idea_id)
@@ -434,7 +570,7 @@ def _edit_history(idea_id):
 
 def _comment_tree(idea_id):
     """Nested comment tree for an idea, oldest first, with author names."""
-    comments = (Comment.query.filter_by(idea_id=idea_id)
+    comments = (Comment.query.filter_by(idea_id=idea_id, scope="idea")
                 .order_by(Comment.created_at).all())
     authors = {}
     user_ids = {c.user_id for c in comments}

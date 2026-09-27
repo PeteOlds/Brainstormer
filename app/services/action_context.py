@@ -48,6 +48,29 @@ def build_idea_context(idea: Idea, max_chars: int = 8000) -> str:
             comment_lines.append(f"- {author} ({c.created_at.strftime('%Y-%m-%d')}): {body}")
         sections.append("### Comments\n" + "\n".join(comment_lines))
 
+    # 2b. Per-document discussion threads (PRD/Design versions)
+    doc_comments = (
+        Comment.query.filter_by(idea_id=idea.id, scope="doc", is_deleted=False)
+        .order_by(Comment.created_at.desc())
+        .all()
+    )
+    if doc_comments:
+        by_doc = {}
+        for c in doc_comments:
+            by_doc.setdefault(c.action_result_id, []).append(c)
+        doc_lines = []
+        results = SecondaryActionResult.query.filter(
+            SecondaryActionResult.id.in_(list(by_doc))).all()
+        label_by_id = {r.id: f"{r.action_type.replace('_', ' ').title()} v{r.version}" for r in results}
+        for rid, thread in by_doc.items():
+            label = label_by_id.get(rid, "Document")
+            for c in thread:
+                author = c.user.name if c.user and c.user.name else (c.user.email if c.user else "Unknown")
+                body = c.body[:300] + ("..." if len(c.body) > 300 else "")
+                doc_lines.append(f"- [{label}] {author}: {body}")
+        if doc_lines:
+            sections.append("### Document Discussions\n" + "\n".join(doc_lines))
+
     # 3. Prior secondary action results
     actions = (
         SecondaryActionResult.query.filter_by(idea_id=idea.id)

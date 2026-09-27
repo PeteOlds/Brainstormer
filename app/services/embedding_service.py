@@ -44,13 +44,8 @@ class EmbeddingService:
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for a single text using nomic-embed-text."""
         try:
-            response = await self.ollama_client.generate(
-                model=self.EMBEDDING_MODEL,
-                prompt=text,
-                format="json",
-                options={"temperature": 0.0},
-            )
-            # nomic-embed-text returns embedding in response["embedding"]
+            response = await self.ollama_client.embeddings(
+                model=self.EMBEDDING_MODEL, prompt=text)
             embedding = response.get("embedding")
             if not embedding or len(embedding) != self.EMBEDDING_DIM:
                 raise ValueError(f"Invalid embedding dimension: {len(embedding) if embedding else 0}")
@@ -114,6 +109,39 @@ class EmbeddingService:
         v2 = Vector(vec2)
         return float(v1.cosine_similarity(v2))
 
+    def find_similar_to_embedding(
+        self,
+        embedding: List[float],
+        threshold: float = None,
+        limit: int = 10,
+        exclude_id=None,
+    ) -> List[Tuple[Idea, float]]:
+        """Find ideas similar to a raw embedding vector.
+
+        Used by the generation dedup gate (the new idea isn't persisted
+        yet, so there is no id to look up). Sorted by score descending.
+        """
+        threshold = threshold or self.SIMILARITY_THRESHOLD
+        if not embedding:
+            return []
+
+        query = select(Idea).where(Idea.embedding.is_not(None))
+        if exclude_id is not None:
+            query = query.where(Idea.id != exclude_id)
+        ideas = db.session.execute(query).scalars().all()
+
+        similar = []
+        for idea in ideas:
+            if not idea.embedding:
+                continue
+            similarity = self.cosine_similarity(embedding, idea.embedding)
+            if similarity >= threshold:
+                similar.append((idea, similarity))
+
+        # Sort by similarity descending
+        similar.sort(key=lambda x: x[1], reverse=True)
+        return similar[:limit]
+
     def find_similar_ideas(
         self,
         idea_id: uuid.UUID,
@@ -124,36 +152,14 @@ class EmbeddingService:
 
         Returns list of (Idea, similarity_score) tuples sorted by similarity descending.
         """
-        threshold = threshold or self.SIMILARITY_THRESHOLD
-
         # Get the target idea's embedding
         target_idea = db.session.get(Idea, idea_id)
         if not target_idea or not target_idea.embedding:
             return []
 
-        target_embedding = target_idea.embedding
-        if not target_embedding:
-            return []
-
-        # Fetch all ideas with embeddings (excluding self)
-        ideas = db.session.execute(
-            select(Idea).where(
-                Idea.id != idea_id,
-                Idea.embedding.is_not(None)
-            )
-        ).scalars().all()
-
-        similar = []
-        for idea in ideas:
-            if not idea.embedding:
-                continue
-            similarity = self.cosine_similarity(target_embedding, idea.embedding)
-            if similarity >= threshold:
-                similar.append((idea, similarity))
-
-        # Sort by similarity descending
-        similar.sort(key=lambda x: x[1], reverse=True)
-        return similar[:limit]
+        return self.find_similar_to_embedding(
+            target_idea.embedding, threshold=threshold, limit=limit,
+            exclude_id=idea_id)
 
     def find_near_duplicates(self, idea_id: uuid.UUID, threshold: float = 0.95) -> List[Tuple[Idea, float]]:
         """Find near-duplicate ideas (very high similarity)."""

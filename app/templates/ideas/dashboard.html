@@ -35,7 +35,8 @@
                     <option value="NEW">New</option>
                     <option value="DISCARDED">Discarded</option>
                     <option value="CONSIDERATION">Consideration</option>
-                    <option value="DEVELOPMENT">Development</option>
+                    <option value="DESIGN">Design</option>
+                    <option value="BUILD">Build</option>
                     <option value="COMPLETE">Complete</option>
                     <option value="HOLD">Hold</option>
                 </select>
@@ -161,8 +162,9 @@
                                                 <option value="">Select status...</option>
                                                 <option value="NEW">New</option>
                                                 <option value="CONSIDERATION">Consideration</option>
+                                                <option value="DESIGN">Design</option>
                                                 <option value="HOLD">Hold</option>
-                                                <option value="DEVELOPMENT">Development</option>
+                                                <option value="BUILD">Build</option>
                                                 <option value="COMPLETE">Complete</option>
                                                 <option value="DISCARDED">Discarded</option>
                                             </select>
@@ -264,7 +266,8 @@
                             <option value="NEW">New</option>
                             <option value="DISCARDED">Discarded</option>
                             <option value="CONSIDERATION">Consideration</option>
-                            <option value="DEVELOPMENT">Development</option>
+                            <option value="DESIGN">Design</option>
+                            <option value="BUILD">Build</option>
                             <option value="COMPLETE">Complete</option>
                             <option value="HOLD">Hold</option>
                         </select>
@@ -385,7 +388,7 @@
                             </button>
                             <div x-show="newActionOpen" @click.outside="newActionOpen = false" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-1 w-72 max-h-80 overflow-y-auto bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50" role="menu" aria-label="Run a new secondary action">
                                 <template x-for="action in availableActions" :key="action.key">
-                                    <button @click="runAction(selectedIdea.id, action.key); newActionOpen = false" :disabled="actionLoading === action.key" :title="action.description" class="flex w-full items-start gap-2 text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50" role="menuitem">
+                                    <button x-show="docActionVisible(action.key)" @click="openRunDialog(selectedIdea.id, action.key); newActionOpen = false" :disabled="actionLoading === action.key" :title="action.description" class="flex w-full items-start gap-2 text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50" role="menuitem">
                                         <span class="font-medium shrink-0" x-text="action.label"></span>
                                         <span class="ml-auto text-xs text-slate-500 dark:text-slate-400" x-show="(selectedIdea?.actions_run || []).includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
                                         <svg x-show="actionLoading === action.key" class="animate-spin h-4 w-4 ml-auto shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
@@ -428,7 +431,8 @@
                                     <option value="NEW">New</option>
                                     <option value="DISCARDED">Discarded</option>
                                     <option value="CONSIDERATION">Consideration</option>
-                                    <option value="DEVELOPMENT">Development</option>
+                                    <option value="DESIGN">Design</option>
+                                    <option value="BUILD">Build</option>
                                     <option value="COMPLETE">Complete</option>
                                     <option value="HOLD">Hold</option>
                                 </select>
@@ -521,6 +525,41 @@
                                 <span class="text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(actionTabResult(tab.key)?.executed_at)"></span>
                             </div>
                             <div class="prose prose-sm prose-slate dark:prose-invert max-w-none" x-html="actionTabResult(tab.key)?.rendered_output"></div>
+                            <template x-if="tab.key === 'PRD_DOC' || tab.key === 'DESIGN_DOC'">
+                                <div class="mt-3 flex flex-wrap items-center gap-2">
+                                    <span class="text-xs text-slate-500 dark:text-slate-400" x-text="docVersionLabel(tab.key)"></span>
+                                    <template x-if="isAdmin">
+                                        <span class="flex gap-2">
+                                            <button @click="openRunDialog(selectedIdea.id, tab.key)" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Recreate</button>
+                                            <button @click="startDocEdit(tab.key)" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Edit</button>
+                                        </span>
+                                    </template>
+                                </div>
+                                <div class="mt-4 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-4" x-init="loadDocComments(actionTabResult(tab.key)?.id)">
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Discussion</h4>
+                                    <div class="space-y-3">
+                                        <template x-for="c in (docThreads[actionTabResult(tab.key)?.id] || [])" :key="c.id">
+                                            <div>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400"><span class="font-medium text-slate-700 dark:text-slate-300" x-text="c.author"></span> · <span x-text="c.created_at"></span></p>
+                                                <p class="text-sm text-slate-700 dark:text-slate-300" x-text="c.body"></p>
+                                                <div class="ml-4 mt-1 space-y-2 border-l-2 border-slate-200 dark:border-slate-700 pl-3">
+                                                    <template x-for="r in (c.replies || [])" :key="r.id">
+                                                        <div>
+                                                            <p class="text-xs text-slate-500 dark:text-slate-400"><span class="font-medium text-slate-700 dark:text-slate-300" x-text="r.author"></span> · <span x-text="r.created_at"></span></p>
+                                                            <p class="text-sm text-slate-700 dark:text-slate-300" x-text="r.body"></p>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <p x-show="!(docThreads[actionTabResult(tab.key)?.id] || []).length" class="text-xs text-slate-500 dark:text-slate-400">No comments yet — start the discussion.</p>
+                                    </div>
+                                    <div class="mt-3 flex gap-2">
+                                        <input x-model="docDrafts[actionTabResult(tab.key)?.id]" @keyup.enter="postDocComment(actionTabResult(tab.key)?.id)" maxlength="2000" placeholder="Comment on this document..." class="flex-1 px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                        <button @click="postDocComment(actionTabResult(tab.key)?.id)" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">Post</button>
+                                    </div>
+                                </div>
+                            </template>
                             <template x-if="tab.key === 'PRD_DOC'">
                                 <div class="mt-4 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-4">
                                     <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Open questions</h4>
@@ -539,11 +578,41 @@
                                         <span x-show="actionLoading !== 'PRD_DOC'">Answer & regenerate</span>
                                         <span x-show="actionLoading === 'PRD_DOC'">Regenerating…</span>
                                     </button>
+                                    <div x-show="(actionTabResult(tab.key)?.answers || []).length" class="mt-4 border-t border-slate-200 dark:border-slate-700 pt-3">
+                                        <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Your answers <span class="font-normal text-slate-500 dark:text-slate-400">(saved with this version)</span></h4>
+                                        <div class="space-y-2">
+                                            <template x-for="(a, i) in (actionTabResult(tab.key)?.answers || [])" :key="i">
+                                                <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap" x-text="a"></p>
+                                            </template>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
                         </div>
                     </template>
                     </div>
+                    <template x-if="docEditorResult()">
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Edit <span x-text="docEditorLabel()"></span> <span class="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400" x-text="docEditorVersion()"></span></h3>
+                                <button @click="cancelDocEdit()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close editor">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                            <template x-for="f in docEditList" :key="f.key">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1" x-text="f.label"></label>
+                                    <textarea x-model="f.value" :rows="f.kind === 'json' ? 8 : (f.kind === 'list' ? 3 : 5)" :spellcheck="f.kind === 'json' ? 'false' : 'true'" :class="f.kind === 'json' ? 'font-mono text-xs' : 'text-sm'" class="block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
+                                    <p x-show="f.kind === 'list'" class="mt-1 text-xs text-slate-500 dark:text-slate-400">One entry per line.</p>
+                                </div>
+                            </template>
+                            <p x-show="docEditError" class="mt-2 text-xs text-red-600 dark:text-red-400" x-text="docEditError"></p>
+                            <div class="mt-2 flex gap-2">
+                                <button @click="saveDocEdit()" :disabled="docEditSaving" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save as new version</button>
+                                <button @click="cancelDocEdit()" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                            </div>
+                        </div>
+                    </template>
                 <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
                     <button @click="closeDetailModal()"  class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Close</button>
                 </div>
@@ -552,6 +621,60 @@
         </div>
     </div>
     
+    <!-- Run Action Dialog (model + skills + guidelines per run) -->
+    <div x-show="runDialogOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeRunDialog()" aria-labelledby="run-dialog-title" role="dialog" aria-modal="true" style="display: none;">
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+        <div class="relative flex min-h-full items-center justify-center p-4">
+            <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-slate-300 dark:border-slate-500">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 id="run-dialog-title" class="text-lg font-semibold text-slate-900 dark:text-white">Run <span x-text="runDialogActionLabel"></span></h2>
+                    <button @click="closeRunDialog()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close dialog">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">AI Model <span class="font-normal text-slate-500 dark:text-slate-400">(blank = idea default)</span></label>
+                        <select x-model="runDialogModel" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <option value="">Idea default</option>
+                            <template x-for="m in ollamaModels" :key="m">
+                                <option :value="m" x-text="m"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div x-show="selectedIdea?.status === 'DESIGN'">
+                        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Skills</span>
+                        <p x-show="!discoverySkills.length" class="text-xs text-slate-500 dark:text-slate-400">No opencode skills discovered. Mount skill directories and set SKILLS_DIRS.</p>
+                        <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
+                            <template x-for="s in discoverySkills" :key="s.name">
+                                <label class="flex items-start gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                                    <input type="checkbox" :checked="runDialogSkills.includes(s.name)" @change="toggleRunList(runDialogSkills, s.name)" class="mt-1 w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                                    <span><span class="block text-sm font-medium text-slate-700 dark:text-slate-300" x-text="s.name"></span><span class="block text-xs text-slate-500 dark:text-slate-400" x-text="s.description"></span></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Guidelines</span>
+                        <p x-show="!discoveryGuidelines.length" class="text-xs text-slate-500 dark:text-slate-400">No guideline files in <span class="font-mono">guidelines/</span> yet.</p>
+                        <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
+                            <template x-for="g in discoveryGuidelines" :key="g.name">
+                                <label class="flex items-center gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                                    <input type="checkbox" :checked="runDialogGuidelines.includes(g.name)" @change="toggleRunList(runDialogGuidelines, g.name)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                                    <span class="text-sm text-slate-700 dark:text-slate-300" x-text="g.name"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 rounded-b-xl">
+                    <button @click="closeRunDialog()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                    <button @click="confirmRunDialog()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors ml-3">Run</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Idea Modal -->
     <div x-show="createIdeaModalOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeCreateIdeaModal()" aria-labelledby="create-idea-modal-title" role="dialog" aria-modal="true" style="display: none;">
         <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
@@ -669,6 +792,12 @@ function ideasApp() {
         availableActions: [],
         activeTab: 'overview',
         prdAnswers: {},
+        docThreads: {},
+        docDrafts: {},
+        docEditing: null,
+        docEditList: [],
+        docEditError: '',
+        docEditSaving: false,
         filters: { status: 'ACTIVE_ONLY', sort: 'created_at', search: '', prompt_id: '', model: '' },
         canCreateIdeas: true,
         createIdeaModalOpen: false,
@@ -693,6 +822,19 @@ function ideasApp() {
         confirmModalActionType: '',
         confirmModalIdeaId: null,
         confirmModalAnswers: [],
+        pendingRunExtra: null,
+
+        // Run dialog state (model + skills + guidelines per run)
+        runDialogOpen: false,
+        runDialogIdeaId: null,
+        runDialogActionType: '',
+        runDialogActionLabel: '',
+        runDialogModel: '',
+        runDialogSkills: [],
+        runDialogGuidelines: [],
+        ollamaModels: [],
+        discoverySkills: [],
+        discoveryGuidelines: [],
 
         // Bulk actions state
         selectedIdeaIds: [],
@@ -928,6 +1070,13 @@ function ideasApp() {
             this.commentDraft = '';
             this.replyTo = null;
             this.editingCommentId = null;
+            this.docThreads = {};
+            this.docDrafts = {};
+            this.cancelDocEdit();
+            // Actions may have run inside the modal: refresh the list so
+            // chips, counts and statuses stop showing stale data.
+            this.loadIdeas();
+            this.loadTotalIdeas();
         },
 
         openCreateIdeaModal() {
@@ -1216,6 +1365,14 @@ function ideasApp() {
             return this.availableActions || [];
         },
 
+        docActionVisible(actionKey) {
+            // PRD/Design generation is Design-stage only (menu is admin-only).
+            if (actionKey === 'PRD_DOC' || actionKey === 'DESIGN_DOC') {
+                return this.selectedIdea?.status === 'DESIGN';
+            }
+            return true;
+        },
+
         async confirmDiscard(idea, close) {
             if (!confirm('Discard this idea? It will be hidden by the default filter.')) return;
             await this.changeStatus('DISCARDED', idea.id);
@@ -1240,6 +1397,16 @@ function ideasApp() {
         },
         
         async runAction(ideaId, actionType, extra) {
+            // PRD/Design docs are Design-stage only (admin enforced server-side too).
+            if (actionType === 'PRD_DOC' || actionType === 'DESIGN_DOC') {
+                const target = (this.selectedIdea?.id === ideaId)
+                    ? this.selectedIdea
+                    : (this.ideas || []).find(i => i.id === ideaId);
+                if (!target || target.status !== 'DESIGN') {
+                    alert('PRD and Design actions are only available when the idea status is Design.');
+                    return;
+                }
+            }
             // Check if this action requires confirmation (Refine or PRD)
             if ((actionType === 'REFINE' || actionType === 'PRD_DOC') && this.selectedIdea) {
                 const idea = this.selectedIdea;
@@ -1262,6 +1429,11 @@ function ideasApp() {
             this.confirmModalActionType = actionType;
             this.confirmModalIdeaId = ideaId;
             this.confirmModalAnswers = extra?.answers || [];
+            this.pendingRunExtra = {
+                ...(extra?.model_override ? { model_override: extra.model_override } : {}),
+                ...(extra?.skills?.length ? { skills: extra.skills } : {}),
+                ...(extra?.guidelines?.length ? { guidelines: extra.guidelines } : {}),
+            };
             this.confirmModalOpen = true;
         },
 
@@ -1273,6 +1445,73 @@ function ideasApp() {
             this.confirmModalActionType = '';
             this.confirmModalIdeaId = null;
             this.confirmModalAnswers = [];
+            this.pendingRunExtra = null;
+        },
+
+        async openRunDialog(ideaId, actionType) {
+            const action = (this.availableActions || []).find(a => a.key === actionType);
+            this.runDialogIdeaId = ideaId;
+            this.runDialogActionType = actionType;
+            this.runDialogActionLabel = action ? action.label : actionType;
+            this.runDialogModel = '';
+            this.runDialogSkills = [];
+            this.runDialogGuidelines = [];
+            this.runDialogOpen = true;
+            await Promise.all([this.loadOllamaModels(), this.loadDiscovery()]);
+        },
+
+        closeRunDialog() {
+            this.runDialogOpen = false;
+            this.runDialogIdeaId = null;
+            this.runDialogActionType = '';
+            this.runDialogActionLabel = '';
+            this.runDialogModel = '';
+            this.runDialogSkills = [];
+            this.runDialogGuidelines = [];
+        },
+
+        async loadOllamaModels() {
+            try {
+                const res = await authFetch('/api/v1/ollama/models');
+                const data = await res.json();
+                const raw = (data.data || data).models || [];
+                this.ollamaModels = raw
+                    .map(m => typeof m === 'string' ? m : (m.name || m.model || m.id))
+                    .filter(Boolean);
+            } catch (e) {
+                console.error('Failed to load models:', e);
+                this.ollamaModels = [];
+            }
+        },
+
+        async loadDiscovery() {
+            try {
+                const res = await authFetch('/api/v1/discovery');
+                if (!res.ok) return;
+                const data = await res.json();
+                const payload = data.data || data;
+                this.discoverySkills = payload.skills || [];
+                this.discoveryGuidelines = payload.guidelines || [];
+            } catch (e) {
+                console.error('Failed to load skills/guidelines:', e);
+            }
+        },
+
+        toggleRunList(list, name) {
+            const i = list.indexOf(name);
+            if (i === -1) list.push(name);
+            else list.splice(i, 1);
+        },
+
+        async confirmRunDialog() {
+            const extra = {};
+            if (this.runDialogModel) extra.model_override = this.runDialogModel;
+            if (this.runDialogSkills.length) extra.skills = [...this.runDialogSkills];
+            if (this.runDialogGuidelines.length) extra.guidelines = [...this.runDialogGuidelines];
+            const ideaId = this.runDialogIdeaId;
+            const actionType = this.runDialogActionType;
+            this.closeRunDialog();
+            await this.runAction(ideaId, actionType, extra);
         },
 
         // Bulk actions functions
@@ -1346,7 +1585,8 @@ function ideasApp() {
             if (!this.confirmModalIdeaId || !this.confirmModalActionType) return;
             const ideaId = this.confirmModalIdeaId;
             const actionType = this.confirmModalActionType;
-            const extra = { ...(this.confirmModalAnswers ? { answers: this.confirmModalAnswers } : {}) };
+            const extra = { ...(this.pendingRunExtra || {}), ...(this.confirmModalAnswers ? { answers: this.confirmModalAnswers } : {}) };
+            this.pendingRunExtra = null;
             this.closeConfirmModal();
             await this.executeAction(ideaId, actionType, extra);
         },
@@ -1395,7 +1635,10 @@ function ideasApp() {
         
         actionTabs() {
             const seen = [];
+            const inDesign = this.selectedIdea?.status === 'DESIGN';
             for (const a of (this.selectedIdea?.actions || [])) {
+                // PRD/Design documents only display on Design-stage ideas.
+                if ((a.action_type === 'PRD_DOC' || a.action_type === 'DESIGN_DOC') && !inDesign) continue;
                 if (!seen.find((t) => t.key === a.action_type)) {
                     const reg = (this.availableActions || []).find((r) => r.key === a.action_type);
                     const label = reg ? reg.label : a.action_type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1407,7 +1650,155 @@ function ideasApp() {
 
         actionTabResult(key) {
             const rows = (this.selectedIdea?.actions || []).filter((a) => a.action_type === key);
-            return rows[rows.length - 1];
+            return rows.find((a) => a.is_current) || rows[rows.length - 1];
+        },
+
+        docVersionLabel(key) {
+            const rows = (this.selectedIdea?.actions || []).filter((a) => a.action_type === key);
+            const cur = rows.find((a) => a.is_current) || rows[rows.length - 1];
+            if (!cur) return '';
+            let label = 'v' + (cur.version || 1);
+            if (cur.edited_by_id) label += ' · edited';
+            if (rows.length > 1) label += ` · ${rows.length - 1} prior`;
+            return label;
+        },
+
+        async loadDocComments(resultId, force) {
+            if (!resultId) return;
+            if (!force && this.docThreads[resultId]) return;
+            try {
+                const res = await authFetch(`/api/v1/actions/${resultId}/comments`);
+                const data = await res.json();
+                const payload = data.data || data;
+                this.docThreads[resultId] = payload.comments || [];
+            } catch (e) {
+                console.error('Failed to load document comments:', e);
+            }
+        },
+
+        async postDocComment(resultId) {
+            const body = (this.docDrafts[resultId] || '').trim();
+            if (!body) return;
+            try {
+                const res = await authFetch(`/api/v1/actions/${resultId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ body }),
+                });
+                if (!res.ok) throw new Error('Failed to post comment');
+                this.docDrafts[resultId] = '';
+                await this.loadDocComments(resultId, true);
+            } catch (e) {
+                alert('Failed to post comment: ' + e.message);
+            }
+        },
+
+        startDocEdit(key) {
+            try {
+                const cur = this.docCurrentResult(key) || this.actionTabResult(key);
+                if (!cur || !cur.id) {
+                    alert('Could not load this document for editing. Try closing and reopening the details.');
+                    return;
+                }
+                const data = cur.output || cur.result_data || {};
+                this.docEditing = cur.id;
+                this.docEditList = [];
+                for (const k of Object.keys(data)) {
+                    const v = data[k];
+                    let kind = 'text';
+                    let value = v ?? '';
+                    if (Array.isArray(v)) {
+                        kind = 'list';
+                        value = v.map((x) => typeof x === 'string' ? x : JSON.stringify(x)).join('\n');
+                    } else if (v && typeof v === 'object') {
+                        kind = 'json';
+                        value = JSON.stringify(v, null, 2);
+                    } else {
+                        value = String(value ?? '');
+                    }
+                    const label = k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                    this.docEditList.push({ key: k, label, kind, value,
+                        isList: Array.isArray(v),
+                        isObj: !!(v && typeof v === 'object' && !Array.isArray(v)) });
+                }
+                this.docEditError = '';
+            } catch (e) {
+                alert('Could not open the editor: ' + (e && e.message ? e.message : e));
+            }
+        },
+
+        cancelDocEdit() {
+            this.docEditing = null;
+            this.docEditList = [];
+            this.docEditError = '';
+        },
+
+        async saveDocEdit() {
+            const parsed = {};
+            for (const f of (this.docEditList || [])) {
+                const raw = f.value ?? '';
+                if (f.isList) {
+                    parsed[f.key] = String(raw).split('\n').map((s) => s.trim()).filter(Boolean);
+                } else if (f.isObj) {
+                    try {
+                        parsed[f.key] = JSON.parse(String(raw) || '{}');
+                    } catch (e) {
+                        this.docEditError = '\u201c' + f.key + '\u201d is not valid JSON: ' + e.message;
+                        return;
+                    }
+                } else {
+                    parsed[f.key] = String(raw);
+                }
+            }
+            if (!Object.keys(parsed).length) {
+                this.docEditError = 'Nothing to save.';
+                return;
+            }
+            this.docEditSaving = true;
+            try {
+                const res = await authFetch(`/api/v1/actions/${this.docEditing}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ result_data: parsed }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data.data || data).message || data.message || 'Save failed');
+                const id = this.docEditing;
+                this.cancelDocEdit();
+                await this.loadIdeas();
+                const idea = (this.ideas || []).find(i => i.id === this.selectedIdea?.id);
+                if (idea) await this.openDetailModal(idea);
+                await this.loadDocComments(id, true);
+            } catch (e) {
+                this.docEditError = e.message;
+            } finally {
+                this.docEditSaving = false;
+            }
+        },
+
+        docCurrentResult(key) {
+            const rows = (this.selectedIdea?.actions || []).filter((a) => a.action_type === key);
+            return rows.find((a) => a.is_current) || rows[rows.length - 1];
+        },
+
+        docEditorResult() {
+            if (!this.docEditing) return null;
+            return (this.selectedIdea?.actions || []).find((a) => a.id === this.docEditing) || null;
+        },
+
+        docEditorLabel() {
+            const r = this.docEditorResult();
+            if (!r) return '';
+            const reg = (this.availableActions || []).find((x) => x.key === r.action_type);
+            return reg ? reg.label : r.action_type;
+        },
+
+        docEditorVersion() {
+            const r = this.docEditorResult();
+            if (!r) return '';
+            let label = 'v' + (r.version || 1);
+            if (r.edited_by_id) label += ' · edited';
+            return label;
         },
 
         prdQuestions() {
@@ -1439,7 +1830,8 @@ function ideasApp() {
                 'NEW': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
                 'DISCARDED': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
                 'CONSIDERATION': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-                'DEVELOPMENT': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+                'DESIGN': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+                'BUILD': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
                 'COMPLETE': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
                 'HOLD': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
             };
@@ -1512,9 +1904,16 @@ function ideasApp() {
 
         actionChips(idea) {
             // Richness signals: which follow-up analyses already live inside.
-            const done = idea && Array.isArray(idea.actions_run) ? idea.actions_run : [];
-            const labels = { REFINE: 'Refined', COMPETITORS: 'Competitors', FEASIBILITY_SCORE: 'Scored', FIVE_FORCES: 'Five Forces', PESTEL: 'PESTEL' };
-            return done.filter((k) => labels[k]).map((k) => ({ key: k, label: labels[k] }));
+            // Registry-driven (like the detail tabs) so new actions appear
+            // with no UI changes; deduped (versions share one chip).
+            const done = idea && Array.isArray(idea.actions_run) ? [...new Set(idea.actions_run)] : [];
+            return done.map((k) => {
+                const reg = (this.availableActions || []).find((r) => r.key === k);
+                const label = reg
+                    ? (reg.done_label || reg.label)
+                    : k.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                return { key: k, label };
+            });
         },
 
         prettySummary(idea) {

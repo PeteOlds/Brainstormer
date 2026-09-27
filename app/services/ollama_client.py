@@ -57,6 +57,28 @@ class OllamaClient:
             payload["keep_alive"] = keep_alive
         return payload
 
+    async def embeddings(
+        self, model: str, prompt: str,
+    ) -> dict[str, Any]:
+        """Embedding lookup via the dedicated embeddings endpoint.
+
+        NOTE: embedding models do NOT support /api/generate (400
+        'does not support generate') — always use this method.
+        """
+        try:
+            response = await self._client.post(
+                f"{self.base_url}/api/embeddings",
+                json={"model": model, "prompt": prompt})
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            body = e.response.text if e.response else None
+            raise OllamaError(
+                f"Ollama API error {e.response.status_code}: {e.response.reason_phrase}",
+                status_code=e.response.status_code,
+                response_body=body
+            ) from e
+
     async def generate(
         self,
         model: str,

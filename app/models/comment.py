@@ -15,6 +15,10 @@ class Comment(db.Model):
     parent_id = db.Column(GUID(), db.ForeignKey("comments.id"), nullable=True, index=True)
     body = db.Column(db.Text, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
+    # Document scope: 'idea' (default, whole-idea thread) or a follow-up
+    # document thread bound to one SecondaryActionResult version.
+    scope = db.Column(db.String(20), default="idea", nullable=False)
+    action_result_id = db.Column(GUID(), db.ForeignKey("secondary_action_results.id", ondelete="CASCADE"), nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -36,6 +40,8 @@ class Comment(db.Model):
             "parent_id": str(self.parent_id) if self.parent_id else None,
             "body": "[deleted]" if self.is_deleted else self.body,
             "is_deleted": self.is_deleted,
+            "scope": self.scope,
+            "action_result_id": str(self.action_result_id) if self.action_result_id else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "replies": children or [],

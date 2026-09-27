@@ -280,6 +280,106 @@ class TestGenerateIdeaTask:
             generate_idea("00000000-0000-0000-0000-000000000000")
 
 
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_generate_idea_auto_discards_duplicate(self, mock_client_class, celery_app):
+        """A generation matching an existing idea (score >= threshold) is
+        created DISCARDED and stays silent (no Slack post)."""
+        from unittest.mock import patch as _patch
+
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.generate_sync.return_value = {
+            "response": json.dumps({
+                "elevator_pitch": "Guided night walks through Pakuranga forest",
+                "target_audience": "Local families",
+                "core_value_proposition": "Safe outdoor fun",
+                "monetization_strategy": "Ticket sales"}),
+            "done": True}
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import User, PromptConfig, Idea, UserRole
+            from app.tasks.ollama_tasks import generate_idea
+
+            admin = User(email="admin_dedup@test.com", role=UserRole.ADMIN)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            db.session.commit()
+
+            prompt = PromptConfig(
+                title="Test", prompt_body="Test", interval_minutes=60,
+                model_name="llama3:8b", is_active=True,
+                slack_channel="#test", created_by_id=admin.id)
+            db.session.add(prompt)
+            db.session.commit()
+
+            seed = Idea(
+                reference_code="IDEA-0001", prompt_title="Test",
+                raw_content="seed", prompt_config_id=prompt.id,
+                embedding=[0.1] * 768)
+            db.session.add(seed)
+            db.session.commit()
+
+            svc = MagicMock()
+            svc.generate_embedding_sync.return_value = [0.1] * 768
+            svc.store_embedding.return_value = True
+            svc.find_similar_to_embedding.return_value = [(seed, 1.0)]
+            with _patch("app.services.embedding_service.get_embedding_service",
+                        return_value=svc), \
+                 _patch("app.services.slack_service.post_idea") as mock_post:
+                generate_idea(str(prompt.id))
+
+            dup = Idea.query.filter(Idea.reference_code != "IDEA-0001").first()
+            assert dup is not None
+            assert dup.status.value == "DISCARDED"
+            mock_post.assert_not_called()
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_generate_idea_original_posts_and_stays_new(self, mock_client_class, celery_app):
+        """No match: idea stays NEW and Slack posts as before."""
+        from unittest.mock import patch as _patch
+
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.generate_sync.return_value = {
+            "response": json.dumps({
+                "elevator_pitch": "A brand new idea pitch here",
+                "target_audience": "Curious early adopters worldwide",
+                "core_value_proposition": "Something genuinely different daily",
+                "monetization_strategy": "Simple subscription plan"}),
+            "done": True}
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import User, PromptConfig, Idea, UserRole
+            from app.tasks.ollama_tasks import generate_idea
+
+            admin = User(email="admin_nodedup@test.com", role=UserRole.ADMIN)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            db.session.commit()
+
+            prompt = PromptConfig(
+                title="Test", prompt_body="Test", interval_minutes=60,
+                model_name="llama3:8b", is_active=True,
+                slack_channel="#test", created_by_id=admin.id)
+            db.session.add(prompt)
+            db.session.commit()
+
+            svc = MagicMock()
+            svc.generate_embedding_sync.return_value = [0.2] * 768
+            svc.store_embedding.return_value = True
+            svc.find_similar_to_embedding.return_value = []
+            with _patch("app.services.embedding_service.get_embedding_service",
+                        return_value=svc), \
+                 _patch("app.services.slack_service.post_idea") as mock_post:
+                generate_idea(str(prompt.id))
+
+            idea = Idea.query.filter_by(prompt_config_id=prompt.id).first()
+            assert idea.status.value == "NEW"
+            mock_post.assert_called_once()
+
+
 class TestSecondaryActionRobustness:
     def _seed(self, db, email="admin_sec@test.com", temperature=0.9):
         from app.models import User, PromptConfig, Idea, UserRole
@@ -570,6 +670,113 @@ class TestRunSecondaryActionTask:
             assert "elevator_pitch" in result.result_data
 
     @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_prd_rerun_creates_new_version(self, mock_client_class, celery_app):
+        """PRD recreate appends v2 and supersedes v1 (threads stay pinned)."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        prd_payload = {
+            "executive_summary": "Problem X for audience Y with KPI Z clearly stated here.",
+            "user_personas": "Primary persona works this way and feels that pain daily.",
+            "product_scope": "MVP must-haves listed, nice-to-haves deferred to phase two.",
+            "functional_requirements": "Given a user When they act Then the system responds accordingly.",
+            "non_functional_requirements": "99.9% uptime, encrypted data, GDPR compliant posture.",
+            "ux_guidelines": "Three-step flow with loading, empty and error states covered.",
+            "assumptions_risks": "Depends on API Q with fallback and mitigation plan.",
+            "open_questions": [],
+        }
+        mock_client.generate_sync.return_value = {
+            "response": json.dumps(prd_payload), "done": True}
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import User, PromptConfig, Idea, SecondaryActionResult, UserRole
+            from app.tasks.ollama_tasks import run_secondary_action
+
+            admin = User(email="admin_prdver@test.com", role=UserRole.ADMIN)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            db.session.commit()
+
+            prompt = PromptConfig(
+                title="Test", prompt_body="Test", interval_minutes=60,
+                model_name="llama3:8b", created_by_id=admin.id)
+            db.session.add(prompt)
+            db.session.commit()
+
+            idea = Idea(
+                reference_code="IDEA-8201",
+                prompt_title="Test Prompt",
+                raw_content="AI-powered inventory management for small retailers.",
+                prompt_config_id=prompt.id)
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+            run_secondary_action(str(idea_id), "PRD_DOC")
+            run_secondary_action(str(idea_id), "PRD_DOC")
+
+            rows = SecondaryActionResult.query.filter_by(
+                idea_id=idea_id, action_type="PRD_DOC"
+            ).order_by(SecondaryActionResult.version).all()
+            assert [r.version for r in rows] == [1, 2]
+            assert [r.is_current for r in rows] == [False, True]
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
+    def test_prd_answers_persisted_on_version(self, mock_client_class, celery_app):
+        """Human answers to open questions are stored on the regenerated
+        version (UI regression: answers vanished after regenerate)."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        prd_payload = {
+            "executive_summary": "Problem X for audience Y with KPI Z clearly stated here.",
+            "user_personas": "Primary persona works this way and feels that pain daily.",
+            "product_scope": "MVP must-haves listed, nice-to-haves deferred to phase two.",
+            "functional_requirements": "Given a user When they act Then the system responds accordingly.",
+            "non_functional_requirements": "99.9% uptime, encrypted data, GDPR compliant posture.",
+            "ux_guidelines": "Three-step flow with loading, empty and error states covered.",
+            "assumptions_risks": "Depends on API Q with fallback and mitigation plan.",
+            "open_questions": [],
+        }
+        mock_client.generate_sync.return_value = {
+            "response": json.dumps(prd_payload), "done": True}
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import User, PromptConfig, Idea, SecondaryActionResult, UserRole
+            from app.tasks.ollama_tasks import run_secondary_action
+
+            admin = User(email="admin_prdans@test.com", role=UserRole.ADMIN)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            db.session.commit()
+
+            prompt = PromptConfig(
+                title="Test", prompt_body="Test", interval_minutes=60,
+                model_name="llama3:8b", created_by_id=admin.id)
+            db.session.add(prompt)
+            db.session.commit()
+
+            idea = Idea(
+                reference_code="IDEA-8202",
+                prompt_title="Test Prompt",
+                raw_content="AI-powered inventory management for small retailers.",
+                prompt_config_id=prompt.id)
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+            answers = ["Q: What is the pricing model?\nA: Freemium, $9/mo"]
+            run_secondary_action(str(idea_id), "PRD_DOC",
+                                 extra_context={"answers": answers})
+
+            result = SecondaryActionResult.query.filter_by(
+                idea_id=idea_id, action_type="PRD_DOC").first()
+            assert result.answers == answers
+            assert result.to_dict()["answers"] == answers
+
+    @patch('app.tasks.ollama_tasks.OllamaClient')
     def test_run_secondary_action_competitors(self, mock_client_class, celery_app):
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
@@ -689,6 +896,61 @@ class TestRunSecondaryActionTask:
             # Verify model_override was used
             call_args = mock_client_class.return_value.generate_sync.call_args
             assert call_args.kwargs["model"] == "mistral:7b"
+
+    def test_drop_answered_questions(self, celery_app):
+        """Regenerated open questions must not repeat already-answered ones
+        (UI regression: same questions came back plus new ones)."""
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import User, PromptConfig, Idea, SecondaryActionResult, UserRole
+            from app.tasks.ollama_tasks import _drop_answered_questions
+            from app.schemas.ollama_schemas import PrdOutput
+
+            admin = User(email="admin_dedupq@test.com", role=UserRole.ADMIN)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            db.session.commit()
+
+            prompt = PromptConfig(
+                title="Test", prompt_body="Test", interval_minutes=60,
+                model_name="llama3:8b", created_by_id=admin.id)
+            db.session.add(prompt)
+            db.session.commit()
+
+            idea = Idea(
+                reference_code="IDEA-8301",
+                prompt_title="Test Prompt",
+                raw_content="Some content here.",
+                prompt_config_id=prompt.id)
+            db.session.add(idea)
+            db.session.commit()
+
+            db.session.add(SecondaryActionResult(
+                idea_id=idea.id, action_type="PRD_DOC",
+                model_used="m", result_data={},
+                answers=["Q: What is the pricing model?\nA: Freemium, $9/mo"]))
+            db.session.commit()
+
+            base = {
+                "executive_summary": "Problem X for audience Y with KPI Z clearly stated here.",
+                "user_personas": "Primary persona works this way and feels that pain daily.",
+                "product_scope": "MVP must-haves listed, nice-to-haves deferred to phase two.",
+                "functional_requirements": "Given a user When they act Then the system responds accordingly.",
+                "non_functional_requirements": "99.9% uptime, encrypted data, GDPR compliant posture.",
+                "ux_guidelines": "Three-step flow with loading, empty and error states covered.",
+                "assumptions_risks": "Depends on API Q with fallback and mitigation plan.",
+            }
+            validated = PrdOutput(**base, open_questions=[
+                "What is the pricing model?",
+                "Which platform should launch first?",
+            ])
+            out = _drop_answered_questions(validated, idea.id, "PRD_DOC")
+            assert out.open_questions == ["Which platform should launch first?"]
+
+            # No prior answers: untouched.
+            validated2 = PrdOutput(**base, open_questions=["Anything unclear?"])
+            out2 = _drop_answered_questions(validated2, idea.id, "REFINE")
+            assert out2.open_questions == ["Anything unclear?"]
 
 
 class TestCheckDuePromptsTask:
