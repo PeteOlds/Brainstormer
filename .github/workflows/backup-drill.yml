@@ -1,0 +1,42 @@
+name: backup-drill
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Backup round-trip tests
+        run: pytest tests/integration/test_backup.py -q
+      - name: CLI drill on a scratch SQLite database
+        env:
+          FLASK_APP: wsgi.py
+          FLASK_ENV: development
+          DATABASE_URL: sqlite:////tmp/drill.db
+          SECRET_KEY: drill-secret-key-min-32-chars-long
+          JWT_SECRET_KEY: drill-jwt-secret-min-32-chars-long
+          FERNET_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        run: |
+          rm -f /tmp/drill.db /tmp/site-a.json /tmp/site-b.json
+          python -c "from wsgi import app; from app.extensions import db; app.app_context().push(); db.create_all()"
+          flask backup-site --output /tmp/site-a.json
+          flask restore --input /tmp/site-a.json --yes
+          flask backup-site --output /tmp/site-b.json
+          python -c "
+          import json
+          a = {k: v for k, v in json.load(open('/tmp/site-a.json'))['manifest']['fingerprints'].items()}
+          b = {k: v for k, v in json.load(open('/tmp/site-b.json'))['manifest']['fingerprints'].items()}
+          assert a == b, 'restore drill: fingerprints differ'
+          print('restore drill: zero diff across', len(a), 'tables')
+          "

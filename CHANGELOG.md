@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.29.0] - 2026-09-29
+### Added
+- Phase 0 safety net: versioned JSON site bundles (schema v1, manifest, SHA-256) via `app/services/backup.py`; `flask backup-site / backup-instance / restore` CLI (restore confirms unless `--yes`, refuses corrupt/newer-schema bundles, friendly error on unmigrated DB); backup → wipe → restore proven zero-diff by per-table fingerprints (listener double-counts and `onupdate` drift corrected); `backup-drill` CI job with backup tests plus scratch-SQLite CLI drill; ops notes in `docs/install-config.md`
+
 ## [0.28.0] - 2026-09-29
 ### Added
 - Whole-V2 system design (`docs/Design.md`): LiteLLM proxy + Ollama backend, Riverpod Flutter app with screen inventory and Inter/blue design tokens, fresh mermaid lifecycle diagram for all 8 states, 7 new tables + `instance_id` rollout with RLS defence-in-depth, full API contract table (instances, switcher, AI/OAuth config, chat + rollback, spend, social PKCE), riskiest-first build notes and open questions; PRD_V2 cross-linked
