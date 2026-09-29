@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.30.0] - 2026-09-29
+### Added
+- Phase 1 tenancy foundation: `instances` + `memberships` (string roles, NULL = site-wide grant), `instance_id` on all tenant tables, JWT `instance_id` claim (optional; legacy tokens stay unscoped), membership-enforcing decorators plus `site_admin_required`, per-request scoping on ideas/prompts/admin/tasks/embeddings/Slack, LiteLLM-ready task instance threading, `/api/v1/instances` CRUD, copy-on-create from Instance 1 (config only, Slack cleared, keys never copied), `init-tenancy / promote-site-admin / create-instance` CLI, reserved numbers 2-19, Postgres RLS failsafe migration, tenancy runbook in `docs/install-config.md`
+
 ## [0.29.0] - 2026-09-29
 ### Added
 - Phase 0 safety net: versioned JSON site bundles (schema v1, manifest, SHA-256) via `app/services/backup.py`; `flask backup-site / backup-instance / restore` CLI (restore confirms unless `--yes`, refuses corrupt/newer-schema bundles, friendly error on unmigrated DB); backup → wipe → restore proven zero-diff by per-table fingerprints (listener double-counts and `onupdate` drift corrected); `backup-drill` CI job with backup tests plus scratch-SQLite CLI drill; ops notes in `docs/install-config.md`

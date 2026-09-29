@@ -11,10 +11,22 @@ class SlackPost(db.Model):
     __tablename__ = "slack_posts"
 
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
-    idea_id = db.Column(GUID(), db.ForeignKey("ideas.id", ondelete="CASCADE"), nullable=False, index=True)
+    instance_id = db.Column(
+        GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
+    )
+    idea_id = db.Column(
+        GUID(),
+        db.ForeignKey("ideas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     channel_id = db.Column(db.String(20), nullable=False)
     message_ts = db.Column(db.String(30), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     __table_args__ = (
         db.UniqueConstraint("channel_id", "message_ts", name="uq_slack_post"),
@@ -30,4 +42,8 @@ class SlackEvent(db.Model):
     __tablename__ = "slack_events"
 
     event_id = db.Column(db.String(60), primary_key=True)
-    received_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    received_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )

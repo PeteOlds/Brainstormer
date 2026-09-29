@@ -2,19 +2,34 @@ import uuid
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models.types import GUID
 from app.models.enums import IdeaStatus
+from app.models.types import GUID
 
 
 class IdeaStatusHistory(db.Model):
     __tablename__ = "idea_status_history"
 
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
-    idea_id = db.Column(GUID(), db.ForeignKey("ideas.id", ondelete="CASCADE"), nullable=False, index=True)
-    changed_by_id = db.Column(GUID(), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    instance_id = db.Column(
+        GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
+    )
+    idea_id = db.Column(
+        GUID(),
+        db.ForeignKey("ideas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    changed_by_id = db.Column(
+        GUID(), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     old_status = db.Column(db.Enum(IdeaStatus), nullable=False)
     new_status = db.Column(db.Enum(IdeaStatus), nullable=False)
-    changed_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    changed_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
 
     # Relationships
     changed_by = db.relationship("User", foreign_keys=[changed_by_id])

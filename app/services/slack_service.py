@@ -3,6 +3,7 @@
 Never raises: without a token/channel, or on any API failure, returns
 None and logs. Generation must never depend on Slack.
 """
+
 import time
 
 import structlog
@@ -13,6 +14,7 @@ logger = structlog.get_logger()
 def get_client(token=None):
     """WebClient or None when unconfigured."""
     import os
+
     token = token or os.getenv("SLACK_BOT_TOKEN", "")
     if not token:
         return None
@@ -30,14 +32,20 @@ def idea_blocks(idea, app_base_url):
     return [
         {
             "type": "section",
-            "text": {"type": "mrkdwn",
-                     "text": f"*{idea.get('reference_code', 'Idea')}* — {idea.get('prompt_title', '')}\n{summary}"},
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*{idea.get('reference_code', 'Idea')}* — {idea.get('prompt_title', '')}\n{summary}",
+            },
         },
         {
             "type": "context",
-            "elements": [{"type": "mrkdwn",
-                          "text": f"Status: {idea.get('status', '')} | "
-                                  f"<{app_base_url}/ideas|Open in Brainstormer>"}],
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"Status: {idea.get('status', '')} | "
+                    f"<{app_base_url}/ideas|Open in Brainstormer>",
+                }
+            ],
         },
     ]
 
@@ -62,16 +70,22 @@ def post_idea(channel, idea, app_base_url=None, client=None, _retried=False):
     except Exception as e:
         # Single retry on rate-limit honoring Retry-After.
         retry_after = getattr(e, "response", None)
-        retry_after = (retry_after.get("headers", {}).get("Retry-After")
-                       if isinstance(retry_after, dict) else None)
+        retry_after = (
+            retry_after.get("headers", {}).get("Retry-After")
+            if isinstance(retry_after, dict)
+            else None
+        )
         if not _retried and retry_after:
             try:
                 time.sleep(int(retry_after))
             except (ValueError, TypeError):
                 pass
             return post_idea(channel, idea, app_base_url, client, _retried=True)
-        logger.warning("slack_post_failed", channel=channel,
-                       error=f"{type(e).__name__}: {str(e)[:200]}")
+        logger.warning(
+            "slack_post_failed",
+            channel=channel,
+            error=f"{type(e).__name__}: {str(e)[:200]}",
+        )
         return None
 
 
@@ -80,16 +94,37 @@ def _record_post(idea_id, channel_id, ts):
     if not idea_id or not ts:
         return
     try:
+        import uuid as uuid_mod
+
         from app.extensions import db
-        from app.models import SlackPost
-        db.session.add(SlackPost(idea_id=idea_id, channel_id=channel_id, message_ts=ts))
+        from app.models import Idea, SlackPost
+
+        try:
+            key = (
+                idea_id
+                if isinstance(idea_id, uuid_mod.UUID)
+                else uuid_mod.UUID(str(idea_id))
+            )
+        except (ValueError, TypeError):
+            key = None
+        idea = db.session.get(Idea, key) if key is not None else None
+        db.session.add(
+            SlackPost(
+                idea_id=idea_id,
+                channel_id=channel_id,
+                message_ts=ts,
+                instance_id=idea.instance_id if idea is not None else None,
+            )
+        )
         db.session.commit()
     except Exception as e:
         try:
             db.session.rollback()
         except Exception:
             pass
-        logger.warning("slack_post_map_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+        logger.warning(
+            "slack_post_map_failed", error=f"{type(e).__name__}: {str(e)[:200]}"
+        )
 
 
 # Reaction emoji -> vote direction (Phase 3b).
@@ -103,6 +138,7 @@ def get_or_provision_user(client, slack_user_id):
     unusable password. Returns the User or None.
     """
     import secrets
+
     from app.extensions import db
     from app.models import User, UserRole
 
@@ -112,7 +148,9 @@ def get_or_provision_user(client, slack_user_id):
     try:
         info = client.users_info(user=slack_user_id).get("user", {})
     except Exception as e:
-        logger.warning("slack_user_lookup_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+        logger.warning(
+            "slack_user_lookup_failed", error=f"{type(e).__name__}: {str(e)[:200]}"
+        )
         return None
     email = (info.get("profile", {}).get("email") or "").strip().lower()
     if not email:
@@ -120,9 +158,11 @@ def get_or_provision_user(client, slack_user_id):
         return None
     user = User.query.filter_by(email=email).first()
     if user is None:
-        user = User(email=email,
-                    name=info.get("real_name") or info.get("name"),
-                    role=UserRole.USER)
+        user = User(
+            email=email,
+            name=info.get("real_name") or info.get("name"),
+            role=UserRole.USER,
+        )
         user.password_hash = secrets.token_urlsafe(32)
         db.session.add(user)
     user.slack_user_id = slack_user_id
@@ -158,6 +198,7 @@ def apply_slack_vote(user, idea_id, direction, present):
 def mark_event_seen(event_id):
     """True if this is the first sighting (records it); False if duplicate."""
     from sqlalchemy.exc import IntegrityError
+
     from app.extensions import db
     from app.models import SlackEvent
 
@@ -172,7 +213,9 @@ def mark_event_seen(event_id):
         return False
     except Exception as e:
         db.session.rollback()
-        logger.warning("slack_event_seen_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+        logger.warning(
+            "slack_event_seen_failed", error=f"{type(e).__name__}: {str(e)[:200]}"
+        )
         return True
 
 
@@ -189,15 +232,19 @@ def handle_reaction_event(client, event, event_id=None, event_type="reaction_add
     if item.get("type") != "message":
         return "ignored-item"
     post = SlackPost.query.filter_by(
-        channel_id=item.get("channel"), message_ts=item.get("ts")).first()
+        channel_id=item.get("channel"), message_ts=item.get("ts")
+    ).first()
     if post is None:
         return "unknown-message"
     user = get_or_provision_user(client, event.get("user", ""))
     if user is None:
         return "unknown-user"
-    net = apply_slack_vote(user, post.idea_id,
-                           VOTE_REACTIONS[reaction],
-                           present=(event_type == "reaction_added"))
+    net = apply_slack_vote(
+        user,
+        post.idea_id,
+        VOTE_REACTIONS[reaction],
+        present=(event_type == "reaction_added"),
+    )
     if net is None:
         return "unknown-idea"
     return f"vote:net={net}"
@@ -237,21 +284,25 @@ def mirror_comment_to_thread(idea, comment, client=None, app_base_url=None):
     blocks = [
         {
             "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*{author}*: {body[:2900]}"
-            }
+            "text": {"type": "mrkdwn", "text": f"*{author}*: {body[:2900]}"},
         },
         {
             "type": "context",
-            "elements": [{
-                "type": "mrkdwn",
-                "text": f"<{app_base_url}/ideas?comment={comment.id}|View in Brainstormer>"
-            }]
-        }
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"<{app_base_url}/ideas?comment={comment.id}|View in Brainstormer>",
+                }
+            ],
+        },
     ]
     # Invisible loop-guard marker
-    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"{MIRROR_MARKER}{comment.id}"}})
+    blocks.append(
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{MIRROR_MARKER}{comment.id}"},
+        }
+    )
 
     client = client or get_client()
     if client is None:
@@ -267,7 +318,9 @@ def mirror_comment_to_thread(idea, comment, client=None, app_base_url=None):
         )
         return resp.get("ts")
     except Exception as e:
-        logger.warning("slack_mirror_failed", error=f"{type(e).__name__}: {str(e)[:200]}")
+        logger.warning(
+            "slack_mirror_failed", error=f"{type(e).__name__}: {str(e)[:200]}"
+        )
         return None
 
 
@@ -300,7 +353,10 @@ def handle_thread_reply(client, event, event_id=None):
 
     # Find the SlackPost by thread_ts (which is the original message_ts)
     from app.models import SlackPost
-    post = SlackPost.query.filter_by(channel_id=event.get("channel"), message_ts=thread_ts).first()
+
+    post = SlackPost.query.filter_by(
+        channel_id=event.get("channel"), message_ts=thread_ts
+    ).first()
     if not post:
         return "unknown-thread"
 
@@ -326,7 +382,11 @@ def handle_thread_reply(client, event, event_id=None):
     db.session.add(comment)
     db.session.commit()
 
-    logger.info("slack_thread_reply_mirrored", comment_id=str(comment.id), idea_id=str(post.idea_id))
+    logger.info(
+        "slack_thread_reply_mirrored",
+        comment_id=str(comment.id),
+        idea_id=str(post.idea_id),
+    )
     return "mirrored"
 
 
@@ -340,7 +400,9 @@ def process_slack_event(client, event, event_id=None):
     event_type = event.get("type", "")
 
     if event_type in ("reaction_added", "reaction_removed"):
-        return handle_reaction_event(client, event, event_id=event.get("event_ts"), event_type=event.get("type"))
+        return handle_reaction_event(
+            client, event, event_id=event.get("event_ts"), event_type=event.get("type")
+        )
 
     if event_type == "message":
         # Skip bot messages and our own
@@ -353,7 +415,12 @@ def process_slack_event(client, event, event_id=None):
 
         thread_ts = event.get("thread_ts")
         if thread_ts:
-            return handle_thread_reply(client, event, event_id=event.get("event_ts"), event_type=event.get("type"))
+            return handle_thread_reply(
+                client,
+                event,
+                event_id=event.get("event_ts"),
+                event_type=event.get("type"),
+            )
         # Non-thread messages are not mirrored
         return "ignored-not-thread"
 

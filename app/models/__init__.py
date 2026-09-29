@@ -1,16 +1,23 @@
-from .user import User, UserRole
-from .refresh_token import RefreshToken
+from .comment import Comment
+from .idea import Idea, IdeaStatus
+from .idea_edit import IdeaEdit
+from .instance import (
+    ROLE_INSTANCE_ADMIN,
+    ROLE_SITE_ADMIN,
+    ROLE_USER,
+    Instance,
+    Membership,
+)
 from .prompt_config import PromptConfig
 from .prompt_run import PromptRun, PromptRunStatus
-from .idea import Idea, IdeaStatus
-from .vote import Vote
-from .comment import Comment
-from .idea_edit import IdeaEdit
-from .slack import SlackPost, SlackEvent
-from .secondary_action import SecondaryActionResult, ActionType
+from .refresh_token import RefreshToken
+from .secondary_action import ActionType, SecondaryActionResult
+from .slack import SlackEvent, SlackPost
 from .status_history import IdeaStatusHistory
 from .system_settings import SystemSettings
 from .types import GUID
+from .user import User, UserRole
+from .vote import Vote
 
 __all__ = [
     "User",
@@ -31,4 +38,9 @@ __all__ = [
     "RefreshToken",
     "PromptRun",
     "PromptRunStatus",
+    "Instance",
+    "Membership",
+    "ROLE_SITE_ADMIN",
+    "ROLE_INSTANCE_ADMIN",
+    "ROLE_USER",
 ]

@@ -95,6 +95,9 @@ def register_cli(app):
     app.cli.add_command(backup_site)
     app.cli.add_command(backup_instance)
     app.cli.add_command(restore_backup)
+    app.cli.add_command(init_tenancy)
+    app.cli.add_command(promote_site_admin)
+    app.cli.add_command(create_instance)
 
 
 @click.command("backup-site")
@@ -177,3 +180,60 @@ def restore_backup(input_path: str, yes: bool):
         f"Restored {total} rows from {input_path} "
         f"(schema v{bundle['manifest']['export_schema_version']})"
     )
+
+
+@click.command("init-tenancy")
+@with_appcontext
+def init_tenancy():
+    """Idempotent first-time tenancy seed.
+
+    Creates Instances 1 (template) + 5 (production), moves all existing
+    rows to Site 5, and grants Site 5 memberships from V1 roles. Take a
+    backup first; the Site Admin itself comes from promote-site-admin.
+    """
+    from app.services import instances as instance_svc
+
+    report = instance_svc.init_site_data()
+    moved = sum(report["backfilled"].values())
+    click.echo(
+        f"Tenancy initialised: template={report['template_id']} "
+        f"production={report['production_id']}, {moved} rows to Site 5, "
+        f"{report['memberships']} memberships granted."
+    )
+
+
+@click.command("promote-site-admin")
+@click.argument("email")
+@with_appcontext
+def promote_site_admin(email: str):
+    """Grant a user the site-wide SITE_ADMIN membership."""
+    from app.models import User
+    from app.services import instances as instance_svc
+
+    user = User.query.filter_by(email=email.strip().lower()).first()
+    if not user:
+        click.echo(f"User {email} not found.", err=True)
+        return
+    instance_svc.grant_site_admin(user.id)
+    click.echo(f"User {email} is now a site admin")
+
+
+@click.command("create-instance")
+@click.option(
+    "--number",
+    type=int,
+    required=True,
+    help="Instance number (>= 20; 1 and 5 exist; 2-19 reserved)",
+)
+@click.option("--name", required=True, help="Instance display name")
+@with_appcontext
+def create_instance(number: int, name: str):
+    """Create an instance from the Instance 1 template (operator-run)."""
+    from app.services import instances as instance_svc
+
+    try:
+        instance = instance_svc.create_instance(number, name.strip())
+    except instance_svc.InstanceError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        return
+    click.echo(f"Instance created: number={instance.number} id={instance.id}")

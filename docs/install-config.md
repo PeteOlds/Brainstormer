@@ -116,3 +116,19 @@ Bundles are versioned JSON with a manifest and SHA-256 checksum; `restore`
 refuses corrupt or newer-schema files. Zero-diff proof: back up, restore,
 back up again — per-table fingerprints must match
 (`pytest tests/integration/test_backup.py`, plus the `backup-drill` CI job).
+
+## Tenancy ops (Phase 1)
+
+First-time tenancy setup on production (after a verified backup):
+
+```bash
+flask db upgrade                                    # instances, memberships, instance_id, RLS
+flask init-tenancy                                  # Instances 1 + 5, rows to Site 5, memberships
+flask promote-site-admin ops@example.com            # site-wide grant
+flask create-instance --number 20 --name "Acme"     # copies Instance 1 config
+```
+
+Login scoping is optional per token: `POST /api/v1/login` accepts
+`instance_id` (403 without membership); tokens without the claim keep the
+legacy unscoped behaviour. Numbers 2–19 (except 5) are reserved and the
+API/CLI refuse them.

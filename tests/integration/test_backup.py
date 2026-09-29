@@ -36,6 +36,13 @@ def seed_site():
     db.session.add_all([admin, user])
     db.session.flush()
 
+    from app.models import Instance, Membership
+
+    site = Instance(number=5, name="Production")
+    db.session.add(site)
+    db.session.flush()
+    db.session.add(Membership(user_id=admin.id, instance_id=site.id, role="INSTANCE_ADMIN"))
+
     prompt = PromptConfig(
         title="Backup Prompt",
         prompt_body="Generate an idea about {{topic}}",

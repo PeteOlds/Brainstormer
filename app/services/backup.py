@@ -24,6 +24,8 @@ from app.models import (
     Idea,
     IdeaEdit,
     IdeaStatusHistory,
+    Instance,
+    Membership,
     PromptConfig,
     PromptRun,
     RefreshToken,
@@ -43,7 +45,9 @@ EXPORT_SCHEMA_VERSION = 1
 # Within a table rows export oldest-first: self-references (token rotation
 # chains, comment replies) always point backwards in time.
 EXPORT_TABLES: list[Any] = [
+    Instance,
     User,
+    Membership,
     SystemSettings,
     PromptConfig,
     Idea,

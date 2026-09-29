@@ -4,19 +4,19 @@ Uses nomic-embed-text via Ollama for generating embeddings.
 Stores embeddings as float arrays in JSONB column.
 Provides similarity search using cosine similarity in Python.
 """
-import uuid
+
 import logging
+import uuid
 from typing import List, Optional, Tuple
 
 import httpx
+import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.extensions import db
 from app.models import Idea
 from app.services.ollama_client import OllamaClient, OllamaError
-
-import structlog
 
 logger = structlog.get_logger()
 
@@ -45,13 +45,22 @@ class EmbeddingService:
         """Generate embedding for a single text using nomic-embed-text."""
         try:
             response = await self.ollama_client.embeddings(
-                model=self.EMBEDDING_MODEL, prompt=text)
+                model=self.EMBEDDING_MODEL, prompt=text
+            )
             embedding = response.get("embedding")
             if not embedding or len(embedding) != self.EMBEDDING_DIM:
-                raise ValueError(f"Invalid embedding dimension: {len(embedding) if embedding else 0}")
+                raise ValueError(
+                    f"Invalid embedding dimension: {len(embedding) if embedding else 0}"
+                )
             return embedding
         except OllamaError as e:
-            logger.error("embedding_generation_failed", base_url=self.ollama_client.base_url, model=self.EMBEDDING_MODEL, status=e.status_code, body=e.response_body)
+            logger.error(
+                "embedding_generation_failed",
+                base_url=self.ollama_client.base_url,
+                model=self.EMBEDDING_MODEL,
+                status=e.status_code,
+                body=e.response_body,
+            )
             raise
         except Exception as e:
             logger.error("embedding_generation_failed", error=str(e))
@@ -69,17 +78,27 @@ class EmbeddingService:
             # nomic-embed-text returns embedding in response["embedding"]
             embedding = response.get("embedding")
             if not embedding or len(embedding) != self.EMBEDDING_DIM:
-                raise ValueError(f"Invalid embedding dimension: {len(embedding) if embedding else 0}")
+                raise ValueError(
+                    f"Invalid embedding dimension: {len(embedding) if embedding else 0}"
+                )
             return embedding
         except OllamaError as e:
-            logger.error("embedding_generation_failed", base_url=self.ollama_client.base_url, model=self.EMBEDDING_MODEL, status=e.status_code, body=e.response_body)
+            logger.error(
+                "embedding_generation_failed",
+                base_url=self.ollama_client.base_url,
+                model=self.EMBEDDING_MODEL,
+                status=e.status_code,
+                body=e.response_body,
+            )
             raise
         except Exception as e:
             logger.error("embedding_generation_failed", error=str(e))
             raise
             embedding = data.get("embedding")
             if not embedding or len(embedding) != self.EMBEDDING_DIM:
-                raise ValueError(f"Invalid embedding dimension: {len(embedding) if embedding else 0}")
+                raise ValueError(
+                    f"Invalid embedding dimension: {len(embedding) if embedding else 0}"
+                )
             return embedding
         except Exception as e:
             logger.error("embedding_generation_failed", error=str(e))
@@ -105,6 +124,7 @@ class EmbeddingService:
     def cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """Compute cosine similarity between two vectors."""
         from pgvector import Vector
+
         v1 = Vector(vec1)
         v2 = Vector(vec2)
         return float(v1.cosine_similarity(v2))
@@ -115,11 +135,14 @@ class EmbeddingService:
         threshold: float = None,
         limit: int = 10,
         exclude_id=None,
+        instance_id=None,
     ) -> List[Tuple[Idea, float]]:
         """Find ideas similar to a raw embedding vector.
 
         Used by the generation dedup gate (the new idea isn't persisted
         yet, so there is no id to look up). Sorted by score descending.
+        instance_id scopes the comparison to one instance (dedup is
+        within-instance only); None keeps the legacy global behaviour.
         """
         threshold = threshold or self.SIMILARITY_THRESHOLD
         if not embedding:
@@ -128,6 +151,8 @@ class EmbeddingService:
         query = select(Idea).where(Idea.embedding.is_not(None))
         if exclude_id is not None:
             query = query.where(Idea.id != exclude_id)
+        if instance_id is not None:
+            query = query.where(Idea.instance_id == instance_id)
         ideas = db.session.execute(query).scalars().all()
 
         similar = []
@@ -146,7 +171,8 @@ class EmbeddingService:
         self,
         idea_id: uuid.UUID,
         threshold: float = None,
-        limit: int = 10
+        limit: int = 10,
+        instance_id=None,
     ) -> List[Tuple[Idea, float]]:
         """Find ideas similar to the given idea.
 
@@ -158,10 +184,16 @@ class EmbeddingService:
             return []
 
         return self.find_similar_to_embedding(
-            target_idea.embedding, threshold=threshold, limit=limit,
-            exclude_id=idea_id)
+            target_idea.embedding,
+            threshold=threshold,
+            limit=limit,
+            exclude_id=idea_id,
+            instance_id=instance_id,
+        )
 
-    def find_near_duplicates(self, idea_id: uuid.UUID, threshold: float = 0.95) -> List[Tuple[Idea, float]]:
+    def find_near_duplicates(
+        self, idea_id: uuid.UUID, threshold: float = 0.95
+    ) -> List[Tuple[Idea, float]]:
         """Find near-duplicate ideas (very high similarity)."""
         return self.find_similar_ideas(idea_id, threshold=threshold, limit=5)
 
@@ -172,9 +204,11 @@ class EmbeddingService:
         """
         stats = {"processed": 0, "succeeded": 0, "failed": 0}
 
-        ideas = db.session.execute(
-            select(Idea).where(Idea.embedding.is_(None))
-        ).scalars().all()
+        ideas = (
+            db.session.execute(select(Idea).where(Idea.embedding.is_(None)))
+            .scalars()
+            .all()
+        )
 
         for idea in ideas:
             stats["processed"] += 1
@@ -185,7 +219,9 @@ class EmbeddingService:
                 else:
                     stats["failed"] += 1
             except Exception as e:
-                logger.error("embedding_backfill_failed", idea_id=str(idea.id), error=str(e))
+                logger.error(
+                    "embedding_backfill_failed", idea_id=str(idea.id), error=str(e)
+                )
                 stats["failed"] += 1
 
         logger.info("embedding_backfill_complete", **stats)

@@ -3,14 +3,17 @@ import uuid
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models.types import GUID
 from app.models.enums import IdeaStatus
+from app.models.types import GUID
 
 
 class Idea(db.Model):
     __tablename__ = "ideas"
 
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    instance_id = db.Column(
+        GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
+    )
     reference_code = db.Column(db.String(20), unique=True, nullable=False, index=True)
     prompt_title = db.Column(db.String(200), nullable=False)
     raw_content = db.Column(db.Text, nullable=False)
@@ -18,7 +21,9 @@ class Idea(db.Model):
     # in place and reassign it — SQLAlchemy then compares new-vs-mutated
     # (equal) and silently skips the UPDATE. Always build a fresh dict.
     structured_content = db.Column(db.JSON)
-    status = db.Column(db.Enum(IdeaStatus), default=IdeaStatus.NEW, nullable=False, index=True)
+    status = db.Column(
+        db.Enum(IdeaStatus), default=IdeaStatus.NEW, nullable=False, index=True
+    )
 
     # Cached voting metrics
     upvotes_count = db.Column(db.Integer, default=0, nullable=False)
@@ -35,14 +40,38 @@ class Idea(db.Model):
     # Foreign keys
     prompt_config_id = db.Column(GUID(), db.ForeignKey("prompt_configs.id"), index=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     # Relationships
-    votes = db.relationship("Vote", backref="idea", lazy="dynamic", cascade="all, delete-orphan")
-    comments = db.relationship("Comment", backref="idea", lazy="dynamic", cascade="all, delete-orphan")
-    actions = db.relationship("SecondaryActionResult", backref="idea", lazy="dynamic", cascade="all, delete-orphan")
-    status_history = db.relationship("IdeaStatusHistory", backref="idea", lazy="dynamic", cascade="all, delete-orphan")
+    votes = db.relationship(
+        "Vote", backref="idea", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    comments = db.relationship(
+        "Comment", backref="idea", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    actions = db.relationship(
+        "SecondaryActionResult",
+        backref="idea",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+    status_history = db.relationship(
+        "IdeaStatusHistory",
+        backref="idea",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
 
     def excerpt(self, limit: int = 200) -> str:
         """Readable one-liner: prefers a structured pitch over a raw dump.
@@ -57,7 +86,14 @@ class Idea(db.Model):
             except (ValueError, TypeError):
                 obj = None
             if isinstance(obj, dict):
-                for key in ("elevator_pitch", "summary", "pitch", "description", "overview", "tagline"):
+                for key in (
+                    "elevator_pitch",
+                    "summary",
+                    "pitch",
+                    "description",
+                    "overview",
+                    "tagline",
+                ):
                     value = obj.get(key)
                     if isinstance(value, str) and value.strip():
                         clean = value.strip()
@@ -75,7 +111,9 @@ class Idea(db.Model):
             "upvotes_count": self.upvotes_count,
             "downvotes_count": self.downvotes_count,
             "feasibility_score": self.feasibility_score,
-            "prompt_config_id": str(self.prompt_config_id) if self.prompt_config_id else None,
+            "prompt_config_id": (
+                str(self.prompt_config_id) if self.prompt_config_id else None
+            ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "actions_run": [a.action_type for a in self.actions],
@@ -90,13 +128,19 @@ class Idea(db.Model):
 
     def update_vote_counts(self):
         """Recalculate vote counts from votes table."""
-        from app.models.vote import Vote
         from sqlalchemy import func
-        counts = db.session.query(
-            func.count(Vote.id).filter(Vote.value == 1),
-            func.count(Vote.id).filter(Vote.value == -1),
-            func.coalesce(func.sum(Vote.value), 0)
-        ).filter(Vote.idea_id == self.id).first()
+
+        from app.models.vote import Vote
+
+        counts = (
+            db.session.query(
+                func.count(Vote.id).filter(Vote.value == 1),
+                func.count(Vote.id).filter(Vote.value == -1),
+                func.coalesce(func.sum(Vote.value), 0),
+            )
+            .filter(Vote.idea_id == self.id)
+            .first()
+        )
         self.upvotes_count = counts[0] or 0
         self.downvotes_count = counts[1] or 0
         self.net_score = counts[2] or 0

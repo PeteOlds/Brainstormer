@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from app.extensions import db
-from app.utils.crypto import encrypt, decrypt
 from app.models.types import GUID
+from app.utils.crypto import decrypt, encrypt
 
 
 class PromptStatus(str, Enum):
@@ -16,6 +16,9 @@ class PromptConfig(db.Model):
     __tablename__ = "prompt_configs"
 
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    instance_id = db.Column(
+        GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
+    )
     title = db.Column(db.String(200), nullable=False)
     _prompt_body = db.Column("prompt_body", db.Text, nullable=False)
     interval_minutes = db.Column(db.Integer, nullable=False)
@@ -32,8 +35,17 @@ class PromptConfig(db.Model):
     last_run_at = db.Column(db.DateTime(timezone=True))
     next_run_at = db.Column(db.DateTime(timezone=True), index=True)
     created_by_id = db.Column(GUID(), db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     # Relationships
     created_by = db.relationship("User", foreign_keys=[created_by_id])
@@ -57,13 +69,22 @@ class PromptConfig(db.Model):
 
         total = PromptRun.query.filter_by(prompt_config_id=self.id).count()
         failures = PromptRun.query.filter_by(
-            prompt_config_id=self.id, status=PromptRunStatus.FAILED).count()
-        pending = PromptRun.query.filter(
-            PromptRun.prompt_config_id == self.id,
-            PromptRun.status.in_([PromptRunStatus.PENDING, PromptRunStatus.RUNNING]),
-        ).count() > 0
-        last = (PromptRun.query.filter_by(prompt_config_id=self.id)
-                .order_by(PromptRun.created_at.desc()).first())
+            prompt_config_id=self.id, status=PromptRunStatus.FAILED
+        ).count()
+        pending = (
+            PromptRun.query.filter(
+                PromptRun.prompt_config_id == self.id,
+                PromptRun.status.in_(
+                    [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
+                ),
+            ).count()
+            > 0
+        )
+        last = (
+            PromptRun.query.filter_by(prompt_config_id=self.id)
+            .order_by(PromptRun.created_at.desc())
+            .first()
+        )
         return {
             "run_count": total,
             "failure_count": failures,

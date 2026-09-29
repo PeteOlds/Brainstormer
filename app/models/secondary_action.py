@@ -26,11 +26,24 @@ class SecondaryActionResult(db.Model):
     __tablename__ = "secondary_action_results"
 
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
-    idea_id = db.Column(GUID(), db.ForeignKey("ideas.id", ondelete="CASCADE"), nullable=False, index=True)
+    instance_id = db.Column(
+        GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
+    )
+    idea_id = db.Column(
+        GUID(),
+        db.ForeignKey("ideas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     action_type = db.Column(db.Enum(ActionType), nullable=False)
     model_used = db.Column(db.String(100), nullable=False)
     result_data = db.Column(db.JSON, nullable=False)
-    executed_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    executed_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
     # Document versioning (PRD/DESIGN_DOC): recreate/edit append a new
     # version and flip is_current instead of deleting history, so
     # per-document comment threads stay pinned to their version.

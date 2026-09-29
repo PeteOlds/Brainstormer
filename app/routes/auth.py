@@ -1,12 +1,11 @@
-from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, unset_jwt_cookies, get_jwt_identity
+from flask import Blueprint, current_app, jsonify, request
+from flask_jwt_extended import get_jwt_identity, jwt_required, unset_jwt_cookies
 
 from app.extensions import db
 from app.models import User
 from app.utils import auth
 from app.utils.decorators import token_required
-from app.utils.responses import api_error
-from app.utils.responses import api_ok
+from app.utils.responses import api_error, api_ok
 
 bp = Blueprint("auth", __name__)
 
@@ -19,19 +18,29 @@ def _set_auth_cookies(resp, tokens, remember=False):
     verify_jwt_in_request() accepts them via JWT_TOKEN_LOCATION cookies.
     JS API calls keep using the Authorization header.
     """
-    access_max_age = int(current_app.config.get("JWT_ACCESS_TOKEN_EXPIRES", 900).total_seconds())
+    access_max_age = int(
+        current_app.config.get("JWT_ACCESS_TOKEN_EXPIRES", 900).total_seconds()
+    )
     refresh_max_age = (30 if remember else 7) * 24 * 3600
     secure = bool(current_app.config.get("JWT_COOKIE_SECURE", False))
     samesite = current_app.config.get("JWT_COOKIE_SAMESITE", "Strict")
     resp.set_cookie(
         current_app.config.get("JWT_ACCESS_COOKIE_NAME", "access_token"),
-        tokens["access_token"], max_age=access_max_age,
-        httponly=True, secure=secure, samesite=samesite, path="/",
+        tokens["access_token"],
+        max_age=access_max_age,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        path="/",
     )
     resp.set_cookie(
         current_app.config.get("JWT_REFRESH_COOKIE_NAME", "refresh_token"),
-        tokens["refresh_token"], max_age=refresh_max_age,
-        httponly=True, secure=secure, samesite=samesite, path="/",
+        tokens["refresh_token"],
+        max_age=refresh_max_age,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        path="/",
     )
     return resp
 
@@ -56,7 +65,15 @@ def register():
 
     remember = data.get("remember", False)
     tokens = auth.create_tokens(user.id, user.role.value, user.email, remember)
-    resp, code = api_ok({"user": user.to_dict(), "access_token": tokens["access_token"], "refresh_token": tokens["refresh_token"]}, "User created.", 201)
+    resp, code = api_ok(
+        {
+            "user": user.to_dict(),
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+        },
+        "User created.",
+        201,
+    )
     # Also set JWT cookies so plain browser navigation (admin HTML pages) carries auth.
     # JS API calls keep using the Authorization header; tests use headers-only config.
     _set_auth_cookies(resp, tokens, remember)
@@ -79,8 +96,19 @@ def login():
     db.session.commit()
 
     remember = data.get("remember", False)
-    tokens = auth.create_tokens(user.id, user.role.value, user.email, remember)
-    resp, code = api_ok({"user": user.to_dict(), "access_token": tokens["access_token"], "refresh_token": tokens["refresh_token"]})
+    instance_id = _scoped_instance_id(user, data.get("instance_id"))
+    if instance_id is False:
+        return api_error("No membership for this instance.", 403)
+    tokens = auth.create_tokens(
+        user.id, user.role.value, user.email, remember, instance_id
+    )
+    resp, code = api_ok(
+        {
+            "user": user.to_dict(),
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+        }
+    )
     # Also set JWT cookies so plain browser navigation (admin HTML pages) carries auth.
     _set_auth_cookies(resp, tokens, remember)
     return resp, code
@@ -92,12 +120,50 @@ def refresh():
     refresh_token = request.json.get("refresh_token") if request.is_json else None
     if not refresh_token:
         return api_error("Refresh token required.", 400)
-    
-    tokens = auth.refresh_access_token(refresh_token)
+
+    data = request.get_json(silent=True) or {}
+    instance_id = data.get("instance_id")
+    if instance_id:
+        from app.models import RefreshToken as RefreshTokenModel
+
+        token_obj = RefreshTokenModel.verify_token(refresh_token)
+        if not token_obj or not token_obj.is_valid():
+            return api_error("Invalid or expired refresh token.", 401)
+        from app.models import User as UserModel
+
+        user = UserModel.query.get(token_obj.user_id)
+        if _scoped_instance_id(user, instance_id) is False:
+            return api_error("No membership for this instance.", 403)
+
+    tokens = auth.refresh_access_token(refresh_token, instance_id)
     if not tokens:
         return api_error("Invalid or expired refresh token.", 401)
-    
+
     return api_ok(tokens)
+
+
+def _scoped_instance_id(user, raw):
+    """Validate an optional login/refresh instance_id.
+
+    Returns the id string, None (unscoped legacy), or False (rejected).
+    """
+    if not raw:
+        return None
+    from app.models import Instance, Membership
+
+    try:
+        import uuid as uuid_mod
+
+        iid = uuid_mod.UUID(str(raw))
+    except (ValueError, TypeError):
+        return False
+    if not Instance.query.get(iid):
+        return False
+    if Membership.is_site_admin(user.id):
+        return str(iid)
+    if Membership.get_role(user.id, iid) is None:
+        return False
+    return str(iid)
 
 
 @bp.route("/me", methods=["GET"])
@@ -111,14 +177,14 @@ def me(current_user):
 def update_user_settings(current_user):
     """Update user-specific settings."""
     data = request.get_json(silent=True) or {}
-    
+
     if "can_create_ideas" in data:
         value = data["can_create_ideas"]
         if not isinstance(value, bool):
             return api_error("can_create_ideas must be a boolean.", status_code=400)
         current_user.can_create_ideas = value
         db.session.commit()
-    
+
     return api_ok({"user": current_user.to_dict()})
 
 
