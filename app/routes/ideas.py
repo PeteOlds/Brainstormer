@@ -49,8 +49,8 @@ def list_ideas(user):
     if status and status.upper() not in ("ACTIVE_ONLY", "ALL"):
         query = query.filter(Idea.status == status.upper())
     elif status and status.upper() == "ACTIVE_ONLY":
-        # ACTIVE_ONLY is a frontend-only filter - exclude DISCARDED ideas
-        query = query.filter(Idea.status != "DISCARDED")
+        # ACTIVE_ONLY is a frontend-only filter - exclude dropped/archived ideas
+        query = query.filter(Idea.status.notin_(["DROP", "ARCHIVE"]))
     # 'ALL' (or absent) means no status filter.
     if search:
         like = f"%{search}%"
@@ -174,7 +174,7 @@ def create_idea(user):
         prompt_title=prompt_title,
         raw_content=raw_content,
         structured_content=structured_content,
-        status="NEW",
+        status="SPARK",
         prompt_config_id=None,  # Manual ideas have no associated prompt config
     )
     stamp(idea)
@@ -283,7 +283,7 @@ def update_idea_status(user, idea_id):
         return api_error("ACTIVE_ONLY is not a valid status value", status_code=400)
 
     try:
-        from app.models import IdeaStatus
+        from app.models.lifecycle import allowed_from, can_transition
 
         new_status_enum = IdeaStatus[new_status.upper()]
     except KeyError:
@@ -292,6 +292,13 @@ def update_idea_status(user, idea_id):
     old_status = idea.status
     if old_status == new_status_enum:
         return api_ok(idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)))
+    if not can_transition(old_status, new_status_enum):
+        return api_error(
+            f"Illegal transition {old_status.value} -> {new_status_enum.value}. "
+            f"Allowed: {', '.join(allowed_from(old_status)) or 'none (terminal)'}.",
+            status_code=400,
+            error_code="ILLEGAL_TRANSITION",
+        )
 
     # Update status
     idea.status = new_status_enum
@@ -324,26 +331,33 @@ def bulk_update_idea_status(user):
         return api_error("Missing required field: status", status_code=400)
 
     try:
+        from app.models.lifecycle import can_transition
+
         new_status_enum = IdeaStatus[new_status.upper()]
     except KeyError:
         return api_error(f"Invalid status: {new_status}", status_code=400)
 
     ideas = Idea.query.filter(Idea.id.in_(idea_ids)).all()
     updated_count = 0
+    skipped_illegal = 0
     for idea in ideas:
         if check_access(idea) is not None:
             continue  # Other instances' ideas are silently skipped.
-        if idea.status != new_status_enum:
-            history = IdeaStatusHistory(
-                idea_id=idea.id,
-                changed_by_id=user.id,
-                old_status=idea.status,
-                new_status=new_status_enum,
-            )
-            stamp(history)
-            db.session.add(history)
-            idea.status = new_status_enum
-            updated_count += 1
+        if idea.status == new_status_enum:
+            continue
+        if not can_transition(idea.status, new_status_enum):
+            skipped_illegal += 1
+            continue
+        history = IdeaStatusHistory(
+            idea_id=idea.id,
+            changed_by_id=user.id,
+            old_status=idea.status,
+            new_status=new_status_enum,
+        )
+        stamp(history)
+        db.session.add(history)
+        idea.status = new_status_enum
+        updated_count += 1
 
     db.session.commit()
 
@@ -351,6 +365,7 @@ def bulk_update_idea_status(user):
         {
             "updated_count": updated_count,
             "total_selected": len(idea_ids),
+            "skipped_illegal": skipped_illegal,
             "status": new_status_enum.value,
         }
     )
@@ -455,10 +470,26 @@ def run_action(user, idea_id):
         )
     action_type = entry["key"]
 
-    # PRD/Design docs are Design-stage only.
-    if action_type in ("PRD_DOC", "DESIGN_DOC") and idea.status.value != "DESIGN":
+    # V2 stage gates (PRD_V2 §5.4): dropped/archived ideas are read-only
+    # history; PRD unlocks at Scope; Design docs unlock at Map.
+    from app.models.lifecycle import (
+        ACTIONS_BLOCKED_STATES,
+        DESIGN_DOC_STATES,
+        PRD_MIN_STATES,
+    )
+
+    if idea.status in ACTIONS_BLOCKED_STATES:
         return api_error(
-            "PRD and Design actions require the idea to be in DESIGN status.",
+            "No actions can run on dropped or archived ideas.", status_code=400
+        )
+    if action_type == "PRD_DOC" and idea.status not in PRD_MIN_STATES:
+        return api_error(
+            "PRD creation requires the idea to reach Scope stage.",
+            status_code=400,
+        )
+    if action_type == "DESIGN_DOC" and idea.status not in DESIGN_DOC_STATES:
+        return api_error(
+            "Design documents require the idea to reach Map stage.",
             status_code=400,
         )
     # Design doc requires an existing PRD (pipeline order: PRD first).
@@ -576,7 +607,14 @@ def get_actions(user, idea_id):
     return api_ok({"results": [a.to_dict() for a in actions]})
 
 
-def _doc_comment_tree(result):
+def _can_see_flags(user) -> bool:
+    """Ignore-flag visibility: legacy admins and instance admins only."""
+    if user.role.value == "ADMIN":
+        return True
+    return current_instance_role() in ("INSTANCE_ADMIN", "SITE_ADMIN")
+
+
+def _doc_comment_tree(result, include_flag=False):
     """Threaded comments scoped to one document version, oldest first."""
     comments = (
         Comment.query.filter_by(action_result_id=result.id, scope="doc")
@@ -597,6 +635,7 @@ def _doc_comment_tree(result):
             child.to_dict(
                 author_name=authors.get(child.user_id, "Unknown"),
                 children=build(child),
+                include_flag=include_flag,
             )
             for child in by_parent.get(node.id if node else None, [])
         ]
@@ -612,7 +651,7 @@ def list_doc_comments(user, result_id):
     denied = check_access(result)
     if denied is not None:
         return denied
-    return api_ok({"comments": _doc_comment_tree(result)})
+    return api_ok({"comments": _doc_comment_tree(result, _can_see_flags(user))})
 
 
 @bp.route("/actions/<uuid:result_id>/comments", methods=["POST"])
@@ -652,10 +691,17 @@ def create_doc_comment(user, result_id):
         action_result_id=result.id,
     )
     stamp(comment)
+    doc_idea = Idea.query.get(result.idea_id)
+    comment.phase = doc_idea.status.value if doc_idea is not None else None
     db.session.add(comment)
     db.session.commit()
     return api_created(
-        {"comment": comment.to_dict(author_name=user.name or user.email)}
+        {
+            "comment": comment.to_dict(
+                author_name=user.name or user.email,
+                include_flag=_can_see_flags(user),
+            )
+        }
     )
 
 
@@ -722,13 +768,12 @@ def _edit_history(idea_id):
     return [e.to_dict(editor_name=names.get(e.editor_id, "Unknown")) for e in edits]
 
 
-def _comment_tree(idea_id):
+def _comment_tree(idea_id, phase=None, include_flag=False):
     """Nested comment tree for an idea, oldest first, with author names."""
-    comments = (
-        Comment.query.filter_by(idea_id=idea_id, scope="idea")
-        .order_by(Comment.created_at)
-        .all()
-    )
+    query = Comment.query.filter_by(idea_id=idea_id, scope="idea")
+    if phase:
+        query = query.filter_by(phase=phase)
+    comments = query.order_by(Comment.created_at).all()
     authors = {}
     user_ids = {c.user_id for c in comments}
     if user_ids:
@@ -743,6 +788,7 @@ def _comment_tree(idea_id):
             child.to_dict(
                 author_name=authors.get(child.user_id, "Unknown"),
                 children=build(child),
+                include_flag=include_flag,
             )
             for child in by_parent.get(node.id if node else None, [])
         ]
@@ -753,12 +799,20 @@ def _comment_tree(idea_id):
 @bp.route("/ideas/<uuid:idea_id>/comments", methods=["GET"])
 @token_required
 def list_comments(user, idea_id):
-    """Nested comment thread for an idea."""
+    """Nested comment thread for an idea (?phase= filters to one phase)."""
     idea = Idea.query.get_or_404(idea_id)
     denied = check_access(idea)
     if denied is not None:
         return denied
-    return api_ok({"comments": _comment_tree(idea_id)})
+    phase = (request.args.get("phase") or "").upper() or None
+    if phase:
+        from app.models import IdeaStatus
+
+        try:
+            IdeaStatus[phase]
+        except KeyError:
+            return api_error(f"Invalid phase: {phase}", status_code=400)
+    return api_ok({"comments": _comment_tree(idea_id, phase, _can_see_flags(user))})
 
 
 @bp.route("/ideas/<uuid:idea_id>/comments", methods=["POST"])
@@ -794,10 +848,16 @@ def create_comment(user, idea_id):
         body=body,
     )
     stamp(comment)
+    comment.phase = idea.status.value
     db.session.add(comment)
     db.session.commit()
     return api_created(
-        {"comment": comment.to_dict(author_name=user.name or user.email)}
+        {
+            "comment": comment.to_dict(
+                author_name=user.name or user.email,
+                include_flag=_can_see_flags(user),
+            )
+        }
     )
 
 
@@ -846,6 +906,36 @@ def delete_comment(user, comment_id):
     comment.body = "[deleted]"
     db.session.commit()
     return api_ok({"deleted": str(comment.id)})
+
+
+@bp.route("/comments/<uuid:comment_id>/flag", methods=["PATCH"])
+@admin_required
+def flag_comment(user, comment_id):
+    """Toggle the admin-only Ignore flag (excluded from AI context).
+
+    The flag is visible to admins only and every toggle writes an
+    IdeaEdit audit row.
+    """
+    comment = Comment.query.get_or_404(comment_id)
+    denied = check_access(comment)
+    if denied is not None:
+        return denied
+    data = request.get_json(silent=True) or {}
+    if "is_ignored" not in data or not isinstance(data["is_ignored"], bool):
+        return api_error("is_ignored must be a boolean.", status_code=400)
+    if comment.is_ignored != data["is_ignored"]:
+        audit = IdeaEdit(
+            idea_id=comment.idea_id,
+            editor_id=user.id,
+            field=f"comment:{comment.id}:is_ignored",
+            old_value=str(comment.is_ignored),
+            new_value=str(data["is_ignored"]),
+        )
+        stamp(audit)
+        db.session.add(audit)
+        comment.is_ignored = data["is_ignored"]
+        db.session.commit()
+    return api_ok({"comment": comment.to_dict(include_flag=True)})
 
 
 EDITABLE_FIELDS = ("prompt_title", "raw_content", "structured_content")

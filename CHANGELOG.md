@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.31.0] - 2026-09-29
+### Added
+- Phase 2 V2 lifecycle: 8-state `IdeaStatus` (Spark/Scope/Map/Ship/Scale/Drop/Freeze/Archive) with transition matrix enforcement (`ILLEGAL_TRANSITION` 400, bulk skips with count), per-phase comment threads (`phase` column + `?phase=` filter + composite index), admin-only Ignore flag (`PATCH /comments/<id>/flag`, hidden from users, excluded from all AI context, IdeaEdit-audited), stage-gated secondary actions (PRD at Scope+, Design docs at Map+, nothing on Drop/Archive), Jinja UI rewritten to V2 states with always-confirm status changes, transactional-safe enum migration with V1 map (PRD-bearing DESIGN ideas become MAP), fixed latent `Comment.user` crash in context builder
+
 ## [0.30.0] - 2026-09-29
 ### Added
 - Phase 1 tenancy foundation: `instances` + `memberships` (string roles, NULL = site-wide grant), `instance_id` on all tenant tables, JWT `instance_id` claim (optional; legacy tokens stay unscoped), membership-enforcing decorators plus `site_admin_required`, per-request scoping on ideas/prompts/admin/tasks/embeddings/Slack, LiteLLM-ready task instance threading, `/api/v1/instances` CRUD, copy-on-create from Instance 1 (config only, Slack cleared, keys never copied), `init-tenancy / promote-site-admin / create-instance` CLI, reserved numbers 2-19, Postgres RLS failsafe migration, tenancy runbook in `docs/install-config.md`

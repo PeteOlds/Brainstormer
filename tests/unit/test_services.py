@@ -4,13 +4,20 @@ import json
 
 from app.services.ollama_client import OllamaClient, OllamaError
 from app.services.prompt_templates import (
-    PromptTemplate, get_base_prompt, get_refine_prompt,
-    get_competitors_prompt, get_feasibility_prompt, get_prompt_template
+    PromptTemplate,
+    get_base_prompt,
+    get_refine_prompt,
+    get_competitors_prompt,
+    get_feasibility_prompt,
+    get_prompt_template,
 )
 from app.utils.markdown import render_markdown_safe, render_markdown_to_text
 from app.schemas.ollama_schemas import (
-    RefineOutput, CompetitorsOutput, FeasibilityOutput,
-    validate_ollama_output, Verdict
+    RefineOutput,
+    CompetitorsOutput,
+    FeasibilityOutput,
+    validate_ollama_output,
+    Verdict,
 )
 
 
@@ -29,8 +36,8 @@ class TestOllamaClient:
             ]
         }
         mock_response.raise_for_status = Mock()
-        
-        with patch.object(client._client, 'get', return_value=mock_response):
+
+        with patch.object(client._client, "get", return_value=mock_response):
             models = await client.list_models()
             assert len(models) == 2
             assert models[0]["name"] == "llama3:8b"
@@ -40,28 +47,31 @@ class TestOllamaClient:
         mock_response = Mock()
         mock_response.json.return_value = {
             "response": '{"elevator_pitch": "Test", "target_audience": "Devs", "core_value_proposition": "Speed", "monetization_strategy": "SaaS"}',
-            "done": True
+            "done": True,
         }
         mock_response.raise_for_status = Mock()
-        
-        with patch.object(client._client, 'post', return_value=mock_response):
+
+        with patch.object(client._client, "post", return_value=mock_response):
             result = await client.generate(
                 model="llama3:8b",
                 prompt="Test prompt",
                 system="System prompt",
-                format="json"
+                format="json",
             )
             assert "response" in result
             assert result["done"] is True
 
     @pytest.mark.asyncio
     async def test_generate_error(self, client):
-        with patch.object(client._client, 'post', side_effect=Exception("Connection failed")):
+        with patch.object(
+            client._client, "post", side_effect=Exception("Connection failed")
+        ):
             with pytest.raises(Exception):
                 await client.generate(model="llama3:8b", prompt="Test")
 
     def test_generate_sync(self, client):
         import httpx as _httpx
+
         mock_response = Mock()
         mock_response.json.return_value = {"response": "test", "done": True}
         mock_response.raise_for_status = Mock()
@@ -69,7 +79,7 @@ class TestOllamaClient:
         mock_client.__enter__ = Mock(return_value=mock_client)
         mock_client.__exit__ = Mock(return_value=False)
         mock_client.post = Mock(return_value=mock_response)
-        with patch.object(_httpx, 'Client', return_value=mock_client):
+        with patch.object(_httpx, "Client", return_value=mock_client):
             result = client.generate_sync(model="llama3:8b", prompt="Test")
             assert result == {"response": "test", "done": True}
             assert mock_client.post.call_args.kwargs["json"]["model"] == "llama3:8b"
@@ -78,6 +88,7 @@ class TestOllamaClient:
         """Regression: reusing one client across calls must not hit a
         closed event loop (prod: strict-retry second call died)."""
         import httpx as _httpx
+
         mock_response = Mock()
         mock_response.json.return_value = {"response": "{}", "done": True}
         mock_response.raise_for_status = Mock()
@@ -85,7 +96,7 @@ class TestOllamaClient:
         mock_client.__enter__ = Mock(return_value=mock_client)
         mock_client.__exit__ = Mock(return_value=False)
         mock_client.post = Mock(return_value=mock_response)
-        with patch.object(_httpx, 'Client', return_value=mock_client):
+        with patch.object(_httpx, "Client", return_value=mock_client):
             client.generate_sync(model="llama3:8b", prompt="first")
             result = client.generate_sync(model="llama3:8b", prompt="second")
             assert result["done"] is True
@@ -94,6 +105,7 @@ class TestOllamaClient:
     def test_generate_sync_http_error_carries_body(self, client):
         import httpx as _httpx
         from app.services.ollama_client import OllamaError
+
         request = Mock()
         response = Mock()
         response.status_code = 404
@@ -104,7 +116,7 @@ class TestOllamaClient:
         mock_client.__enter__ = Mock(return_value=mock_client)
         mock_client.__exit__ = Mock(return_value=False)
         mock_client.post = Mock(side_effect=err)
-        with patch.object(_httpx, 'Client', return_value=mock_client):
+        with patch.object(_httpx, "Client", return_value=mock_client):
             with pytest.raises(OllamaError) as exc_info:
                 client.generate_sync(model="x", prompt="Test")
             assert exc_info.value.status_code == 404
@@ -117,7 +129,9 @@ class TestOllamaClient:
         mock_response = Mock()
         mock_response.json.return_value = {"embedding": [0.1] * 768}
         mock_response.raise_for_status = Mock()
-        with patch.object(client._client, 'post', return_value=mock_response) as mock_post:
+        with patch.object(
+            client._client, "post", return_value=mock_response
+        ) as mock_post:
             result = await client.embeddings(model="nomic-embed-text", prompt="hi")
             assert result["embedding"] == [0.1] * 768
             assert mock_post.call_args.args[0].endswith("/api/embeddings")
@@ -150,10 +164,10 @@ class TestPromptTemplates:
     def test_get_prompt_template(self):
         template = get_prompt_template("REFINE")
         assert isinstance(template, PromptTemplate)
-        
+
         template = get_prompt_template("COMPETITORS")
         assert isinstance(template, PromptTemplate)
-        
+
         template = get_prompt_template("FEASIBILITY_SCORE")
         assert isinstance(template, PromptTemplate)
 
@@ -206,23 +220,32 @@ class TestOllamaSchemas:
             "elevator_pitch": "A test elevator pitch that is long enough",
             "target_audience": "Developers",
             "core_value_proposition": "A core value proposition that is long enough",
-            "monetization_strategy": "SaaS model"
+            "monetization_strategy": "SaaS model",
         }
         output = RefineOutput(**data)
         assert output.elevator_pitch == "A test elevator pitch that is long enough"
 
     def test_refine_output_invalid(self):
         with pytest.raises(Exception):
-            RefineOutput(elevator_pitch="Short", target_audience="Devs", core_value_proposition="Speed", monetization_strategy="SaaS")
+            RefineOutput(
+                elevator_pitch="Short",
+                target_audience="Devs",
+                core_value_proposition="Speed",
+                monetization_strategy="SaaS",
+            )
 
     def test_competitors_output_valid(self):
         data = {
             "direct_competitors": [
-                {"name": "Competitor A", "description": "A description", "advantage_over_idea": "An advantage"}
+                {
+                    "name": "Competitor A",
+                    "description": "A description",
+                    "advantage_over_idea": "An advantage",
+                }
             ],
             "indirect_competitors": ["Excel"],
             "differentiator": "Unique feature",
-            "barriers_to_entry": ["High cost"]
+            "barriers_to_entry": ["High cost"],
         }
         output = CompetitorsOutput(**data)
         assert len(output.direct_competitors) == 1
@@ -231,11 +254,17 @@ class TestOllamaSchemas:
         data = {
             "overall_score": 7.5,
             "scores": {
-                "technical_feasibility": {"score": 8, "reasoning": "Easy to build with standard tools"},
+                "technical_feasibility": {
+                    "score": 8,
+                    "reasoning": "Easy to build with standard tools",
+                },
                 "market_demand": {"score": 7, "reasoning": "Good demand in the market"},
-                "capital_efficiency": {"score": 8, "reasoning": "Low capital requirement"}
+                "capital_efficiency": {
+                    "score": 8,
+                    "reasoning": "Low capital requirement",
+                },
             },
-            "verdict": "RECOMMENDED"
+            "verdict": "RECOMMENDED",
         }
         output = FeasibilityOutput(**data)
         assert output.overall_score == 7.5
@@ -248,6 +277,7 @@ class TestOllamaSchemas:
 
     def test_validate_five_forces_output(self):
         from app.schemas.ollama_schemas import FiveForcesOutput
+
         json_str = '{"competitive_rivalry": "Several entrenched players compete on price and features in a growing market.", "threat_of_substitutes": "Spreadsheets and manual processes remain common workarounds.", "threat_of_new_entrants": "Moderate capital needs but strong brand loyalty protects incumbents.", "bargaining_power_of_buyers": "Fragmented buyers with low switching costs are price sensitive.", "bargaining_power_of_suppliers": "Commodity inputs from many vendors keep supplier power low.", "market_attractiveness": "Attractive niche with clear differentiation openings.", "primary_risks": ["Price war", "Platform dependency"], "recommendations": ["Own a narrow vertical first", "Build switching costs via integrations"]}'
         result = validate_ollama_output("FIVE_FORCES", json_str)
         assert isinstance(result, FiveForcesOutput)
@@ -255,11 +285,13 @@ class TestOllamaSchemas:
 
     def test_validate_five_forces_missing_field(self):
         import pytest as _pytest
+
         with _pytest.raises(Exception):
             validate_ollama_output("FIVE_FORCES", '{"competitive_rivalry": "x"}')
 
     def test_validate_pestel_output(self):
         from app.schemas.ollama_schemas import PestelOutput
+
         json_str = '{"political": "Stable policy environment with supportive startup legislation in place.", "economic": "Moderate inflation with steady consumer spending power overall.", "social": "Growing sustainability culture among younger demographics today.", "technological": "Rapid AI tooling advances lower build costs significantly.", "environmental": "Tightening packaging rules raise compliance costs somewhat.", "legal": "Standard consumer protection plus GDPR-style privacy duties.", "opportunities": ["Green subsidies"], "threats": ["Recession"], "recommendations": ["Launch in subsidised regions"]}'
         result = validate_ollama_output("PESTEL", json_str)
         assert isinstance(result, PestelOutput)
@@ -267,6 +299,7 @@ class TestOllamaSchemas:
 
     def test_validate_competitors_output(self):
         from app.schemas.ollama_schemas import CompetitorsOutput
+
         json_str = '{"direct_competitors": [{"name": "Acme", "description": "Market leader", "advantage_over_idea": "Brand recognition"}], "indirect_competitors": ["Spreadsheets"], "differentiator": "Local focus", "barriers_to_entry": ["Network effects"]}'
         result = validate_ollama_output("COMPETITORS", json_str)
         assert isinstance(result, CompetitorsOutput)
@@ -276,9 +309,11 @@ class TestOllamaSchemas:
         """Small models omit fields — partial output must validate with
         defaults rather than fail the run (UI regression)."""
         from app.schemas.ollama_schemas import CompetitorsOutput
+
         result = validate_ollama_output(
             "COMPETITORS",
-            '{"direct_competitors": [{"name": "Acme"}], "differentiator": "Local focus"}')
+            '{"direct_competitors": [{"name": "Acme"}], "differentiator": "Local focus"}',
+        )
         assert isinstance(result, CompetitorsOutput)
         assert result.direct_competitors[0].description == ""
         assert result.indirect_competitors == []
@@ -286,7 +321,8 @@ class TestOllamaSchemas:
 
     def test_validate_competitors_empty_output(self):
         from app.schemas.ollama_schemas import CompetitorsOutput
-        result = validate_ollama_output("COMPETITORS", '{}')
+
+        result = validate_ollama_output("COMPETITORS", "{}")
         assert isinstance(result, CompetitorsOutput)
         assert result.direct_competitors == []
 
@@ -294,6 +330,7 @@ class TestOllamaSchemas:
         """Recorded prod failure: PESTEL `political` arrived as a list of
         junk objects. Usable strings are joined; the run survives."""
         from app.schemas.ollama_schemas import PestelOutput
+
         long_text = "Stable policy environment with supportive startup rules."
         json_str = (
             '{"political": [{"_id": "governance_stub"}, "Stable policy environment with supportive startup rules."], '
@@ -312,6 +349,7 @@ class TestOllamaSchemas:
     def test_validate_coerces_list_shaped_refine(self):
         """Recorded prod failure: Refine `elevator_pitch` arrived as a list."""
         from app.schemas.ollama_schemas import RefineOutput
+
         json_str = (
             '{"elevator_pitch": ["A focused elevator pitch long enough here"], '
             '"target_audience": "Developers", '
@@ -332,6 +370,7 @@ class TestOllamaSchemas:
             '"key_assumptions": ["Pricing holds"]}'
         )
         from app.schemas.ollama_schemas import MarketSizingOutput
+
         result = validate_ollama_output("MARKET_SIZING", json_str)
         assert isinstance(result, MarketSizingOutput)
         assert "1.4B" in result.tam
@@ -340,15 +379,19 @@ class TestOllamaSchemas:
         """Recorded prod failure: truncated FIVE_FORCES JSON must still raise
         (so the retry path engages) rather than validate garbage."""
         import pytest as _pytest
+
         with _pytest.raises(Exception):
-            validate_ollama_output("FIVE_FORCES", '{"competitive_rivalry": "Several entrenched')
+            validate_ollama_output(
+                "FIVE_FORCES", '{"competitive_rivalry": "Several entrenched'
+            )
 
     def test_validate_unknown_action_lists_known(self):
         import pytest as _pytest
+
         with _pytest.raises(ValueError, match="NO_SUCH_ACTION"):
-            validate_ollama_output("NO_SUCH_ACTION", '{}')
+            validate_ollama_output("NO_SUCH_ACTION", "{}")
         try:
-            validate_ollama_output("NO_SUCH_ACTION", '{}')
+            validate_ollama_output("NO_SUCH_ACTION", "{}")
         except ValueError as e:
             assert "REFINE" in str(e) and "VRIO" in str(e)
 
@@ -358,6 +401,7 @@ class TestOllamaSchemas:
 
     def test_validate_prd_output(self):
         from app.schemas.ollama_schemas import PrdOutput
+
         json_str = '{"executive_summary": "Problem X for audience Y with KPI Z clearly stated here.", "user_personas": "Primary persona works this way and feels that pain daily.", "product_scope": "MVP must-haves listed, nice-to-haves deferred to phase two.", "functional_requirements": "Given a user When they act Then the system responds accordingly.", "non_functional_requirements": "99.9% uptime, encrypted data, GDPR compliant posture.", "ux_guidelines": "Three-step flow with loading, empty and error states covered.", "assumptions_risks": "Depends on API Q with fallback and mitigation plan.", "open_questions": ["What is the pricing model?", "Which platform first?"]}'
         result = validate_ollama_output("PRD_DOC", json_str)
         assert isinstance(result, PrdOutput)
@@ -365,8 +409,27 @@ class TestOllamaSchemas:
 
     def test_validate_prd_too_many_questions(self):
         import pytest as _pytest
+
         qs = ", ".join(f'"q{i}"' for i in range(6))
-        json_str = '{"executive_summary": "' + "x" * 30 + '", "user_personas": "' + "x" * 30 + '", "product_scope": "' + "x" * 30 + '", "functional_requirements": "' + "x" * 30 + '", "non_functional_requirements": "' + "x" * 30 + '", "ux_guidelines": "' + "x" * 30 + '", "assumptions_risks": "' + "x" * 30 + '", "open_questions": [' + qs + ']}'
+        json_str = (
+            '{"executive_summary": "'
+            + "x" * 30
+            + '", "user_personas": "'
+            + "x" * 30
+            + '", "product_scope": "'
+            + "x" * 30
+            + '", "functional_requirements": "'
+            + "x" * 30
+            + '", "non_functional_requirements": "'
+            + "x" * 30
+            + '", "ux_guidelines": "'
+            + "x" * 30
+            + '", "assumptions_risks": "'
+            + "x" * 30
+            + '", "open_questions": ['
+            + qs
+            + "]}"
+        )
         with _pytest.raises(Exception):
             validate_ollama_output("PRD_DOC", json_str)
 
@@ -377,14 +440,17 @@ class TestOllamaSchemas:
         import json as _json
         from app.models import Idea
         from app.services.embedding_service import embedding_text
+
         idea = Idea(
             prompt_title="Weekend Activities",
-            raw_content=_json.dumps({
-                "elevator_pitch": "Guided night walks through Pakuranga forest",
-                "target_audience": "Local families",
-                "core_value_proposition": "Safe outdoor fun",
-                "monetization_strategy": "Ticket sales",
-            }),
+            raw_content=_json.dumps(
+                {
+                    "elevator_pitch": "Guided night walks through Pakuranga forest",
+                    "target_audience": "Local families",
+                    "core_value_proposition": "Safe outdoor fun",
+                    "monetization_strategy": "Ticket sales",
+                }
+            ),
         )
         text = embedding_text(idea)
         assert "Guided night walks through Pakuranga forest" in text
@@ -398,24 +464,32 @@ class TestDiscovery:
         d = base / dirname
         d.mkdir(parents=True, exist_ok=True)
         (d / "SKILL.md").write_text(
-            f"---\nname: {name}\ndescription: {desc}\n---\n\n# {name}\nBody here.\n")
+            f"---\nname: {name}\ndescription: {desc}\n---\n\n# {name}\nBody here.\n"
+        )
         return d
 
     def test_list_skills_parses_frontmatter(self, tmp_path, monkeypatch):
         from app.services.discovery import list_skills
+
         self._skill(tmp_path / "skills", "ux", "ux-pro", "Design help.")
         monkeypatch.setenv("SKILLS_DIRS", str(tmp_path / "skills"))
-        assert list_skills() == [{
-            "name": "ux-pro", "description": "Design help.",
-            "source": str(tmp_path / "skills")}]
+        assert list_skills() == [
+            {
+                "name": "ux-pro",
+                "description": "Design help.",
+                "source": str(tmp_path / "skills"),
+            }
+        ]
 
     def test_list_skills_missing_dir_is_empty(self, tmp_path, monkeypatch):
         from app.services.discovery import list_skills
+
         monkeypatch.setenv("SKILLS_DIRS", str(tmp_path / "nope"))
         assert list_skills() == []
 
     def test_read_skill_body(self, tmp_path, monkeypatch):
         from app.services.discovery import read_skill_body
+
         self._skill(tmp_path / "skills", "ux", "ux-pro", "Design help.")
         monkeypatch.setenv("SKILLS_DIRS", str(tmp_path / "skills"))
         assert "# ux-pro" in read_skill_body("ux-pro")
@@ -423,14 +497,21 @@ class TestDiscovery:
 
     def test_list_and_read_guidelines(self, tmp_path, monkeypatch):
         from app.services import discovery as disc
+
         (tmp_path / "tone.md").write_text("# Tone\nBe crisp.\n")
         monkeypatch.setenv("GUIDELINES_DIR", str(tmp_path))
         assert disc.list_guidelines() == [
-            {"name": "tone", "file": "tone.md", "size": (tmp_path / "tone.md").stat().st_size}]
+            {
+                "name": "tone",
+                "file": "tone.md",
+                "size": (tmp_path / "tone.md").stat().st_size,
+            }
+        ]
         assert "Be crisp" in disc.read_guideline("tone")
 
     def test_read_guideline_rejects_traversal(self, tmp_path, monkeypatch):
         from app.services import discovery as disc
+
         monkeypatch.setenv("GUIDELINES_DIR", str(tmp_path))
         assert disc.read_guideline("../secret") is None
         assert disc.read_guideline(".hidden") is None
@@ -446,6 +527,7 @@ class TestDiscovery:
             '"open_questions": ["Which auth provider?"]}'
         )
         from app.schemas.ollama_schemas import DesignDocOutput
+
         result = validate_ollama_output("DESIGN_DOC", json_str)
         assert isinstance(result, DesignDocOutput)
         assert result.open_questions == ["Which auth provider?"]
@@ -456,6 +538,7 @@ class TestTokenLifetime:
         """Regression: create_tokens hardcoded 15min, ignoring
         JWT_ACCESS_TOKEN_EXPIRES (users logged out every 15min)."""
         import jwt as pyjwt
+
         with app.app_context():
             from app.extensions import db
             from app.models import User
@@ -467,7 +550,9 @@ class TestTokenLifetime:
             db.session.commit()
 
             tokens = create_tokens(str(user.id), "USER", user.email)
-            payload = pyjwt.decode(tokens["access_token"], options={"verify_signature": False})
+            payload = pyjwt.decode(
+                tokens["access_token"], options={"verify_signature": False}
+            )
             expected = app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
             assert payload["exp"] - payload["iat"] == expected
 
@@ -475,13 +560,18 @@ class TestTokenLifetime:
 class TestBeatHeartbeat:
     def test_write_then_check_fresh(self):
         from app.tasks.maintenance_tasks import (
-            write_beat_heartbeat, check_beat_heartbeat, HEARTBEAT_KEY)
+            write_beat_heartbeat,
+            check_beat_heartbeat,
+            HEARTBEAT_KEY,
+        )
 
         class FakeRedis:
             def __init__(self):
                 self.d = {}
+
             def set(self, k, v):
                 self.d[k] = v
+
             def get(self, k):
                 return self.d.get(k)
 
@@ -522,16 +612,22 @@ class TestBeatHeartbeat:
 class TestSlackService:
     def test_no_token_returns_none(self, monkeypatch):
         from app.services import slack_service
+
         monkeypatch.delenv("SLACK_BOT_TOKEN", raising=False)
         assert slack_service.post_idea("#general", {"reference_code": "IDEA-1"}) is None
 
     def test_success_returns_ts(self):
         from unittest.mock import MagicMock
         from app.services import slack_service
+
         client = MagicMock()
         client.chat_postMessage.return_value = {"ts": "123.456", "ok": True}
-        ts = slack_service.post_idea("#general", {"reference_code": "IDEA-1", "status": "NEW"},
-                                     "http://x", client=client)
+        ts = slack_service.post_idea(
+            "#general",
+            {"reference_code": "IDEA-1", "status": "SPARK"},
+            "http://x",
+            client=client,
+        )
         assert ts == "123.456"
         kwargs = client.chat_postMessage.call_args.kwargs
         assert kwargs["channel"] == "#general"
@@ -540,10 +636,15 @@ class TestSlackService:
     def test_failure_returns_none(self):
         from unittest.mock import MagicMock
         from app.services import slack_service
+
         client = MagicMock()
         client.chat_postMessage.side_effect = RuntimeError("boom")
-        assert slack_service.post_idea("#general", {"reference_code": "IDEA-1"},
-                                       "http://x", client=client) is None
+        assert (
+            slack_service.post_idea(
+                "#general", {"reference_code": "IDEA-1"}, "http://x", client=client
+            )
+            is None
+        )
 
     def test_rate_limit_retries_once(self):
         from unittest.mock import MagicMock
@@ -555,8 +656,9 @@ class TestSlackService:
 
         client = MagicMock()
         client.chat_postMessage.side_effect = [RateLimited(), {"ts": "1.0", "ok": True}]
-        ts = slack_service.post_idea("#general", {"reference_code": "IDEA-1"},
-                                     "http://x", client=client)
+        ts = slack_service.post_idea(
+            "#general", {"reference_code": "IDEA-1"}, "http://x", client=client
+        )
         assert ts == "1.0"
         assert client.chat_postMessage.call_count == 2
 
@@ -564,26 +666,37 @@ class TestSlackService:
 class TestSlackReactions:
     def _seed_idea(self, db, ref="IDEA-SV"):
         from app.models import Idea, PromptConfig, User, UserRole
+
         admin = User(email="admin_slack@test.com", role=UserRole.ADMIN)
         admin.set_password("admin123")
         db.session.add(admin)
         db.session.commit()
         prompt = PromptConfig(
-            title="Slack Votes", prompt_body="Test", interval_minutes=60,
-            model_name="llama3:8b", created_by_id=admin.id)
+            title="Slack Votes",
+            prompt_body="Test",
+            interval_minutes=60,
+            model_name="llama3:8b",
+            created_by_id=admin.id,
+        )
         db.session.add(prompt)
         db.session.commit()
-        idea = Idea(reference_code=ref, prompt_title="T", raw_content="c",
-                    prompt_config_id=prompt.id)
+        idea = Idea(
+            reference_code=ref,
+            prompt_title="T",
+            raw_content="c",
+            prompt_config_id=prompt.id,
+        )
         db.session.add(idea)
         db.session.commit()
         return idea
 
     def _mock_client(self, email="voter@test.com"):
         from unittest.mock import MagicMock
+
         client = MagicMock()
         client.users_info.return_value = {
-            "user": {"profile": {"email": email}, "real_name": "Voter"}}
+            "user": {"profile": {"email": email}, "real_name": "Voter"}
+        }
         return client
 
     def test_provision_new_user_by_email(self, celery_app):
@@ -591,14 +704,13 @@ class TestSlackReactions:
             from app.extensions import db
             from app.models import User, UserRole
             from app.services import slack_service
-            user = slack_service.get_or_provision_user(
-                self._mock_client(), "U123")
+
+            user = slack_service.get_or_provision_user(self._mock_client(), "U123")
             assert user.email == "voter@test.com"
             assert user.role == UserRole.USER
             assert user.slack_user_id == "U123"
             # Second call resolves by slack id, no duplicate.
-            same = slack_service.get_or_provision_user(
-                self._mock_client(), "U123")
+            same = slack_service.get_or_provision_user(self._mock_client(), "U123")
             assert same.id == user.id
             assert User.query.filter_by(email="voter@test.com").count() == 1
 
@@ -607,12 +719,14 @@ class TestSlackReactions:
             from app.extensions import db
             from app.models import User, UserRole
             from app.services import slack_service
+
             admin = User(email="linked@test.com", role=UserRole.USER)
             admin.set_password("admin123")
             db.session.add(admin)
             db.session.commit()
             user = slack_service.get_or_provision_user(
-                self._mock_client("linked@test.com"), "U999")
+                self._mock_client("linked@test.com"), "U999"
+            )
             assert user.id == admin.id
             assert user.slack_user_id == "U999"
             assert user.role == UserRole.USER
@@ -622,6 +736,7 @@ class TestSlackReactions:
             from app.extensions import db
             from app.models import User, UserRole
             from app.services import slack_service
+
             idea = self._seed_idea(db)
             user = User(email="flip@test.com", role=UserRole.USER)
             user.set_password("admin123")
@@ -636,6 +751,7 @@ class TestSlackReactions:
     def test_event_dedup(self, celery_app):
         with celery_app.app_context():
             from app.services import slack_service
+
             assert slack_service.mark_event_seen("Ev001") is True
             assert slack_service.mark_event_seen("Ev001") is False
 
@@ -644,32 +760,63 @@ class TestSlackReactions:
             from app.extensions import db
             from app.models import SlackPost
             from app.services import slack_service
+
             idea = self._seed_idea(db, ref="IDEA-SE")
-            db.session.add(SlackPost(idea_id=idea.id, channel_id="C1",
-                                     message_ts="111.222"))
+            db.session.add(
+                SlackPost(idea_id=idea.id, channel_id="C1", message_ts="111.222")
+            )
             db.session.commit()
             client = self._mock_client("react@test.com")
             out = slack_service.handle_reaction_event(
                 client,
-                {"reaction": "+1", "user": "U555",
-                 "item": {"type": "message", "channel": "C1", "ts": "111.222"}},
-                event_id="Ev100", event_type="reaction_added")
+                {
+                    "reaction": "+1",
+                    "user": "U555",
+                    "item": {"type": "message", "channel": "C1", "ts": "111.222"},
+                },
+                event_id="Ev100",
+                event_type="reaction_added",
+            )
             assert out == "vote:net=1"
             # Redelivery is a no-op.
-            assert slack_service.handle_reaction_event(
-                client,
-                {"reaction": "+1", "user": "U555",
-                 "item": {"type": "message", "channel": "C1", "ts": "111.222"}},
-                event_id="Ev100", event_type="reaction_added") == "duplicate"
+            assert (
+                slack_service.handle_reaction_event(
+                    client,
+                    {
+                        "reaction": "+1",
+                        "user": "U555",
+                        "item": {"type": "message", "channel": "C1", "ts": "111.222"},
+                    },
+                    event_id="Ev100",
+                    event_type="reaction_added",
+                )
+                == "duplicate"
+            )
             # Unknown emoji ignored.
-            assert slack_service.handle_reaction_event(
-                client,
-                {"reaction": "eyes", "user": "U555",
-                 "item": {"type": "message", "channel": "C1", "ts": "111.222"}},
-                event_id="Ev101", event_type="reaction_added") == "ignored-reaction"
+            assert (
+                slack_service.handle_reaction_event(
+                    client,
+                    {
+                        "reaction": "eyes",
+                        "user": "U555",
+                        "item": {"type": "message", "channel": "C1", "ts": "111.222"},
+                    },
+                    event_id="Ev101",
+                    event_type="reaction_added",
+                )
+                == "ignored-reaction"
+            )
             # Unknown message ignored.
-            assert slack_service.handle_reaction_event(
-                client,
-                {"reaction": "+1", "user": "U555",
-                 "item": {"type": "message", "channel": "C9", "ts": "999.999"}},
-                event_id="Ev102", event_type="reaction_added") == "unknown-message"
+            assert (
+                slack_service.handle_reaction_event(
+                    client,
+                    {
+                        "reaction": "+1",
+                        "user": "U555",
+                        "item": {"type": "message", "channel": "C9", "ts": "999.999"},
+                    },
+                    event_id="Ev102",
+                    event_type="reaction_added",
+                )
+                == "unknown-message"
+            )

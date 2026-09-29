@@ -2,13 +2,16 @@ from enum import Enum
 
 
 class IdeaStatus(str, Enum):
-    NEW = "NEW"
-    CONSIDERATION = "CONSIDERATION"
-    HOLD = "HOLD"
-    DESIGN = "DESIGN"
-    BUILD = "BUILD"
-    COMPLETE = "COMPLETE"
-    DISCARDED = "DISCARDED"
+    """V2 lifecycle (PRD_V2 §5). Values are the canonical state names."""
+
+    SPARK = "SPARK"
+    SCOPE = "SCOPE"
+    MAP = "MAP"
+    SHIP = "SHIP"
+    SCALE = "SCALE"
+    DROP = "DROP"
+    FREEZE = "FREEZE"
+    ARCHIVE = "ARCHIVE"
 
 
 class PromptRunStatus(str, Enum):

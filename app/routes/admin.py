@@ -188,7 +188,7 @@ def _prompts_health():
             Idea.prompt_config_id == prompt.id, Idea.created_at >= cutoff
         )
         ideas_7d = ideas_q.count()
-        discarded = ideas_q.filter(Idea.status == IdeaStatus.DISCARDED).count()
+        discarded = ideas_q.filter(Idea.status == IdeaStatus.DROP).count()
         discard_pct = round(discarded / ideas_7d * 100) if ideas_7d else None
         avg_net = (
             db.session.query(func.avg(Idea.net_score))
@@ -577,7 +577,16 @@ def activity_stats(user):
         .group_by(Idea.status)
         .all()
     )
-    ideas_by_status = {"NEW": 0, "CONSIDERATION": 0, "DISCARDED": 0}
+    ideas_by_status = {
+        "SPARK": 0,
+        "SCOPE": 0,
+        "MAP": 0,
+        "SHIP": 0,
+        "SCALE": 0,
+        "DROP": 0,
+        "FREEZE": 0,
+        "ARCHIVE": 0,
+    }
     for status, count in idea_status_rows:
         ideas_by_status[status.value] = count
 

@@ -41,7 +41,9 @@ def seed_site():
     site = Instance(number=5, name="Production")
     db.session.add(site)
     db.session.flush()
-    db.session.add(Membership(user_id=admin.id, instance_id=site.id, role="INSTANCE_ADMIN"))
+    db.session.add(
+        Membership(user_id=admin.id, instance_id=site.id, role="INSTANCE_ADMIN")
+    )
 
     prompt = PromptConfig(
         title="Backup Prompt",
@@ -101,8 +103,8 @@ def seed_site():
         IdeaStatusHistory(
             idea_id=idea.id,
             changed_by_id=admin.id,
-            old_status=IdeaStatus.NEW,
-            new_status=IdeaStatus.CONSIDERATION,
+            old_status=IdeaStatus.SPARK,
+            new_status=IdeaStatus.SCOPE,
         )
     )
     db.session.add(SlackPost(idea_id=idea.id, channel_id="C123", message_ts="1.0"))

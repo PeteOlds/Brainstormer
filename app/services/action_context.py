@@ -3,6 +3,7 @@
 Collects all supporting material for an idea: comments, structured fields,
 prior secondary action results, votes. Truncated to fit token budget.
 """
+
 import json
 from typing import Any
 
@@ -34,23 +35,32 @@ def build_idea_context(idea: Idea, max_chars: int = 8000) -> str:
         if parts:
             sections.append("### Structured Content\n" + "\n".join(parts))
 
-    # 2. Comments (newest first, with authors)
+    # 2. Comments (newest first, with authors). Admin-ignored comments
+    # are excluded from every AI context (Phase 2 Ignore flag).
     comments = (
-        Comment.query.filter_by(idea_id=idea.id, is_deleted=False)
+        Comment.query.filter_by(idea_id=idea.id, is_deleted=False, is_ignored=False)
         .order_by(Comment.created_at.desc())
         .all()
     )
     if comments:
         comment_lines = []
         for c in comments:
-            author = c.user.name if c.user and c.user.name else (c.user.email if c.user else "Unknown")
+            author = (
+                c.user.name
+                if c.user and c.user.name
+                else (c.user.email if c.user else "Unknown")
+            )
             body = c.body[:500] + ("..." if len(c.body) > 500 else "")
-            comment_lines.append(f"- {author} ({c.created_at.strftime('%Y-%m-%d')}): {body}")
+            comment_lines.append(
+                f"- {author} ({c.created_at.strftime('%Y-%m-%d')}): {body}"
+            )
         sections.append("### Comments\n" + "\n".join(comment_lines))
 
     # 2b. Per-document discussion threads (PRD/Design versions)
     doc_comments = (
-        Comment.query.filter_by(idea_id=idea.id, scope="doc", is_deleted=False)
+        Comment.query.filter_by(
+            idea_id=idea.id, scope="doc", is_deleted=False, is_ignored=False
+        )
         .order_by(Comment.created_at.desc())
         .all()
     )
@@ -60,12 +70,20 @@ def build_idea_context(idea: Idea, max_chars: int = 8000) -> str:
             by_doc.setdefault(c.action_result_id, []).append(c)
         doc_lines = []
         results = SecondaryActionResult.query.filter(
-            SecondaryActionResult.id.in_(list(by_doc))).all()
-        label_by_id = {r.id: f"{r.action_type.replace('_', ' ').title()} v{r.version}" for r in results}
+            SecondaryActionResult.id.in_(list(by_doc))
+        ).all()
+        label_by_id = {
+            r.id: f"{r.action_type.replace('_', ' ').title()} v{r.version}"
+            for r in results
+        }
         for rid, thread in by_doc.items():
             label = label_by_id.get(rid, "Document")
             for c in thread:
-                author = c.user.name if c.user and c.user.name else (c.user.email if c.user else "Unknown")
+                author = (
+                    c.user.name
+                    if c.user and c.user.name
+                    else (c.user.email if c.user else "Unknown")
+                )
                 body = c.body[:300] + ("..." if len(c.body) > 300 else "")
                 doc_lines.append(f"- [{label}] {author}: {body}")
         if doc_lines:
@@ -90,12 +108,18 @@ def build_idea_context(idea: Idea, max_chars: int = 8000) -> str:
         sections.append("### Prior Analyses\n" + "\n".join(action_lines))
 
     # 4. Vote summary
-    upvotes = db.session.query(func.count(Vote.id)).filter(
-        Vote.idea_id == idea.id, Vote.value == 1
-    ).scalar() or 0
-    downvotes = db.session.query(func.count(Vote.id)).filter(
-        Vote.idea_id == idea.id, Vote.value == -1
-    ).scalar() or 0
+    upvotes = (
+        db.session.query(func.count(Vote.id))
+        .filter(Vote.idea_id == idea.id, Vote.value == 1)
+        .scalar()
+        or 0
+    )
+    downvotes = (
+        db.session.query(func.count(Vote.id))
+        .filter(Vote.idea_id == idea.id, Vote.value == -1)
+        .scalar()
+        or 0
+    )
     net = upvotes - downvotes
     vote_summary = f"Upvotes: {upvotes}, Downvotes: {downvotes}, Net: {net}"
     sections.append("### Votes\n" + vote_summary)
@@ -107,4 +131,4 @@ def build_idea_context(idea: Idea, max_chars: int = 8000) -> str:
 
     # Truncate from the end (preserve structured content, comments first)
     # Simple truncation with marker
-    return full[:max_chars - 100] + "\n\n[...truncated due to length...]"
+    return full[: max_chars - 100] + "\n\n[...truncated due to length...]"

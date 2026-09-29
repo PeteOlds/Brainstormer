@@ -22,7 +22,7 @@ class Idea(db.Model):
     # (equal) and silently skips the UPDATE. Always build a fresh dict.
     structured_content = db.Column(db.JSON)
     status = db.Column(
-        db.Enum(IdeaStatus), default=IdeaStatus.NEW, nullable=False, index=True
+        db.Enum(IdeaStatus), default=IdeaStatus.SPARK, nullable=False, index=True
     )
 
     # Cached voting metrics

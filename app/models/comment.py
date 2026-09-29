@@ -10,6 +10,10 @@ from app.models.types import GUID
 class Comment(db.Model):
     __tablename__ = "comments"
 
+    __table_args__ = (
+        db.Index("ix_comments_instance_idea_phase", "instance_id", "idea_id", "phase"),
+    )
+
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
     instance_id = db.Column(
         GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
@@ -40,6 +44,11 @@ class Comment(db.Model):
         nullable=True,
         index=True,
     )
+    # V2 lifecycle phase the comment was made in (filterable per phase).
+    phase = db.Column(db.String(20), nullable=True, index=True)
+    # Admin-only tickbox: ignored comments are hidden from normal users'
+    # payloads and excluded from every secondary action + Chat context.
+    is_ignored = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -61,8 +70,12 @@ class Comment(db.Model):
         lazy="dynamic",
     )
 
-    def to_dict(self, author_name=None, children=None):
-        return {
+    # Read-only author link used by context builders (Idea already
+    # backrefs `idea`; User defines no comment relationship to clash with).
+    user = db.relationship("User", foreign_keys="Comment.user_id", viewonly=True)
+
+    def to_dict(self, author_name=None, children=None, include_flag=False):
+        data = {
             "id": str(self.id),
             "idea_id": str(self.idea_id),
             "user_id": str(self.user_id),
@@ -71,6 +84,7 @@ class Comment(db.Model):
             "body": "[deleted]" if self.is_deleted else self.body,
             "is_deleted": self.is_deleted,
             "scope": self.scope,
+            "phase": self.phase,
             "action_result_id": (
                 str(self.action_result_id) if self.action_result_id else None
             ),
@@ -78,6 +92,9 @@ class Comment(db.Model):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "replies": children or [],
         }
+        if include_flag:
+            data["is_ignored"] = self.is_ignored
+        return data
 
     def __repr__(self):
         return f"<Comment {self.id} idea={self.idea_id} parent={self.parent_id}>"

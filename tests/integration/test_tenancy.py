@@ -183,13 +183,13 @@ def test_instance_admin_membership_unlocks_admin_routes(app, client):
 
     scoped = login(client, "iadmin@t.test", aid)
     res = client.patch(
-        f"/api/v1/ideas/{iid}/status", json={"status": "CONSIDERATION"}, headers=scoped
+        f"/api/v1/ideas/{iid}/status", json={"status": "SCOPE"}, headers=scoped
     )
     assert res.status_code == 200, res.get_json()
 
     unscoped = login(client, "iadmin@t.test")
     res = client.patch(
-        f"/api/v1/ideas/{iid}/status", json={"status": "HOLD"}, headers=unscoped
+        f"/api/v1/ideas/{iid}/status", json={"status": "FREEZE"}, headers=unscoped
     )
     assert res.status_code == 403
 

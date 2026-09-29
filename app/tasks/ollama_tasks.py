@@ -87,7 +87,7 @@ def _prompt_memory(prompt_config, limit_avoid=10, limit_explore=3):
     top = (
         Idea.query.filter(
             Idea.prompt_config_id == prompt_config.id,
-            Idea.status != IdeaStatus.DISCARDED,
+            Idea.status != IdeaStatus.DROP,
         )
         .order_by(Idea.net_score.desc(), Idea.created_at.desc())
         .limit(limit_explore)
@@ -283,7 +283,7 @@ def generate_idea(
             structured_content=structured.model_dump(),
             prompt_config_id=prompt_config.id,
             instance_id=prompt_config.instance_id,
-            status="NEW",
+            status="SPARK",
         )
         db.session.add(idea)
 
@@ -335,7 +335,7 @@ def generate_idea(
             )
             if matches:
                 duplicate_of, duplicate_score = matches[0]
-                idea.status = "DISCARDED"
+                idea.status = "DROP"
                 db.session.commit()
                 logger.info(
                     "idea_auto_discarded",

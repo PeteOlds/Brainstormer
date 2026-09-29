@@ -210,8 +210,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Breakdowns: horizontal bars rendered with vanilla JS (no Alpine
     // scope on this page). Rows link to the filtered Ideas page.
     const dotFor = (status) => ({
-        NEW: 'bg-blue-500', CONSIDERATION: 'bg-amber-400',
-        DISCARDED: 'bg-slate-400', SUCCESS: 'bg-emerald-500',
+        SPARK: 'bg-blue-500', SCOPE: 'bg-violet-400', MAP: 'bg-cyan-500',
+        SHIP: 'bg-indigo-500', SCALE: 'bg-emerald-500', DROP: 'bg-slate-400',
+        FREEZE: 'bg-purple-400', ARCHIVE: 'bg-amber-400', SUCCESS: 'bg-emerald-500',
         RUNNING: 'bg-blue-500', PENDING: 'bg-amber-400',
         FAILED: 'bg-red-500',
     }[String(status).toUpperCase()] || 'bg-slate-400');

@@ -32,13 +32,14 @@
                 <select id="status-filter" x-model="filters.status" class="block w-full pl-3 pr-10 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none">
                     <option value="ACTIVE_ONLY">Active Only (default)</option>
                     <option value="">All Statuses</option>
-                    <option value="NEW">New</option>
-                    <option value="DISCARDED">Discarded</option>
-                    <option value="CONSIDERATION">Consideration</option>
-                    <option value="DESIGN">Design</option>
-                    <option value="BUILD">Build</option>
-                    <option value="COMPLETE">Complete</option>
-                    <option value="HOLD">Hold</option>
+                    <option value="SPARK">Spark</option>
+                    <option value="SCOPE">Scope</option>
+                    <option value="MAP">Map</option>
+                    <option value="SHIP">Ship</option>
+                    <option value="SCALE">Scale</option>
+                    <option value="DROP">Drop</option>
+                    <option value="FREEZE">Freeze</option>
+                    <option value="ARCHIVE">Archive</option>
                 </select>
             </div>
             <div class="flex-1 sm:w-64">
@@ -160,13 +161,14 @@
                                             <div class="px-4 py-1 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Change Status</div>
                                             <select @change="changeStatus($event.target.value, idea.id); dropdownOpenId = null" class="w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" aria-label="Change status">
                                                 <option value="">Select status...</option>
-                                                <option value="NEW">New</option>
-                                                <option value="CONSIDERATION">Consideration</option>
-                                                <option value="DESIGN">Design</option>
-                                                <option value="HOLD">Hold</option>
-                                                <option value="BUILD">Build</option>
-                                                <option value="COMPLETE">Complete</option>
-                                                <option value="DISCARDED">Discarded</option>
+                                                <option value="SPARK">Spark</option>
+                                                <option value="SCOPE">Scope</option>
+                                                <option value="MAP">Map</option>
+                                                <option value="SHIP">Ship</option>
+                                                <option value="SCALE">Scale</option>
+                                                <option value="DROP">Drop</option>
+                                                <option value="FREEZE">Freeze</option>
+                                                <option value="ARCHIVE">Archive</option>
                                             </select>
                                             <hr class="border-slate-200 dark:border-slate-700 my-1">
                                             <button @click="confirmDiscard(idea, () => dropdownOpenId = null)" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Discard (hidden by the default filter)">
@@ -263,13 +265,14 @@
                     <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
                         <select x-model="bulkStatus" class="w-full sm:w-48 px-3 py-2 min-h-[44px] text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500" aria-label="Select new status">
                             <option value="">Change status to...</option>
-                            <option value="NEW">New</option>
-                            <option value="DISCARDED">Discarded</option>
-                            <option value="CONSIDERATION">Consideration</option>
-                            <option value="DESIGN">Design</option>
-                            <option value="BUILD">Build</option>
-                            <option value="COMPLETE">Complete</option>
-                            <option value="HOLD">Hold</option>
+                            <option value="SPARK">Spark</option>
+                            <option value="SCOPE">Scope</option>
+                            <option value="MAP">Map</option>
+                            <option value="SHIP">Ship</option>
+                            <option value="SCALE">Scale</option>
+                            <option value="DROP">Drop</option>
+                            <option value="FREEZE">Freeze</option>
+                            <option value="ARCHIVE">Archive</option>
                         </select>
                         <button @click="confirmBulkAction()" :disabled="bulkUpdating || !bulkStatus" class="w-full sm:w-auto px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
                             <span x-show="!bulkUpdating">Apply</span>
@@ -428,13 +431,14 @@
                             <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Run a new analysis from the <span class="font-medium">+ New</span> menu in the tab bar above.</p>
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <select @change="changeStatus($event.target.value, selectedIdea.id)" class="flex-1 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" :value="selectedIdea?.status">
-                                    <option value="NEW">New</option>
-                                    <option value="DISCARDED">Discarded</option>
-                                    <option value="CONSIDERATION">Consideration</option>
-                                    <option value="DESIGN">Design</option>
-                                    <option value="BUILD">Build</option>
-                                    <option value="COMPLETE">Complete</option>
-                                    <option value="HOLD">Hold</option>
+                                    <option value="SPARK">Spark</option>
+                                    <option value="SCOPE">Scope</option>
+                                    <option value="MAP">Map</option>
+                                    <option value="SHIP">Ship</option>
+                                    <option value="SCALE">Scale</option>
+                                    <option value="DROP">Drop</option>
+                                    <option value="FREEZE">Freeze</option>
+                                    <option value="ARCHIVE">Archive</option>
                                 </select>
                                 <button @click="startIdeaEdit()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Edit content</button>
                             </div>
@@ -642,7 +646,7 @@
                             </template>
                         </select>
                     </div>
-                    <div x-show="selectedIdea?.status === 'DESIGN'">
+                    <div x-show="['SCOPE', 'MAP', 'SHIP', 'SCALE', 'FREEZE'].includes(selectedIdea?.status)">
                         <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Skills</span>
                         <p x-show="!discoverySkills.length" class="text-xs text-slate-500 dark:text-slate-400">No opencode skills discovered. Mount skill directories and set SKILLS_DIRS.</p>
                         <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
@@ -919,7 +923,7 @@ function ideasApp() {
                     limit: this.pageSize,
                     sort_by: this.filters.sort,
                 });
-                // ACTIVE_ONLY is understood by the API (excludes DISCARDED).
+                // ACTIVE_ONLY is understood by the API (excludes DROP/ARCHIVE).
                 if (this.filters.status) {
                     params.append('status', this.filters.status);
                 }
@@ -1366,26 +1370,39 @@ function ideasApp() {
         },
 
         docActionVisible(actionKey) {
-            // PRD/Design generation is Design-stage only (menu is admin-only).
-            if (actionKey === 'PRD_DOC' || actionKey === 'DESIGN_DOC') {
-                return this.selectedIdea?.status === 'DESIGN';
+            // V2 stage gates: PRD unlocks at Scope, Design docs at Map.
+            // Dropped/archived ideas are read-only (menu is admin-only).
+            const st = this.selectedIdea?.status;
+            if (actionKey === 'PRD_DOC') {
+                return st && st !== 'SPARK' && st !== 'DROP' && st !== 'ARCHIVE';
+            }
+            if (actionKey === 'DESIGN_DOC') {
+                return ['MAP', 'SHIP', 'SCALE', 'FREEZE'].includes(st);
             }
             return true;
         },
 
         async confirmDiscard(idea, close) {
-            if (!confirm('Discard this idea? It will be hidden by the default filter.')) return;
-            await this.changeStatus('DISCARDED', idea.id);
+            if (!confirm('Drop this idea? It will be hidden by the default filter.')) return;
+            await this.changeStatus('DROP', idea.id, true);
             if (close) close();
         },
 
-        async changeStatus(status, ideaId) {            try {
+        async changeStatus(status, ideaId, confirmed) {
+            if (!status) return;
+            // Contract: the UI always prompts the admin on a status change.
+            if (!confirmed && !confirm(`Change status to ${status}?`)) {
+                await this.loadIdeas();
+                return;
+            }
+            try {
                 const response = await authFetch(`/api/v1/ideas/${ideaId}/status`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status })
                 });
-                if (!response.ok) throw new Error('Failed to update status');
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error((payload && payload.message) || 'Failed to update status');
                 await this.loadIdeas();
                 await this.loadTotalIdeas();
                 if (this.selectedIdea?.id === ideaId) {
@@ -1393,19 +1410,27 @@ function ideasApp() {
                 }
             } catch (error) {
                 alert('Failed to update status: ' + error.message);
+                await this.loadIdeas();
             }
         },
         
         async runAction(ideaId, actionType, extra) {
-            // PRD/Design docs are Design-stage only (admin enforced server-side too).
-            if (actionType === 'PRD_DOC' || actionType === 'DESIGN_DOC') {
-                const target = (this.selectedIdea?.id === ideaId)
-                    ? this.selectedIdea
-                    : (this.ideas || []).find(i => i.id === ideaId);
-                if (!target || target.status !== 'DESIGN') {
-                    alert('PRD and Design actions are only available when the idea status is Design.');
-                    return;
-                }
+            // V2 stage gates mirror the server (admin enforced server-side too).
+            const target = (this.selectedIdea?.id === ideaId)
+                ? this.selectedIdea
+                : (this.ideas || []).find(i => i.id === ideaId);
+            const st = target ? target.status : null;
+            if (st === 'DROP' || st === 'ARCHIVE') {
+                alert('No actions can run on dropped or archived ideas.');
+                return;
+            }
+            if (actionType === 'PRD_DOC' && (!st || st === 'SPARK')) {
+                alert('PRD creation requires the idea to reach Scope stage.');
+                return;
+            }
+            if (actionType === 'DESIGN_DOC' && !['MAP', 'SHIP', 'SCALE', 'FREEZE'].includes(st)) {
+                alert('Design documents require the idea to reach Map stage.');
+                return;
             }
             // Check if this action requires confirmation (Refine or PRD)
             if ((actionType === 'REFINE' || actionType === 'PRD_DOC') && this.selectedIdea) {
@@ -1635,10 +1660,9 @@ function ideasApp() {
         
         actionTabs() {
             const seen = [];
-            const inDesign = this.selectedIdea?.status === 'DESIGN';
             for (const a of (this.selectedIdea?.actions || [])) {
-                // PRD/Design documents only display on Design-stage ideas.
-                if ((a.action_type === 'PRD_DOC' || a.action_type === 'DESIGN_DOC') && !inDesign) continue;
+                // Existing result tabs always display (history survives
+                // every transition); creation is gated by docActionVisible.
                 if (!seen.find((t) => t.key === a.action_type)) {
                     const reg = (this.availableActions || []).find((r) => r.key === a.action_type);
                     const label = reg ? reg.label : a.action_type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1827,15 +1851,16 @@ function ideasApp() {
 
         getStatusClass(status) {
             const classes = {
-                'NEW': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-                'DISCARDED': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
-                'CONSIDERATION': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-                'DESIGN': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-                'BUILD': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-                'COMPLETE': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-                'HOLD': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+                'SPARK': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                'SCOPE': 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
+                'MAP': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+                'SHIP': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+                'SCALE': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+                'DROP': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+                'FREEZE': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+                'ARCHIVE': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
             };
-            return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${classes[status] || classes.NEW}`;
+            return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${classes[status] || classes.SPARK}`;
         },
         
         formatDate(dateStr) {

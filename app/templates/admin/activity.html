@@ -386,7 +386,7 @@ function activityApp() {
         },
 
         get ideaStatuses() {
-            const order = ['NEW', 'CONSIDERATION', 'HOLD', 'DESIGN', 'BUILD', 'COMPLETE', 'DISCARDED'];
+            const order = ['SPARK', 'SCOPE', 'MAP', 'SHIP', 'SCALE', 'DROP', 'FREEZE', 'ARCHIVE'];
             return order.map((s) => ({ status: s, count: (this.ideasByStatus || {})[s] || 0 }));
         },
 
@@ -441,13 +441,14 @@ function activityApp() {
                 'RUNNING': 'bg-blue-500 animate-pulse',
                 'SUCCESS': 'bg-emerald-500',
                 'FAILED': 'bg-red-500',
-                'NEW': 'bg-sky-500',
-                'CONSIDERATION': 'bg-violet-500',
-                'HOLD': 'bg-purple-500',
-                'DESIGN': 'bg-cyan-500',
-                'BUILD': 'bg-indigo-500',
-                'COMPLETE': 'bg-emerald-500',
-                'DISCARDED': 'bg-slate-400',
+                'SPARK': 'bg-sky-500',
+                'SCOPE': 'bg-violet-500',
+                'MAP': 'bg-cyan-500',
+                'SHIP': 'bg-indigo-500',
+                'SCALE': 'bg-emerald-500',
+                'DROP': 'bg-slate-400',
+                'FREEZE': 'bg-purple-500',
+                'ARCHIVE': 'bg-amber-500',
             }[status] || 'bg-slate-400';
         },
 

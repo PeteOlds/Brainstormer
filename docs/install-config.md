@@ -101,6 +101,12 @@ running: launch `<name>-new` alongside where ports allow, verify, then swap.
 # 3. flask db upgrade             # remaining migrations
 ```
 
+Exception: the V2 lifecycle migration (`f1a2b3c4d5e6`) rebuilds the
+`ideastatus` type (create new → convert with CASE → drop → rename) and
+runs fine inside one transaction — no psql workaround needed. It maps
+V1 values per PRD_V2 §5.3, promoting SCOPE ideas with a current PRD to
+MAP.
+
 ## Backups (Phase 0)
 
 Take a backup before every upgrade (golden rule). Encrypted blobs travel
