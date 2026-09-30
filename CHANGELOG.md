@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.36.0] - 2026-09-30
+### Added
+- Phase 7 Flutter replatform (`flutter/`, verified with Flutter 3.41.4): feature-first Riverpod app (auth with instance picker, ideas list/detail with vote/comments/phase filter/status change, chat tab, prompts with provider routing, admin dashboard/activity/users, instance settings with write-only keys and spend), single ApiClient with 401-refresh-retry, secure token storage, Inter/blue tokens with dark mode, version footer, web deep-link parity, 10 widget/unit tests plus a tracked golden, release web build proven. Backend: `LEGACY_WEB_ENABLED` flag (default on) with 410 retirement path for all Jinja routes. Deliberately deferred: push/offline, integration_test against staging, freezed codegen (hand-written models for now)
+
 ## [0.35.0] - 2026-09-30
 ### Added
 - Phase 6 backup GA: real per-instance export (tenant rows plus members and referenced authors; sessions and global event ids excluded by design) and scoped restore that never touches other instances, `restore-instance` CLI, self-service `GET /instances/<id>/export` download, daily `scheduled_site_backup` beat task with write-verify, site-restore scope guard, RTO runbook with measured drill record. `backup-instance` now requires an instance number or UUID

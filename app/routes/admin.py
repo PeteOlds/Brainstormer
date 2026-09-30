@@ -18,6 +18,25 @@ from app.utils.tenancy import apply_scope, current_instance_id
 # Blueprint for admin HTML pages (no URL prefix)
 admin_pages_bp = Blueprint("admin_pages", __name__)
 
+
+@admin_pages_bp.before_request
+def _legacy_web_gate():
+    """Same Phase 7 gate as pages: 410 when LEGACY_WEB_ENABLED is False."""
+    from flask import current_app, jsonify
+
+    if not current_app.config.get("LEGACY_WEB_ENABLED", True):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "This web UI is retired; use the Flutter client.",
+                }
+            ),
+            410,
+        )
+    return None
+
+
 # Blueprint for admin API routes (with /api/v1 prefix)
 admin_api_bp = Blueprint("admin_api", __name__)
 

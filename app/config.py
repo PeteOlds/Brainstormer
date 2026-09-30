@@ -90,6 +90,10 @@ class Config:
     # volume in production). No auto-pruning: files accumulate.
     BACKUP_DIR = get_env("BACKUP_DIR", "./backups")
 
+    # Legacy Jinja web UI (Phase 7): True keeps serving it; False makes
+    # the pages blueprint answer 410 pointing at the Flutter client.
+    LEGACY_WEB_ENABLED = get_env("LEGACY_WEB_ENABLED", "True") == "True"
+
     # Rate Limiting
     RATE_LIMIT_STORAGE_URL = get_env(
         "RATE_LIMIT_STORAGE_URL", "redis://localhost:6379/2"
