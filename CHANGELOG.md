@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.34.0] - 2026-09-29
+### Added
+- Phase 5 social login (Google/Apple/Microsoft OIDC): stateless PKCE with Fernet-encrypted state, JWKS-verified ID tokens (issuer/audience/nonce/expiry), verified-email requirement, link-by-email ceremony with explicit confirm token (409 LINKING_REQUIRED, never silent merges), JIT onboarding at least privilege, immutable (provider, subject) identity links surviving email changes, per-instance OAuth credentials (write-only secrets), member roster with role guards (never self, never last admin), 5/min/IP rate limits, tenant-tagged auth telemetry. Apple uses a pasted client-secret JWT. Deviation: identity links in `oauth_identities` table instead of the guide's single column (multi-provider reality)
+
 ## [0.33.0] - 2026-09-29
 ### Added
 - Phase 4 Chat-to-AI: prose chat turns on all phases (JSON-mode escape hatch in the provider interface), versioned iterate with IdeaEdit audit + before/after snapshots, rollback of any iterate turn (itself audited), per-user 3/min rate limit, per-instance enable switch (`CHAT_DISABLED` 403), admin-only iterate/rollback/model-override, content-hash-only logging, ignored comments proven excluded from sent prompts, fixed latent `Comment.user` crash in context builder. Known gap: iterate is admin-only while the V2 matrix grants users edit-own — flagged as open item

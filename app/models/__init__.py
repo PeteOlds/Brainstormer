@@ -6,6 +6,7 @@ from .ai_config import (
 )
 from .chat import CHAT_KINDS, CHAT_ROLES, ChatSession, ChatTurn, content_hash
 from .comment import Comment
+from .oauth import OAUTH_PROVIDERS, OAuthIdentity, TenantOAuthConfig
 from .idea import Idea, IdeaStatus
 from .idea_edit import IdeaEdit
 from .instance import (
@@ -59,4 +60,7 @@ __all__ = [
     "CHAT_ROLES",
     "CHAT_KINDS",
     "content_hash",
+    "TenantOAuthConfig",
+    "OAuthIdentity",
+    "OAUTH_PROVIDERS",
 ]

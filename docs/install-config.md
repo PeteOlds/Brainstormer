@@ -174,3 +174,22 @@ append-only in `ai_spend_ledger` and included in site backups.
 config rows, at least one needs `chat_enabled: true` or chat returns
 403 `CHAT_DISABLED` (pure-Ollama instances without rows stay open).
 Turns persist content for history/rollback; logs carry hashes only.
+
+## Social login (Phase 5)
+
+Per-instance OAuth credentials (instance admin), global identity links:
+
+```bash
+# PUT /api/v1/instances/<id>/oauth {"provider": "google", "client_id": "...", "client_secret": "..."}
+# Login: GET /api/v1/oauth/<provider>/start?instance_id=<id> -> open auth_url
+#   -> provider redirects to /api/v1/oauth/<provider>/callback -> tokens (201/200),
+#      409 LINKING_REQUIRED (existing email: confirm via POST /api/v1/oauth/link),
+#      or 400 (unverified email, bad state, misconfiguration)
+# Members: GET/PATCH/DELETE /api/v1/instances/<id>/members[/<user_id>]
+```
+
+Register `APP_BASE_URL/api/v1/oauth/<provider>/callback` at each
+provider. Apple: paste a generated client-secret JWT (rotation happens
+at Apple, then update here). Link-by-verified-email needs explicit
+`confirm: true`; JIT onboarders get the least-privilege USER role.
+OAuth endpoints share the 5/min/IP login rate limit.

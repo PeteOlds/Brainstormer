@@ -230,3 +230,151 @@ def instance_spend(user, instance_id):
             "budgets": budgets,
         }
     )
+
+
+@bp.route("/instances/<uuid:instance_id>/oauth", methods=["GET"])
+@token_required
+def list_oauth_configs(user, instance_id):
+    """Social login credentials per provider (secrets never leave)."""
+    from app.models import TenantOAuthConfig
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    configs = TenantOAuthConfig.query.filter_by(instance_id=instance.id).all()
+    return api_ok({"configs": [c.to_dict() for c in configs]})
+
+
+@bp.route("/instances/<uuid:instance_id>/oauth", methods=["PUT"])
+@token_required
+def upsert_oauth_config(user, instance_id):
+    """Create or update one provider's OAuth credentials (secret write-only).
+
+    Apple note: paste a generated client-secret JWT (Apple has no static
+    secret); rotation happens at Apple, then update here.
+    """
+    from app.models import OAUTH_PROVIDERS, TenantOAuthConfig
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    provider = (data.get("provider") or "").strip().lower()
+    if provider not in OAUTH_PROVIDERS:
+        return api_error(
+            f"provider is required and must be one of {', '.join(OAUTH_PROVIDERS)}.",
+            status_code=400,
+        )
+    client_id = (data.get("client_id") or "").strip()
+    if not client_id or len(client_id) > 255:
+        return api_error("client_id is required (max 255 chars).", status_code=400)
+    secret = data.get("client_secret")
+    if secret is not None and not isinstance(secret, str):
+        return api_error("client_secret must be a string or null.", status_code=400)
+    config = TenantOAuthConfig.query.filter_by(
+        instance_id=instance.id, provider_name=provider
+    ).first()
+    if config is None:
+        config = TenantOAuthConfig(instance_id=instance.id, provider_name=provider)
+        db.session.add(config)
+    config.client_id = client_id
+    if secret:
+        config.client_secret = secret
+    elif secret is None:
+        config._client_secret = None
+    db.session.commit()
+    return api_ok({"config": config.to_dict()})
+
+
+def _member_entry(membership):
+    from app.models import User as UserModel
+
+    member = UserModel.query.get(membership.user_id)
+    return {
+        "user_id": str(membership.user_id),
+        "email": member.email if member else None,
+        "name": member.name if member else None,
+        "role": membership.role,
+    }
+
+
+@bp.route("/instances/<uuid:instance_id>/members", methods=["GET"])
+@token_required
+def list_members(user, instance_id):
+    """Membership roster for one instance."""
+    from app.models import Membership as MembershipModel
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    memberships = MembershipModel.query.filter_by(instance_id=instance.id).all()
+    return api_ok({"members": [_member_entry(m) for m in memberships]})
+
+
+def _last_admin_guard(instance_id, target_user_id):
+    from app.models import Membership as MembershipModel
+    from app.models import ROLE_INSTANCE_ADMIN
+
+    others = MembershipModel.query.filter(
+        MembershipModel.instance_id == instance_id,
+        MembershipModel.role == ROLE_INSTANCE_ADMIN,
+        MembershipModel.user_id != target_user_id,
+    ).count()
+    if others == 0:
+        return api_error("Cannot remove the last instance admin.", 409)
+    return None
+
+
+@bp.route("/instances/<uuid:instance_id>/members/<uuid:member_id>", methods=["PATCH"])
+@token_required
+def update_member(user, instance_id, member_id):
+    """Change a member's role (INSTANCE_ADMIN/USER)."""
+    from app.models import ROLE_INSTANCE_ADMIN, ROLE_USER, Membership as MembershipModel
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    if data.get("role") not in (ROLE_INSTANCE_ADMIN, ROLE_USER):
+        return api_error(
+            f"role must be {ROLE_INSTANCE_ADMIN} or {ROLE_USER}.", status_code=400
+        )
+    membership = MembershipModel.query.filter_by(
+        user_id=member_id, instance_id=instance.id
+    ).first()
+    if membership is None:
+        return api_error("Member not found.", 404)
+    if str(member_id) == str(user.id) and not is_site_admin(user):
+        return api_error("You cannot change your own membership.", 403)
+    if membership.role == ROLE_INSTANCE_ADMIN and data["role"] == ROLE_USER:
+        blocked = _last_admin_guard(instance.id, member_id)
+        if blocked:
+            return blocked
+    membership.role = data["role"]
+    db.session.commit()
+    return api_ok({"member": _member_entry(membership)})
+
+
+@bp.route("/instances/<uuid:instance_id>/members/<uuid:member_id>", methods=["DELETE"])
+@token_required
+def remove_member(user, instance_id, member_id):
+    """Remove a membership (never yourself, never the last admin)."""
+    from app.models import ROLE_INSTANCE_ADMIN, Membership as MembershipModel
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    membership = MembershipModel.query.filter_by(
+        user_id=member_id, instance_id=instance.id
+    ).first()
+    if membership is None:
+        return api_error("Member not found.", 404)
+    if str(member_id) == str(user.id):
+        return api_error("You cannot remove your own membership.", 403)
+    if membership.role == ROLE_INSTANCE_ADMIN:
+        blocked = _last_admin_guard(instance.id, member_id)
+        if blocked:
+            return blocked
+    db.session.delete(membership)
+    db.session.commit()
+    return api_ok({"removed": str(member_id)})
