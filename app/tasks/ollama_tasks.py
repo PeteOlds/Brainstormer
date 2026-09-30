@@ -41,8 +41,12 @@ def _generate_reference_code() -> str:
     return "IDEA-0001"
 
 
-def _generation_options(prompt_config) -> dict:
-    """Ollama options dict from a prompt config (null-safe fallbacks)."""
+def _generation_options(prompt_config, stage_cfg=None) -> dict:
+    """Generation options dict (null-safe fallbacks).
+
+    Stage config wins over the prompt for temperature/top_p/num_predict;
+    absent rows change nothing.
+    """
     options = {
         "temperature": (
             prompt_config.temperature if prompt_config.temperature is not None else 0.7
@@ -57,6 +61,9 @@ def _generation_options(prompt_config) -> dict:
     }
     if getattr(prompt_config, "seed", None) is not None:
         options["seed"] = prompt_config.seed
+    for key in ("temperature", "top_p", "num_predict"):
+        if stage_cfg and stage_cfg.get(key) is not None:
+            options[key] = stage_cfg[key]
     return options
 
 
@@ -213,6 +220,14 @@ def generate_idea(
     client = OllamaClient(timeout=600.0)
     model = prompt_config.model_name
     provider = (prompt_config.provider or "ollama").lower()
+    # Spark stage config wins over the prompt; absent rows change nothing.
+    from app.models import resolve_stage as _resolve_stage
+
+    spark_cfg = _resolve_stage(prompt_config.instance_id, "SPARK")
+    if spark_cfg.get("model_name"):
+        model = spark_cfg["model_name"]
+    if spark_cfg.get("provider"):
+        provider = spark_cfg["provider"].lower()
     hosted = provider != "ollama"
     logger.info(
         "ollama_task_start",
@@ -263,18 +278,26 @@ def generate_idea(
         # Hosted providers route via LiteLLM (budget gates, spend log);
         # Ollama keeps the exact legacy call sequence.
         if hosted:
+            from types import SimpleNamespace
+
             from app.services.llm_backends import (
                 BudgetExhausted,
                 ProviderError,
                 generate_for_prompt,
             )
 
+            options = _generation_options(prompt_config, spark_cfg)
+            route = SimpleNamespace(
+                provider=provider,
+                model_name=model,
+                instance_id=prompt_config.instance_id,
+            )
             try:
                 result = generate_for_prompt(
-                    prompt_config,
+                    route,
                     prompt_text,
                     system=base_prompt,
-                    options=_generation_options(prompt_config),
+                    options=options,
                     keep_alive=prompt_config.keep_alive or "2h",
                     timeout=600.0,
                 )
@@ -302,7 +325,7 @@ def generate_idea(
                     prompt=prompt_text,
                     system=base_prompt,
                     format="json",
-                    options=_generation_options(prompt_config),
+                    options=_generation_options(prompt_config, spark_cfg),
                     keep_alive=prompt_config.keep_alive or "2h",
                 )
             except OllamaError as e:
@@ -553,6 +576,15 @@ def run_secondary_action(
     )
     provider_cfg = idea.prompt_config
     provider = (provider_cfg.provider or "ollama").lower() if provider_cfg else "ollama"
+    # Stage config wins over the prompt (explicit run args already won
+    # above via model_override); absent rows change nothing.
+    from app.models import resolve_stage
+
+    stage_cfg = resolve_stage(idea.instance_id, idea.status.value)
+    if not model_override and stage_cfg.get("model_name"):
+        model = stage_cfg["model_name"]
+    if stage_cfg.get("provider"):
+        provider = stage_cfg["provider"].lower()
     hosted = provider != "ollama"
     # A model override on a hosted idea is a litellm model id; on a
     # prompt-less idea the override alone cannot imply a provider.
@@ -682,8 +714,12 @@ def run_secondary_action(
         # Selected opencode skills + guideline docs (admin run dialog).
         # Injected after the brief so they steer generation; capped so a
         # large selection cannot blow the context window.
-        skill_names = (extra_context or {}).get("skills") or []
-        guideline_names = (extra_context or {}).get("guidelines") or []
+        skill_names = (
+            (extra_context or {}).get("skills") or stage_cfg.get("skills") or []
+        )
+        guideline_names = (
+            (extra_context or {}).get("guidelines") or stage_cfg.get("guidelines") or []
+        )
         if skill_names or guideline_names:
             from app.services.discovery import read_guideline, read_skill_body
 
@@ -727,7 +763,10 @@ def run_secondary_action(
 
         # Analytical actions run cold: precision over creativity. Cap the
         # prompt's temperature at 0.3 (a lower setting is respected).
-        options = _generation_options(prompt_config) if prompt_config else None
+        # Stage config overrides the prompt values before the cap.
+        options = (
+            _generation_options(prompt_config, stage_cfg) if prompt_config else None
+        )
         if options is None:
             options = {"temperature": 0.3}
         else:

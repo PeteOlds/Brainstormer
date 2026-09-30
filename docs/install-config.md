@@ -221,6 +221,22 @@ later). Free instances baseline to `core`; paid to everything.
 Suspended instances (`status != active`) are refused everywhere.
 Start/End dates are recorded and surfaced, enforcement TBD.
 
+## Per-stage AI config (item 18)
+
+Each active stage (Spark/Scope/Map/Ship/Scale) may override provider,
+model, temperature/top_p/num_predict and default skills/guidelines:
+
+```bash
+# PUT /api/v1/instances/<id>/stage-config
+# {"stage": "SPARK", "provider": "ollama", "model_name": "llama3:8b",
+#  "temperature": 0.7, "skills": [], "guidelines": []}
+# GET /api/v1/instances/<id>/stage-config   (all five stages)
+```
+
+Resolution everywhere: explicit run arguments > stage row > prompt
+values > hardcoded defaults. Unset rows change nothing; chat follows
+the stage model unless an admin overrides it.
+
 ## Social login (Phase 5)
 
 Per-instance OAuth credentials (instance admin), global identity links:

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.38.0] - 2026-09-30
+### Added
+- Per-stage AI config (item 18): `stage_ai_configs` (one row per instance+stage, all settings nullable) with GET/PUT API, resolution order explicit-args > stage > prompt > defaults across generation, secondary actions (model/provider/params/skills/guidelines) and chat routing; rewritten user guide for the V2 pipeline and API
+
 ## [0.37.0] - 2026-09-30
 ### Added
 - Phase 8 billing entitlements + hardening: entitlement framework (stored grants layer over Free-flag baselines, `hosted_ai` enforced on hosted generation and chat with 402, suspended instances refused, site-admin management API + `set-entitlement` CLI), `guardrails.yml` CI (bandit, safety, guard scripts, Flutter analyze/test, backend gate), `check_no_external_calls`/`check_no_secrets` scripts. Audit: bandit 0 high/medium (14 pre-existing lows), safety 0 vulnerabilities, backend coverage 73% (gate 35, target 80 tracked). Honest deferrals: payment provider/pricing, Start/End enforcement, DLP layer, proxy-server virtual keys, push/offline

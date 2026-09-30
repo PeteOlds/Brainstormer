@@ -452,3 +452,106 @@ def set_entitlement(user, instance_id):
     row.limits = dict(limits)
     db.session.commit()
     return api_ok({"entitlement": row.to_dict()})
+
+
+@bp.route("/instances/<uuid:instance_id>/stage-config", methods=["GET"])
+@token_required
+def list_stage_configs(user, instance_id):
+    """Per-stage AI settings for one instance (stages without rows inherit)."""
+    from app.models import STAGES, StageAIConfig
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    rows = StageAIConfig.query.filter_by(instance_id=instance.id).all()
+    by_stage = {r.stage: r.to_dict() for r in rows}
+    return api_ok(
+        {
+            "stages": [by_stage.get(stage) for stage in STAGES],
+        }
+    )
+
+
+@bp.route("/instances/<uuid:instance_id>/stage-config", methods=["PUT"])
+@token_required
+def upsert_stage_config(user, instance_id):
+    """Create or update one stage's AI settings (unchecked keys inherit)."""
+    from app.models import PROVIDERS, STAGES, StageAIConfig
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    stage = (data.get("stage") or "").strip().upper()
+    if stage not in STAGES:
+        return api_error(
+            f"stage is required and must be one of {', '.join(STAGES)}.",
+            status_code=400,
+        )
+    provider = data.get("provider")
+    if provider is not None:
+        provider = str(provider).strip().lower() or None
+        if provider is not None and provider not in PROVIDERS:
+            return api_error(
+                f"provider must be one of {', '.join(PROVIDERS)}.",
+                status_code=400,
+            )
+    temperature = _optional_float(data.get("temperature"), "temperature", 0, 2)
+    if isinstance(temperature, tuple):
+        return temperature
+    top_p = _optional_float(data.get("top_p"), "top_p", 0, 1)
+    if isinstance(top_p, tuple):
+        return top_p
+    num_predict = data.get("num_predict")
+    if num_predict is not None:
+        try:
+            num_predict = int(num_predict)
+        except (TypeError, ValueError):
+            return api_error("num_predict must be an integer.", status_code=400)
+        if not 1 <= num_predict <= 4096:
+            return api_error("num_predict must be 1-4096.", status_code=400)
+    for list_key in ("skills", "guidelines"):
+        if list_key in data and (
+            not isinstance(data[list_key], list)
+            or any(not isinstance(v, str) for v in data[list_key])
+        ):
+            return api_error(f"{list_key} must be a list of strings.", status_code=400)
+    model_name = data.get("model_name")
+    if model_name is not None:
+        model_name = str(model_name).strip() or None
+        if model_name is not None and len(model_name) > 100:
+            return api_error(
+                "model_name must be 100 characters or fewer.", status_code=400
+            )
+    row = StageAIConfig.query.filter_by(instance_id=instance.id, stage=stage).first()
+    if row is None:
+        row = StageAIConfig(instance_id=instance.id, stage=stage)
+        db.session.add(row)
+    if "provider" in data:
+        row.provider = provider
+    if "model_name" in data:
+        row.model_name = model_name
+    if "temperature" in data:
+        row.temperature = temperature
+    if "top_p" in data:
+        row.top_p = top_p
+    if "num_predict" in data:
+        row.num_predict = num_predict
+    if "skills" in data:
+        row.skills = list(data["skills"])
+    if "guidelines" in data:
+        row.guidelines = list(data["guidelines"])
+    db.session.commit()
+    return api_ok({"stage_config": row.to_dict()})
+
+
+def _optional_float(value, name, lo, hi):
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return api_error(f"{name} must be a number.", status_code=400)
+    if not lo <= number <= hi:
+        return api_error(f"{name} must be between {lo} and {hi}.", status_code=400)
+    return number

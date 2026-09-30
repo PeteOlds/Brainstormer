@@ -30,6 +30,7 @@ from .prompt_run import PromptRun, PromptRunStatus
 from .refresh_token import RefreshToken
 from .secondary_action import ActionType, SecondaryActionResult
 from .slack import SlackEvent, SlackPost
+from .stage_config import STAGES, StageAIConfig, resolve_stage
 from .status_history import IdeaStatusHistory
 from .system_settings import SystemSettings
 from .types import GUID
@@ -79,4 +80,7 @@ __all__ = [
     "PAID_BASELINE",
     "require_entitlement",
     "resolve_entitlements",
+    "StageAIConfig",
+    "STAGES",
+    "resolve_stage",
 ]

@@ -48,13 +48,23 @@ class ChatNotFoundError(ChatError):
 def resolve_route(idea: Any, model_override: Any = None) -> Any:
     """Provider/model/instance routing for an idea's chat turns.
 
-    Follows the instance's stage config once per-stage settings land;
-    until then the idea's own prompt is the config (admin override swaps
-    the model within the same provider).
+    Stage config first (the instance's per-stage settings), then the
+    idea's own prompt, then the local default. An admin model_override
+    swaps the model within the resolved provider.
     """
+    from app.models import resolve_stage
+
+    stage_cfg = resolve_stage(idea.instance_id, idea.status.value)
     prompt = idea.prompt_config
-    provider = (prompt.provider if prompt else None) or "ollama"
-    model = model_override or (prompt.model_name if prompt else None) or "llama3:8b"
+    provider = (
+        stage_cfg.get("provider") or (prompt.provider if prompt else None) or "ollama"
+    )
+    model = (
+        model_override
+        or stage_cfg.get("model_name")
+        or (prompt.model_name if prompt else None)
+        or "llama3:8b"
+    )
     return SimpleNamespace(
         provider=provider, model_name=model, instance_id=idea.instance_id
     )
