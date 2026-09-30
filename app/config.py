@@ -90,6 +90,12 @@ class Config:
     # volume in production). No auto-pruning: files accumulate.
     BACKUP_DIR = get_env("BACKUP_DIR", "./backups")
 
+    # LiteLLM proxy (item 10): sidecar for virtual-key isolation. Empty
+    # master key disables provisioning; direct litellm-library calls
+    # remain the fallback path.
+    LITELLM_PROXY_URL = get_env("LITELLM_PROXY_URL", "http://litellm:4000")
+    LITELLM_MASTER_KEY = get_env("LITELLM_MASTER_KEY", "")
+
     # Legacy Jinja web UI (Phase 7): True keeps serving it; False makes
     # the pages blueprint answer 410 pointing at the Flutter client.
     LEGACY_WEB_ENABLED = get_env("LEGACY_WEB_ENABLED", "True") == "True"

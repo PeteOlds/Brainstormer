@@ -30,6 +30,8 @@ class InstanceAIConfig(db.Model):
     )
     provider = db.Column(db.String(20), nullable=False)
     _api_key = db.Column("api_key", db.Text, nullable=True)
+    _virtual_key = db.Column("virtual_key", db.Text, nullable=True)
+    use_proxy = db.Column(db.Boolean, default=False, nullable=False)
     endpoint = db.Column(db.String(255), nullable=True)
     model_allowlist = db.Column(db.JSON, default=list)
     embedding_model = db.Column(db.String(100), nullable=True)
@@ -59,15 +61,27 @@ class InstanceAIConfig(db.Model):
         return ""
 
     @api_key.setter
-    def api_key(self, value: str):
+    def api_key(self, value: str) -> None:
         self._api_key = encrypt(value) if value else None
 
-    def to_dict(self):
+    @property
+    def virtual_key(self) -> str:
+        if self._virtual_key:
+            return decrypt(self._virtual_key)
+        return ""
+
+    @virtual_key.setter
+    def virtual_key(self, value: str) -> None:
+        self._virtual_key = encrypt(value) if value else None
+
+    def to_dict(self) -> dict:
         return {
             "id": str(self.id),
             "instance_id": str(self.instance_id),
             "provider": self.provider,
             "has_key": bool(self._api_key),
+            "use_proxy": self.use_proxy,
+            "has_virtual_key": bool(self._virtual_key),
             "endpoint": self.endpoint,
             "model_allowlist": list(self.model_allowlist or []),
             "embedding_model": self.embedding_model,
@@ -109,7 +123,7 @@ class AISpendLedger(db.Model):
         index=True,
     )
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {
             "id": str(self.id),
             "instance_id": str(self.instance_id) if self.instance_id else None,

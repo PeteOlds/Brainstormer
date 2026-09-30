@@ -263,3 +263,23 @@ provider. Apple: paste a generated client-secret JWT (rotation happens
 at Apple, then update here). Link-by-verified-email needs explicit
 `confirm: true`; JIT onboarders get the least-privilege USER role.
 OAuth endpoints share the 5/min/IP login rate limit.
+
+## LiteLLM proxy sidecar (item 10)
+
+Raw provider keys live only in the proxy; the app holds virtual keys.
+
+```bash
+# One-time: create the proxy database, set LITELLM_MASTER_KEY, start up
+psql -c "CREATE DATABASE litellm;"
+docker compose up -d litellm   # or manual equivalent per topology above
+# Per instance+provider (needs the direct API key configured first):
+flask provision-proxy-key --instance 20 --provider openai --models openai/gpt-4o-mini
+# Then enable proxy mode (refuses without a provisioned key):
+# PUT /api/v1/instances/<id>/ai-configs {"provider": "openai", "use_proxy": true}
+```
+
+Budgets, spend logging and entitlements stay enforced in the app on
+every proxied call. Manual-container parity: run the same
+`ghcr.io/berriai/litellm:main-latest` image with
+`litellm_config.yaml`, `LITELLM_MASTER_KEY` and
+`DATABASE_URL=postgresql://app:PASS@127.0.0.1:5432/litellm`.

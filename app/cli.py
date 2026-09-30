@@ -100,6 +100,7 @@ def register_cli(app):
     app.cli.add_command(promote_site_admin)
     app.cli.add_command(create_instance)
     app.cli.add_command(set_entitlement)
+    app.cli.add_command(provision_proxy_key)
 
 
 @click.command("backup-site")
@@ -313,4 +314,59 @@ def set_entitlement(instance_ref: str, key: str, grant: bool):
     db.session.commit()
     click.echo(
         f"Entitlement {key} {'granted' if grant else 'revoked'} for instance {iid}"
+    )
+
+
+@click.command("provision-proxy-key")
+@click.option(
+    "--instance", "instance_ref", required=True, help="Instance number or UUID"
+)
+@click.option(
+    "--provider", required=True, help="Provider with a stored API key (e.g. openai)"
+)
+@click.option(
+    "--models", required=True, help="Comma-separated litellm model ids for the key"
+)
+@with_appcontext
+def provision_proxy_key(instance_ref: str, provider: str, models: str):
+    """Issue a LiteLLM virtual key and store it (raw key stays in the proxy).
+
+    Requires the provider API key already configured plus
+    LITELLM_MASTER_KEY. The virtual key itself is encrypted at rest and
+    never printed: only its prefix is shown for identification.
+    """
+    from app.models import InstanceAIConfig
+    from app.services.llm_backends import provision_virtual_key
+
+    try:
+        iid = _resolve_instance_id(instance_ref)
+    except ValueError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        return
+    config = InstanceAIConfig.query.filter_by(
+        instance_id=iid, provider=provider.strip().lower()
+    ).first()
+    if config is None or not config.api_key:
+        click.echo(
+            f"Error: no API key configured for provider '{provider}' on this instance.",
+            err=True,
+        )
+        return
+    model_list = [m.strip() for m in models.split(",") if m.strip()]
+    if not model_list:
+        click.echo("Error: --models must list at least one model id.", err=True)
+        return
+    try:
+        key = provision_virtual_key(model_list, alias=f"{iid}:{provider}")
+    except Exception as exc:
+        click.echo(f"Error: {exc}", err=True)
+        return
+    config.virtual_key = key
+    config.use_proxy = True
+    from app.extensions import db
+
+    db.session.commit()
+    click.echo(
+        f"Proxy key provisioned for instance {iid} provider {provider} "
+        f"(prefix {key[:7]}…, stored encrypted, proxy mode on)."
     )

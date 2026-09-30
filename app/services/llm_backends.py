@@ -12,10 +12,10 @@ bodies — only the prompt hash, model, token counts and cost are logged.
 """
 
 from dataclasses import dataclass
-from typing import Any
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import httpx
 import structlog
 from sqlalchemy import func
 
@@ -133,6 +133,119 @@ def record_spend(
         completion_tokens=int(completion_tokens or 0),
         cost_cents=int(cost_cents or 0),
     )
+
+
+def _proxy_url() -> str:
+    import os
+
+    from flask import current_app
+
+    try:
+        configured = current_app.config.get("LITELLM_PROXY_URL")
+    except RuntimeError:
+        configured = None
+    raw = configured or os.getenv("LITELLM_PROXY_URL") or "http://litellm:4000"
+    return raw.rstrip("/")
+
+
+def _proxy_generate(
+    model: str,
+    prompt: str,
+    system: str | None,
+    options: dict | None,
+    virtual_key: str,
+    timeout: float,
+    json_mode: bool = True,
+) -> GenerationResult:
+    """OpenAI-compatible chat via the LiteLLM proxy (virtual key only).
+
+    The raw provider key lives server-side in LiteLLM; application
+    memory only ever holds the virtual key.
+    """
+    messages: list[dict[str, str]] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+    payload: dict[str, Any] = {"model": model, "messages": messages}
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
+    options = options or {}
+    if options.get("temperature") is not None:
+        payload["temperature"] = options["temperature"]
+    if options.get("num_predict"):
+        payload["max_tokens"] = options["num_predict"]
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(
+                f"{_proxy_url()}/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {virtual_key}"},
+            )
+            if response.status_code == 401:
+                raise ProviderError("Proxy rejected the virtual key.", retryable=False)
+            response.raise_for_status()
+            body = response.json()
+    except ProviderError:
+        raise
+    except Exception as exc:
+        raise ProviderError("Proxy unreachable.", retryable=True) from exc
+    try:
+        text = body["choices"][0]["message"]["content"] or ""
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ProviderError("Proxy returned no content.", retryable=True) from exc
+    usage = body.get("usage") or {}
+    prompt_tokens = int(usage.get("prompt_tokens") or 0)
+    completion_tokens = int(usage.get("completion_tokens") or 0)
+    return GenerationResult(
+        text=text,
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cost_cents=_proxy_cost_cents(model, prompt_tokens, completion_tokens),
+    )
+
+
+def _proxy_cost_cents(model: str, prompt_tokens: int, completion_tokens: int) -> int:
+    """Cost from LiteLLM's bundled price table (offline, no provider call)."""
+    try:
+        import litellm
+
+        info = litellm.model_cost.get(model, {})
+        total = prompt_tokens * float(
+            info.get("input_cost_per_token", 0)
+        ) + completion_tokens * float(info.get("output_cost_per_token", 0))
+        return max(0, round(total * 100))
+    except Exception:
+        return 0
+
+
+def provision_virtual_key(models: list, alias: str) -> str:
+    """Issue a proxy virtual key (master-key auth, never logged)."""
+    import os
+
+    from flask import current_app
+
+    try:
+        master = current_app.config.get("LITELLM_MASTER_KEY")
+    except RuntimeError:
+        master = None
+    master = master or os.getenv("LITELLM_MASTER_KEY", "")
+    if not master:
+        raise ProviderError("LITELLM_MASTER_KEY is not configured.", retryable=False)
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            response = client.post(
+                f"{_proxy_url()}/key/generate",
+                json={"models": models, "key_alias": alias},
+                headers={"Authorization": f"Bearer {master}"},
+            )
+            response.raise_for_status()
+            key = response.json().get("key")
+    except Exception as exc:
+        raise ProviderError("Proxy key provisioning failed.", retryable=True) from exc
+    if not key:
+        raise ProviderError("Proxy returned no key.", retryable=True)
+    return str(key)
 
 
 def _litellm_cost_cents(model: str, response: Any) -> int:
@@ -255,16 +368,27 @@ def generate_for_prompt(
     except EntitlementError as exc:
         raise ProviderError(str(exc), retryable=False) from exc
     check_budget(config)
-    result = _litellm_generate(
-        model,
-        prompt_text,
-        system,
-        options,
-        api_key=config.api_key,
-        endpoint=config.endpoint,
-        timeout=timeout,
-        json_mode=json_mode,
-    )
+    if config.use_proxy and config.virtual_key:
+        result = _proxy_generate(
+            model,
+            prompt_text,
+            system,
+            options,
+            virtual_key=config.virtual_key,
+            timeout=timeout,
+            json_mode=json_mode,
+        )
+    else:
+        result = _litellm_generate(
+            model,
+            prompt_text,
+            system,
+            options,
+            api_key=config.api_key,
+            endpoint=config.endpoint,
+            timeout=timeout,
+            json_mode=json_mode,
+        )
     record_spend(
         prompt.instance_id,
         user_id,

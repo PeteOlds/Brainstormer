@@ -143,6 +143,22 @@ services:
     networks:
       - brainstormer-network
 
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    command: ["--config", "/app/litellm_config.yaml", "--port", "4000", "--num_workers", "2"]
+    volumes:
+      - ./litellm_config.yaml:/app/litellm_config.yaml:ro
+    environment:
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - DATABASE_URL=postgresql://app:${DB_PASSWORD}@postgres:5432/litellm
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - brainstormer-network
+
 volumes:
   postgres_data:
   redis_data:

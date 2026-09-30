@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.39.0] - 2026-09-30
+### Added
+- Proxy-server virtual keys (item 10): LiteLLM sidecar in compose plus config template, per-config proxy mode with encrypted virtual keys (raw keys stay server-side in LiteLLM), app-side budget/entitlement/spend enforcement on every proxied call, `provision-proxy-key` CLI (key prefix only on screen), API toggle gated on provisioning, per-call pricing from the bundled table. Deferred: proxy DB persistence beyond documented setup, embeddings via proxy
+
 ## [0.38.0] - 2026-09-30
 ### Added
 - Per-stage AI config (item 18): `stage_ai_configs` (one row per instance+stage, all settings nullable) with GET/PUT API, resolution order explicit-args > stage > prompt > defaults across generation, secondary actions (model/provider/params/skills/guidelines) and chat routing; rewritten user guide for the V2 pipeline and API

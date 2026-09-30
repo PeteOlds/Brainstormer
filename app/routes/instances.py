@@ -179,6 +179,15 @@ def upsert_ai_config(user, instance_id):
         if not isinstance(data["chat_enabled"], bool):
             return api_error("chat_enabled must be a boolean.", status_code=400)
         config.chat_enabled = data["chat_enabled"]
+    if "use_proxy" in data:
+        if not isinstance(data["use_proxy"], bool):
+            return api_error("use_proxy must be a boolean.", status_code=400)
+        if data["use_proxy"] and not config.virtual_key:
+            return api_error(
+                "Provision a proxy key first (provision-proxy-key CLI).",
+                status_code=400,
+            )
+        config.use_proxy = data["use_proxy"]
     db.session.commit()
     return api_ok({"config": config.to_dict()})
 
