@@ -202,17 +202,37 @@ def test_cli_restore_requires_confirmation(app, tmp_path):
         assert Idea.query.count() == 1
 
 
-def test_backup_instance_marks_phase0_scope(app, tmp_path):
+def test_backup_instance_requires_instance_id(app):
     runner = app.test_cli_runner()
+    result = runner.invoke(args=["backup-instance", "--output", "x.json"])
+    assert result.exit_code != 0
+
     with app.app_context():
-        seed_site()
-    path = str(tmp_path / "instance.json")
-    result = runner.invoke(args=["backup-instance", "--output", path])
-    assert result.exit_code == 0, result.output
-    with open(path, encoding="utf-8") as fh:
-        bundle = json.load(fh)
-    assert bundle["manifest"]["scope"] == "instance"
-    assert "Phase 1" in bundle["manifest"]["note"]
-    # Still a verifiable, restorable bundle.
+        from app.models import Instance
+
+        db.session.add(Instance(number=99, name="Temp"))
+        db.session.commit()
+    result = runner.invoke(
+        args=["backup-instance", "--instance-id", "12345", "--output", "x.json"]
+    )
+    assert result.exit_code != 0
+
     with app.app_context():
-        assert backup_svc.verify_bundle(bundle)["scope"] == "instance"
+        db.session.delete(Instance.query.filter_by(number=99).first())
+        db.session.commit()
+
+
+def test_restore_site_rejects_instance_bundle(app, tmp_path):
+    from app.services import backup as backup_svc
+
+    with app.app_context():
+        from app.models import Instance
+
+        inst = Instance(number=98, name="Scope")
+        db.session.add(inst)
+        db.session.commit()
+        bundle = backup_svc.export_instance(inst.id)
+        with pytest.raises(BackupIntegrityError):
+            backup_svc.restore_site(bundle)
+        db.session.delete(inst)
+        db.session.commit()

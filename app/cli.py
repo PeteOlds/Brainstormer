@@ -95,6 +95,7 @@ def register_cli(app):
     app.cli.add_command(backup_site)
     app.cli.add_command(backup_instance)
     app.cli.add_command(restore_backup)
+    app.cli.add_command(restore_instance)
     app.cli.add_command(init_tenancy)
     app.cli.add_command(promote_site_admin)
     app.cli.add_command(create_instance)
@@ -133,30 +134,48 @@ def backup_site(output: str):
 @click.command("backup-instance")
 @click.option(
     "--instance-id",
-    default=None,
-    help="Instance to export (per-instance filtering lands in Phase 1)",
+    required=True,
+    help="Instance number or UUID to export (real per-instance filtering)",
 )
 @click.option("--output", required=True, help="Destination .json bundle file")
 @with_appcontext
-def backup_instance(instance_id: str | None, output: str):
-    """Export one instance to JSON (Phase 0: exports the whole database).
-
-    Per-instance filtering arrives with `instance_id` columns in Phase 1;
-    until then this is identical to backup-site and says so in the manifest.
-    """
+def backup_instance(instance_id: str, output: str):
+    """Export one instance to JSON (rows, members, configs — no sessions)."""
     from app.services import backup as backup_svc
 
-    bundle = backup_svc.export_site()
-    backup_svc.rescope_bundle(
-        bundle,
-        "instance",
-        instance_id=instance_id,
-        note="Phase 0: whole-database export; per-instance filtering lands in Phase 1",
-    )
+    try:
+        bundle = backup_svc.export_instance(_resolve_instance_id(instance_id))
+    except (backup_svc.BackupIntegrityError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
     backup_svc.write_bundle(bundle, output)
+    manifest = bundle["manifest"]
+    total = sum(manifest["tables"].values())
     click.echo(
-        f"Instance backup written to {output} (whole-database export; per-instance filtering lands in Phase 1)"
+        f"Instance {manifest.get('instance_number')} backup written to {output}: "
+        f"{total} rows, checksum {manifest['checksum'][:16]}…"
     )
+
+
+def _resolve_instance_id(raw: str):
+    """Accept an instance number or UUID, returning the UUID."""
+    import uuid as uuid_mod
+
+    from app.models import Instance
+
+    try:
+        number = int(raw)
+    except (TypeError, ValueError):
+        number = None
+    if number is not None:
+        instance = Instance.query.filter_by(number=number).first()
+    else:
+        try:
+            instance = Instance.query.get(uuid_mod.UUID(str(raw)))
+        except (ValueError, TypeError, AttributeError):
+            instance = None
+    if instance is None:
+        raise ValueError(f"Unknown instance: {raw}.")
+    return instance.id
 
 
 @click.command("restore")
@@ -179,6 +198,31 @@ def restore_backup(input_path: str, yes: bool):
     click.echo(
         f"Restored {total} rows from {input_path} "
         f"(schema v{bundle['manifest']['export_schema_version']})"
+    )
+
+
+@click.command("restore-instance")
+@click.option("--input", "input_path", required=True, help="Instance bundle .json file")
+@click.option("--yes", is_flag=True, help="Skip the destructive-action confirmation")
+@with_appcontext
+def restore_instance(input_path: str, yes: bool):
+    """Restore one instance bundle (other instances untouched)."""
+    from app.services import backup as backup_svc
+
+    if not yes:
+        click.confirm(
+            "Restore replaces ALL rows of the bundled instance. Continue?",
+            abort=True,
+        )
+    try:
+        bundle = backup_svc.read_bundle(input_path)
+        counts = backup_svc.restore_instance(bundle)
+    except (backup_svc.BackupIntegrityError, backup_svc.BackupVersionError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    total = sum(counts.values())
+    click.echo(
+        f"Restored instance {bundle['manifest'].get('instance_number')}: "
+        f"{total} rows from {input_path}"
     )
 
 

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.35.0] - 2026-09-30
+### Added
+- Phase 6 backup GA: real per-instance export (tenant rows plus members and referenced authors; sessions and global event ids excluded by design) and scoped restore that never touches other instances, `restore-instance` CLI, self-service `GET /instances/<id>/export` download, daily `scheduled_site_backup` beat task with write-verify, site-restore scope guard, RTO runbook with measured drill record. `backup-instance` now requires an instance number or UUID
+
 ## [0.34.0] - 2026-09-29
 ### Added
 - Phase 5 social login (Google/Apple/Microsoft OIDC): stateless PKCE with Fernet-encrypted state, JWKS-verified ID tokens (issuer/audience/nonce/expiry), verified-email requirement, link-by-email ceremony with explicit confirm token (409 LINKING_REQUIRED, never silent merges), JIT onboarding at least privilege, immutable (provider, subject) identity links surviving email changes, per-instance OAuth credentials (write-only secrets), member roster with role guards (never self, never last admin), 5/min/IP rate limits, tenant-tagged auth telemetry. Apple uses a pasted client-secret JWT. Deviation: identity links in `oauth_identities` table instead of the guide's single column (multi-provider reality)

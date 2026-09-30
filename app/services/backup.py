@@ -1,13 +1,10 @@
-"""Site backup, export and restore (Phase 0).
+"""Site and instance backup, export and restore (Phases 0 + 6).
 
-Versioned JSON bundles with a manifest and a SHA-256 checksum. The bundle
-holds every tenant-scoped table plus users and settings, so
-backup -> wipe -> restore round-trips the database with zero diff.
-
-Encrypted blobs (prompt bodies, and later per-instance keys) travel as-is:
-restoring requires the same FERNET_KEY. Per-instance filtering lands in
-Phase 1 with `instance_id`; until then `backup-instance` exports the whole
-database and says so.
+Versioned JSON bundles with a manifest and a SHA-256 checksum. Site
+bundles round-trip the whole database; instance bundles carry one
+instance's rows plus its members (sessions and global event ids are
+excluded by design). Encrypted blobs travel as-is: restoring requires
+the same FERNET_KEY.
 """
 
 import hashlib
@@ -138,11 +135,13 @@ def _row_key(model: Any) -> str:
     return str(pk)
 
 
-def _export_rows(model: Any) -> list[dict[str, Any]]:
+def _export_rows(model: Any, instance_id: Any = None) -> list[dict[str, Any]]:
     pk = _row_key(model)
     query = model.query.order_by(getattr(model, pk).asc())
     if hasattr(model, "created_at"):
         query = model.query.order_by(model.created_at.asc(), getattr(model, pk).asc())
+    if instance_id is not None and "instance_id" in model.__table__.columns:
+        query = query.filter(model.instance_id == instance_id)
     rows = []
     for obj in query.all():
         row = {}
@@ -175,6 +174,53 @@ def export_site() -> dict:
     }
     bundle = {"manifest": manifest, "data": data}
     return rescope_bundle(bundle, "site")
+
+
+# Tables carrying instance_id (tenant-scoped). Everything else is global:
+# users + oauth identities travel by reference (members and authors),
+# refresh tokens never export (sessions are re-established by login),
+# slack event ids are global idempotency keys.
+USER_REF_FIELDS = (
+    "user_id",
+    "created_by_id",
+    "changed_by_id",
+    "editor_id",
+    "edited_by_id",
+)
+
+
+def _tenant_models() -> list:
+    return [m for m in EXPORT_TABLES if "instance_id" in m.__table__.columns]
+
+
+def export_instance(instance_id: Any) -> dict:
+    """Export one instance: its row, tenant rows, memberships, member users.
+
+    Refresh tokens and slack events are intentionally excluded (see above).
+    """
+    from app.models import Instance
+
+    instance = db.session.get(Instance, instance_id)
+    if instance is None:
+        raise BackupIntegrityError(f"Unknown instance: {instance_id}.")
+    data = _export_instance_tables(instance)
+    manifest = {
+        "export_schema_version": EXPORT_SCHEMA_VERSION,
+        "app_version": _app_version(),
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "scope": "instance",
+        "instance_id": str(instance_id),
+        "instance_number": instance.number,
+        "tables": {name: len(rows) for name, rows in data.items()},
+        "fingerprints": {name: table_fingerprint(rows) for name, rows in data.items()},
+    }
+    bundle = {"manifest": manifest, "data": data}
+    return rescope_bundle(
+        bundle,
+        "instance",
+        instance_id=str(instance_id),
+        instance_number=instance.number,
+    )
 
 
 def rescope_bundle(bundle: dict[str, Any], scope: str, **extra: Any) -> dict[str, Any]:
@@ -252,14 +298,16 @@ def _import_rows(model: Any, rows: list[dict[str, Any]]) -> None:
     db.session.flush()
 
 
-def _recompute_counters() -> None:
-    """Vote/comment listeners fire on insert, so recompute stored counters.
+def _recompute_counters(instance_id: Any = None) -> None:
+    """Recompute vote/comment counters absolutely (see docstring above).
 
-    Counters must be recomputed absolutely: idea rows are imported with
-    their stored counts and every re-inserted vote/comment fires its
-    listener on top, double-counting.
+    Scoped to one instance when given, so restoring an instance bundle
+    never dirties other instances' rows.
     """
-    for idea in Idea.query.all():
+    query = Idea.query
+    if instance_id is not None:
+        query = query.filter(Idea.instance_id == instance_id)
+    for idea in query.all():
         if hasattr(idea, "update_vote_counts"):
             idea.update_vote_counts()
         idea.comments_count = Comment.query.filter(
@@ -299,8 +347,12 @@ def _reset_client_defaults(model: Any, rows: list[dict[str, Any]]) -> None:
 
 
 def restore_site(bundle: dict[str, Any]) -> dict[str, int]:
-    """Verify, wipe and re-import a bundle. Returns per-table row counts."""
-    verify_bundle(bundle)
+    """Verify, wipe and re-import a site bundle. Returns row counts."""
+    manifest = verify_bundle(bundle)
+    if manifest.get("scope") != "site":
+        raise BackupIntegrityError(
+            "Not a site bundle (scope != site). Use restore-instance."
+        )
     data: dict[str, Any] = dict(bundle["data"])
     _wipe_all()
     for model in EXPORT_TABLES:
@@ -321,3 +373,143 @@ def fingerprint_db() -> dict[str, str]:
         model.__tablename__: table_fingerprint(_export_rows(model))
         for model in EXPORT_TABLES
     }
+
+
+def fingerprint_instance(instance_id: Any) -> dict[str, str]:
+    """Fingerprints of one instance's exported rows (zero-diff checks)."""
+    from app.models import Instance
+
+    instance = db.session.get(Instance, instance_id)
+    if instance is None:
+        raise BackupIntegrityError(f"Unknown instance: {instance_id}.")
+    bundle_tables = _export_instance_tables(instance)
+    return {name: table_fingerprint(rows) for name, rows in bundle_tables.items()}
+
+
+def _export_instance_tables(instance: Any) -> dict[str, list]:
+    data: dict[str, list] = {}
+    for model in EXPORT_TABLES:
+        name = model.__tablename__
+        if name == "instances":
+            rows = _export_rows(model)
+            data[name] = [r for r in rows if r["id"] == str(instance.id)]
+        elif "instance_id" in model.__table__.columns:
+            data[name] = _export_rows(model, instance.id)
+        else:
+            data[name] = []
+    referenced = set()
+    for rows in data.values():
+        for row in rows:
+            for field in USER_REF_FIELDS:
+                if row.get(field):
+                    referenced.add(str(row[field]))
+    member_ids = {r["user_id"] for r in data.get("memberships", [])}
+    wanted = referenced | {str(i) for i in member_ids}
+    data["users"] = [r for r in _export_rows(User) if r["id"] in wanted]
+    data["oauth_identities"] = [
+        r for r in _export_rows(OAuthIdentity) if r["user_id"] in wanted
+    ]
+    return data
+
+
+def restore_instance(bundle: dict[str, Any]) -> dict[str, int]:
+    """Verify and restore one instance bundle (other instances untouched).
+
+    The instance shell is upserted from the bundle, its tenant rows are
+    replaced wholesale, and member users/oauth links are upserted (global
+    users are never deleted: other instances may share them).
+    """
+    from app.models import Instance
+
+    manifest = verify_bundle(bundle)
+    if manifest.get("scope") != "instance":
+        raise BackupIntegrityError("Not an instance bundle (scope != instance).")
+    data: dict[str, Any] = dict(bundle["data"])
+    instance_id = uuid.UUID(str(manifest["instance_id"]))
+
+    instance_rows = data.get("instances", [])
+    if instance_rows:
+        row = instance_rows[0]
+        instance = db.session.get(Instance, instance_id)
+        if instance is None:
+            instance = Instance()
+            db.session.add(instance)
+        columns = {c.name: c for c in Instance.__table__.columns}
+        for name, value in row.items():
+            if name in columns:
+                setattr(instance, name, _deserialise_value(columns[name], value))
+        db.session.flush()
+    elif db.session.get(Instance, instance_id) is None:
+        raise BackupIntegrityError("Bundle names an instance it does not contain.")
+
+    for model in reversed(EXPORT_TABLES):
+        name = model.__tablename__
+        if name in (
+            "instances",
+            "users",
+            "oauth_identities",
+            "refresh_tokens",
+            "slack_events",
+        ):
+            continue
+        if "instance_id" in model.__table__.columns:
+            db.session.query(model).filter(model.instance_id == instance_id).delete(
+                synchronize_session=False
+            )
+    db.session.flush()
+
+    for model in EXPORT_TABLES:
+        name = model.__tablename__
+        if name in ("refresh_tokens", "slack_events"):
+            continue
+        if name in ("instances", "users", "oauth_identities", "memberships"):
+            _upsert_rows(model, data.get(name, []))
+        elif "instance_id" in model.__table__.columns:
+            _import_rows(model, data.get(name, []))
+    _recompute_counters(instance_id)
+    for model in EXPORT_TABLES:
+        _reset_client_defaults(model, data.get(model.__tablename__, []))
+    db.session.commit()
+    return {name: len(data.get(name, [])) for name in data}
+
+
+def _upsert_rows(model: Any, rows: list[dict[str, Any]]) -> None:
+    """Insert rows, replacing on PK conflict (idempotent restores)."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+    if not rows:
+        return
+    columns = {c.name: c for c in model.__table__.columns}
+    table = model.__table__
+    bind = db.session.get_bind()
+    values = [
+        {
+            name: _deserialise_value(columns[name], value)
+            for name, value in row.items()
+            if name in columns
+        }
+        for row in rows
+    ]
+    if bind.dialect.name == "postgresql":
+        pg_base = pg_insert(table).values(values)
+        stmt: Any = pg_base.on_conflict_do_update(
+            index_elements=[table.c[_row_key(model)]],
+            set_={
+                c.name: pg_base.excluded[c.name]
+                for c in table.columns
+                if c.name != _row_key(model)
+            },
+        )
+    else:
+        lite_base = sqlite_insert(table).values(values)
+        stmt = lite_base.on_conflict_do_update(
+            index_elements=[table.c[_row_key(model)]],
+            set_={
+                c.name: lite_base.excluded[c.name]
+                for c in table.columns
+                if c.name != _row_key(model)
+            },
+        )
+    db.session.execute(stmt)
+    db.session.flush()

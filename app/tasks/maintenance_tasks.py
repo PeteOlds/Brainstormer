@@ -1,8 +1,10 @@
-from app.tasks import celery, BaseTask
+from datetime import datetime, timedelta, timezone
+
+import structlog
+
 from app.extensions import db
 from app.models import Idea, Vote
-from datetime import datetime, timezone, timedelta
-import structlog
+from app.tasks import BaseTask, celery
 
 logger = structlog.get_logger()
 
@@ -63,7 +65,8 @@ def recalculate_vote_counts(self):
 )
 def update_next_run_times(self):
     """Update next_run_at for all active prompts based on interval."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     from app.models import PromptConfig
 
     now = datetime.now(timezone.utc)
@@ -128,3 +131,43 @@ def beat_heartbeat(self):
     stamped = write_beat_heartbeat(redis_client)
     logger.info("beat_heartbeat", at=stamped)
     return {"status": "ok", "at": stamped}
+
+
+@celery.task(
+    bind=True,
+    base=BaseTask,
+    name="app.tasks.maintenance_tasks.scheduled_site_backup",
+)
+def scheduled_site_backup(self, backup_dir: str | None = None) -> dict:
+    """Daily site backup: export, write, and verify by re-reading.
+
+    BACKUP_DIR env (default ./backups) must live on the Docker backup
+    volume in production. No retention policy per PRD: files accumulate
+    and disk use is monitored, never auto-pruned.
+    """
+    import os
+
+    from flask import current_app
+
+    from app.services import backup as backup_svc
+
+    target = (
+        backup_dir
+        or os.getenv("BACKUP_DIR")
+        or str(current_app.config.get("BACKUP_DIR", "./backups"))
+    )
+    os.makedirs(target, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    path = os.path.join(target, f"site-{stamp}.json")
+    bundle = backup_svc.export_site()
+    backup_svc.write_bundle(bundle, path)
+    manifest = backup_svc.read_bundle(path)["manifest"]
+    total = sum(manifest["tables"].values())
+    logger.info(
+        "scheduled_backup",
+        path=path,
+        rows=total,
+        checksum=manifest["checksum"][:16],
+        app_version=manifest["app_version"],
+    )
+    return {"status": "ok", "path": path, "rows": total}

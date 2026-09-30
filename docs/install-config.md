@@ -169,11 +169,39 @@ append-only in `ai_spend_ledger` and included in site backups.
 # POST /api/v1/ideas/<id>/chat/iterate {"content": {"prompt_title": "..."}}
 # POST /api/v1/ideas/<id>/chat/rollback {"turn_id": "..."}
 ```
-
 3/min/user rate limit. Per-instance switch: once an instance has AI
 config rows, at least one needs `chat_enabled: true` or chat returns
 403 `CHAT_DISABLED` (pure-Ollama instances without rows stay open).
 Turns persist content for history/rollback; logs carry hashes only.
+
+## Restore drills and RTO (Phase 6)
+
+Scheduled site backups run daily via beat (`scheduled_site_backup`
+→ `BACKUP_DIR`, default `./backups`, on the Docker backup volume).
+Every file is verified by re-read on write. No auto-pruning: monitor
+disk, never delete silently.
+
+Drill (quarterly, and before every upgrade):
+
+```bash
+flask backup-site --output /backups/pre-upgrade.json
+# prove restore on a scratch database, time it:
+time flask restore --input /backups/pre-upgrade.json --yes   # against scratch DB
+flask backup-instance --instance-id 5 --output /backups/site5.json
+flask restore-instance --input /backups/site5.json --yes     # scratch DB
+```
+
+RTO record (scratch SQLite, 14 rows: export 0.04s, restore 0.03s —
+sub-second at this scale; re-measure on production data and log here):
+
+| Date | Scope | Rows | Restore time | Operator |
+|------|-------|------|--------------|----------|
+| 2026-09-29 | site (drill) | 14 | 0.03s | automated |
+| _next drill_ | | | | |
+
+Target RTO on current production size: under 15 minutes including
+verification. Instance restores never touch other instances (proven by
+`test_instance_restore_round_trip_leaves_others_alone`).
 
 ## Social login (Phase 5)
 

@@ -378,3 +378,25 @@ def remove_member(user, instance_id, member_id):
     db.session.delete(membership)
     db.session.commit()
     return api_ok({"removed": str(member_id)})
+
+
+@bp.route("/instances/<uuid:instance_id>/export", methods=["GET"])
+@token_required
+def export_instance_bundle(user, instance_id):
+    """Download this instance's JSON bundle (self-service export)."""
+    from flask import jsonify
+
+    from app.services import backup as backup_svc
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    try:
+        bundle = backup_svc.export_instance(instance.id)
+    except backup_svc.BackupIntegrityError as exc:
+        return api_error(str(exc), 404)
+    response = jsonify(bundle)
+    response.headers["Content-Disposition"] = (
+        f"attachment; filename=instance-{instance.number}.json"
+    )
+    return response
