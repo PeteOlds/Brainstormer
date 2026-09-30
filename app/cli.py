@@ -99,6 +99,7 @@ def register_cli(app):
     app.cli.add_command(init_tenancy)
     app.cli.add_command(promote_site_admin)
     app.cli.add_command(create_instance)
+    app.cli.add_command(set_entitlement)
 
 
 @click.command("backup-site")
@@ -281,3 +282,35 @@ def create_instance(number: int, name: str):
         click.echo(f"Error: {exc}", err=True)
         return
     click.echo(f"Instance created: number={instance.number} id={instance.id}")
+
+
+@click.command("set-entitlement")
+@click.option(
+    "--instance", "instance_ref", required=True, help="Instance number or UUID"
+)
+@click.option("--key", required=True, help="Entitlement key (e.g. hosted_ai)")
+@click.option("--grant/--revoke", default=True, help="Grant or revoke")
+@with_appcontext
+def set_entitlement(instance_ref: str, key: str, grant: bool):
+    """Grant or revoke a billing entitlement (operator-run, billing manual)."""
+    from app.models import ENTITLEMENTS, Instance, InstanceEntitlement
+
+    try:
+        iid = _resolve_instance_id(instance_ref)
+    except ValueError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        return
+    if key not in ENTITLEMENTS:
+        click.echo(f"Error: key must be one of {', '.join(ENTITLEMENTS)}.", err=True)
+        return
+    from app.extensions import db
+
+    row = InstanceEntitlement.query.filter_by(instance_id=iid, key=key).first()
+    if row is None:
+        row = InstanceEntitlement(instance_id=iid, key=key)
+        db.session.add(row)
+    row.granted = grant
+    db.session.commit()
+    click.echo(
+        f"Entitlement {key} {'granted' if grant else 'revoked'} for instance {iid}"
+    )

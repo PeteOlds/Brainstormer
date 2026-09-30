@@ -142,7 +142,11 @@ def _record_turn(
 
 def chat_turn(idea: Any, user: Any, message: str, model_override: Any = None) -> Any:
     """One conversational turn: no idea changes, reply in prose."""
+    from app.models import require_entitlement
+
     route = resolve_route(idea, model_override)
+    if route.provider != "ollama":
+        require_entitlement(idea.instance_id, "hosted_ai")
     session = get_or_create_session(idea, user, route.model_name)
     system = get_base_prompt() + (
         "\nYou are brainstorming conversationally about the idea below. "

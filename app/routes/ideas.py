@@ -937,9 +937,12 @@ def _chat_gate(idea):
 
 
 def _chat_provider_error(err):
+    from app.models import EntitlementError
     from app.services.llm_backends import BudgetExhausted, ProviderError
     from app.services.ollama_client import OllamaError
 
+    if isinstance(err, EntitlementError):
+        return api_error(str(err), status_code=402, error_code="ENTITLEMENT_REQUIRED")
     if isinstance(err, BudgetExhausted):
         return api_error(str(err), status_code=429, error_code="BUDGET_EXHAUSTED")
     if isinstance(err, OllamaError):

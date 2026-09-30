@@ -19,8 +19,8 @@ from app.models import (
 )
 
 
-def make_instance(number, name=None):
-    instance = Instance(number=number, name=name or f"Inst {number}")
+def make_instance(number, name=None, free=False):
+    instance = Instance(number=number, name=name or f"Inst {number}", is_free=free)
     db.session.add(instance)
     db.session.flush()
     return instance

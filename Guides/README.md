@@ -27,8 +27,8 @@ Each guide carries a status header:
 | `Guide_SecurityBasic.md` | Adopted | Yes — complements `Guardrail.md` (which remains authoritative) |
 | `Guide_Upgrades.md` | Adopted (selectively) | Container, migration, and rollback practices — yes; Flutter/Supabase-specific tooling — no (see Aspirational) |
 | `Policy_Privacy.md` | Template (placeholder) | No — placeholder text; tailor + legal review before any release relies on it (required gate before any hosted-AI or social-login rollout per `PRD_V2.md` §12) |
-| `Guide_Flutter.md` | Aspirational | No — current frontend is Jinja2 + Alpine.js; applies if/when a Flutter client is built |
-| `Guide_UITesting.md` | Aspirational | No — Flutter widget/golden testing; current UI tests are API-backed pytest in `tests/ui/` |
+| `Guide_Flutter.md` | Adopted | Yes — the `flutter/` client (Riverpod, dumb widgets, tokens) |
+| `Guide_UITesting.md` | Adopted | Yes — pytest owns API behaviour; widget/golden/integration in `flutter/test/` |
 | `Guide_SocialLogin.md` | Adopted-for-V2 (Template otherwise) | V2 only — social login + multi-tenancy per `PRD_V2.md` §4; no social login in V1 |
 | `Guide_MultiTenantAIConnectivity.md` | Adopted-for-V2 (Template otherwise) | V2 only — proxy, virtual keys, budgets per `PRD_V2.md` §7; V1 calls local Ollama directly |
 

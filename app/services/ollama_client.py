@@ -139,7 +139,7 @@ class OllamaClient:
         model: str,
         prompt: str,
         system: str | None = None,
-        format: str = "json",
+        format: str | None = "json",
         options: dict | None = None,
         keep_alive: str | None = None,
     ) -> dict[str, Any]:

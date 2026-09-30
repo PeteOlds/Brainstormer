@@ -203,6 +203,24 @@ Target RTO on current production size: under 15 minutes including
 verification. Instance restores never touch other instances (proven by
 `test_instance_restore_round_trip_leaves_others_alone`).
 
+## Billing entitlements (Phase 8)
+
+Payment provider and pricing are unconfirmed, so billing is manual:
+Site Admins grant entitlements; the Free flag sets baselines.
+
+```bash
+flask set-entitlement --instance 20 --key hosted_ai            # grant
+flask set-entitlement --instance 20 --key hosted_ai --revoke   # revoke
+# GET /api/v1/instances/<id>/entitlements                     # read (instance admin+)
+# PUT /api/v1/instances/<id>/entitlements                     # write (site admin)
+```
+
+Keys: `core` (always), `hosted_ai` (enforced on hosted generation and
+chat), `chat`, `extra_guides`, `custom_deploy` (resolvable, wiring
+later). Free instances baseline to `core`; paid to everything.
+Suspended instances (`status != active`) are refused everywhere.
+Start/End dates are recorded and surfaced, enforcement TBD.
+
 ## Social login (Phase 5)
 
 Per-instance OAuth credentials (instance admin), global identity links:

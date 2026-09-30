@@ -163,7 +163,8 @@ def grant_site_admin(user_id: uuid.UUID) -> Membership:
 
     existing = Membership.query.filter_by(user_id=user_id, instance_id=None).first()
     if existing is not None:
-        assert isinstance(existing, Membership)
+        if not isinstance(existing, Membership):
+            raise InstanceError("Corrupt site-admin grant.")
         return existing
     grant = Membership(user_id=user_id, instance_id=None, role=ROLE_SITE_ADMIN)
     db.session.add(grant)

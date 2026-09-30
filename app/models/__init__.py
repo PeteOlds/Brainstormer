@@ -6,6 +6,15 @@ from .ai_config import (
 )
 from .chat import CHAT_KINDS, CHAT_ROLES, ChatSession, ChatTurn, content_hash
 from .comment import Comment
+from .entitlement import (
+    ENTITLEMENTS,
+    FREE_BASELINE,
+    PAID_BASELINE,
+    EntitlementError,
+    InstanceEntitlement,
+    require_entitlement,
+    resolve_entitlements,
+)
 from .oauth import OAUTH_PROVIDERS, OAuthIdentity, TenantOAuthConfig
 from .idea import Idea, IdeaStatus
 from .idea_edit import IdeaEdit
@@ -63,4 +72,11 @@ __all__ = [
     "TenantOAuthConfig",
     "OAuthIdentity",
     "OAUTH_PROVIDERS",
+    "InstanceEntitlement",
+    "EntitlementError",
+    "ENTITLEMENTS",
+    "FREE_BASELINE",
+    "PAID_BASELINE",
+    "require_entitlement",
+    "resolve_entitlements",
 ]

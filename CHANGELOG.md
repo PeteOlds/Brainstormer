@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.37.0] - 2026-09-30
+### Added
+- Phase 8 billing entitlements + hardening: entitlement framework (stored grants layer over Free-flag baselines, `hosted_ai` enforced on hosted generation and chat with 402, suspended instances refused, site-admin management API + `set-entitlement` CLI), `guardrails.yml` CI (bandit, safety, guard scripts, Flutter analyze/test, backend gate), `check_no_external_calls`/`check_no_secrets` scripts. Audit: bandit 0 high/medium (14 pre-existing lows), safety 0 vulnerabilities, backend coverage 73% (gate 35, target 80 tracked). Honest deferrals: payment provider/pricing, Start/End enforcement, DLP layer, proxy-server virtual keys, push/offline
+
 ## [0.36.0] - 2026-09-30
 ### Added
 - Phase 7 Flutter replatform (`flutter/`, verified with Flutter 3.41.4): feature-first Riverpod app (auth with instance picker, ideas list/detail with vote/comments/phase filter/status change, chat tab, prompts with provider routing, admin dashboard/activity/users, instance settings with write-only keys and spend), single ApiClient with 401-refresh-retry, secure token storage, Inter/blue tokens with dark mode, version footer, web deep-link parity, 10 widget/unit tests plus a tracked golden, release web build proven. Backend: `LEGACY_WEB_ENABLED` flag (default on) with 410 retirement path for all Jinja routes. Deliberately deferred: push/offline, integration_test against staging, freezed codegen (hand-written models for now)

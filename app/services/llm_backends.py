@@ -248,6 +248,12 @@ def generate_for_prompt(
             f"No API key configured for provider '{provider}' on this instance.",
             retryable=False,
         )
+    from app.models import EntitlementError, require_entitlement
+
+    try:
+        require_entitlement(prompt.instance_id, "hosted_ai")
+    except EntitlementError as exc:
+        raise ProviderError(str(exc), retryable=False) from exc
     check_budget(config)
     result = _litellm_generate(
         model,

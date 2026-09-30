@@ -400,3 +400,55 @@ def export_instance_bundle(user, instance_id):
         f"attachment; filename=instance-{instance.number}.json"
     )
     return response
+
+
+@bp.route("/instances/<uuid:instance_id>/entitlements", methods=["GET"])
+@token_required
+def list_entitlements(user, instance_id):
+    """Granted keys (resolved) plus stored overrides and billing flags."""
+    from app.models import InstanceEntitlement, resolve_entitlements
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    rows = InstanceEntitlement.query.filter_by(instance_id=instance.id).all()
+    return api_ok(
+        {
+            "instance_id": str(instance.id),
+            "is_free": instance.is_free,
+            "status": instance.status,
+            "granted": sorted(resolve_entitlements(instance)),
+            "overrides": [r.to_dict() for r in rows],
+        }
+    )
+
+
+@bp.route("/instances/<uuid:instance_id>/entitlements", methods=["PUT"])
+@site_admin_required
+def set_entitlement(user, instance_id):
+    """Grant/revoke one entitlement (site admin; billing is manual)."""
+    from app.models import ENTITLEMENTS, InstanceEntitlement
+
+    instance = Instance.query.get(instance_id)
+    if instance is None:
+        return api_error("Not found.", 404)
+    data = request.get_json(silent=True) or {}
+    key = (data.get("key") or "").strip()
+    if key not in ENTITLEMENTS:
+        return api_error(
+            f"key must be one of {', '.join(ENTITLEMENTS)}.", status_code=400
+        )
+    granted = data.get("granted", True)
+    if not isinstance(granted, bool):
+        return api_error("granted must be a boolean.", status_code=400)
+    limits = data.get("limits", {})
+    if not isinstance(limits, dict):
+        return api_error("limits must be an object.", status_code=400)
+    row = InstanceEntitlement.query.filter_by(instance_id=instance.id, key=key).first()
+    if row is None:
+        row = InstanceEntitlement(instance_id=instance.id, key=key)
+        db.session.add(row)
+    row.granted = granted
+    row.limits = dict(limits)
+    db.session.commit()
+    return api_ok({"entitlement": row.to_dict()})
