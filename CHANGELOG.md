@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.41.0] - 2026-09-30
+### Added
+- Staging smoke test (item 15): `flutter/integration_test/app_test.dart` walks register → login → ideas → vote → comment → chat history with a throwaway user and cleanup; verified headless against a scratch backend (device/Chrome required for on-device runs; never point at production)
+
 ## [0.40.0] - 2026-09-30
 ### Added
 - Offline + local notifications (item 14): TTL GET cache with stale-on-failure fallback and prefix invalidation on mutations, connectivity banner in the app shell, new-idea digest and chat-reply local notifications (no-op off-platform), 6 new Flutter tests (18 total). FCM deliberately unwired pending project credentials (documented follow-up)

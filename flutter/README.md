@@ -43,6 +43,11 @@ flutter build web --release
   flow, pills) → golden (shared chrome, git-tracked) → integration
   (`integration_test`, staging backend) — pytest keeps API behaviour,
   Flutter owns widget/visual.
+- Staging smoke (`integration_test/app_test.dart`) registers a
+  throwaway user and walks auth → ideas → vote → comment → chat
+  history, cleaning up afterwards. Needs a device or Chrome
+  (`flutter test integration_test`); verified headless against a
+  scratch backend. Never point it at production.
 
 ## Offline + notifications
 
