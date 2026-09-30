@@ -4,6 +4,7 @@ from .ai_config import (
     PROVIDERS,
     InstanceAIConfig,
 )
+from .chat import CHAT_KINDS, CHAT_ROLES, ChatSession, ChatTurn, content_hash
 from .comment import Comment
 from .idea import Idea, IdeaStatus
 from .idea_edit import IdeaEdit
@@ -53,4 +54,9 @@ __all__ = [
     "AISpendLedger",
     "PROVIDERS",
     "CUTOFF_BEHAVIOURS",
+    "ChatSession",
+    "ChatTurn",
+    "CHAT_ROLES",
+    "CHAT_KINDS",
+    "content_hash",
 ]

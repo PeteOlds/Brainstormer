@@ -153,6 +153,7 @@ def _litellm_generate(
     api_key: str,
     endpoint: str | None,
     timeout: float,
+    json_mode: bool = True,
 ) -> GenerationResult:
     import litellm
 
@@ -164,10 +165,11 @@ def _litellm_generate(
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "response_format": {"type": "json_object"},
         "api_key": api_key or None,
         "timeout": timeout,
     }
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
     if endpoint:
         kwargs["api_base"] = endpoint
     if options.get("temperature") is not None:
@@ -213,12 +215,14 @@ def generate_for_prompt(
     keep_alive: str | None = None,
     timeout: float = 600.0,
     user_id: Any = None,
+    json_mode: bool = True,
 ) -> GenerationResult:
-    """Generate JSON-mode text for a prompt config, recording spend.
+    """Generate text for a prompt config, recording spend.
 
     Ollama keeps the exact legacy OllamaClient call sequence. Hosted
     providers require an instance config with a key, pass the budget
-    gate, and log spend afterwards.
+    gate, and log spend afterwards. json_mode=False returns free prose
+    (used by Chat); structured actions always use JSON mode.
     """
     from app.services.ollama_client import OllamaClient
 
@@ -231,7 +235,7 @@ def generate_for_prompt(
                 model=model,
                 prompt=prompt_text,
                 system=system,
-                format="json",
+                format="json" if json_mode else None,
                 options=options,
                 keep_alive=keep_alive,
             )
@@ -253,6 +257,7 @@ def generate_for_prompt(
         api_key=config.api_key,
         endpoint=config.endpoint,
         timeout=timeout,
+        json_mode=json_mode,
     )
     record_spend(
         prompt.instance_id,

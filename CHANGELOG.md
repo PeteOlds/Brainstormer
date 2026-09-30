@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.33.0] - 2026-09-29
+### Added
+- Phase 4 Chat-to-AI: prose chat turns on all phases (JSON-mode escape hatch in the provider interface), versioned iterate with IdeaEdit audit + before/after snapshots, rollback of any iterate turn (itself audited), per-user 3/min rate limit, per-instance enable switch (`CHAT_DISABLED` 403), admin-only iterate/rollback/model-override, content-hash-only logging, ignored comments proven excluded from sent prompts, fixed latent `Comment.user` crash in context builder. Known gap: iterate is admin-only while the V2 matrix grants users edit-own — flagged as open item
+
 ## [0.32.0] - 2026-09-29
 ### Added
 - Phase 3 provider abstraction (LiteLLM): `generate_for_prompt` routing with Ollama legacy-path parity, hosted JSON-mode generation with usage capture and static-fallback pricing, rolling 30d budgets (70% alert, 100% refuse-fast without retry), append-only `ai_spend_ledger`, encrypted per-instance provider configs with write-only keys and allowlists, per-prompt provider routing, hosted embedding override, spend dashboard API, Guardrail per-instance egress opt-in. Deferred honestly: proxy-server virtual keys (in-process for now), queue/degrade cutoffs, pricing auto-sync, DLP layer

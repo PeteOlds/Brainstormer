@@ -6,7 +6,7 @@ import uuid
 from flask import Blueprint, request
 from sqlalchemy import asc, desc, func, or_
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import (
     Comment,
     Idea,
@@ -20,6 +20,7 @@ from app.models.enums import IdeaStatus
 from app.utils.decorators import admin_required, token_required
 from app.utils.responses import api_created, api_error, api_ok
 from app.utils.tenancy import apply_scope, check_access, current_instance_role, stamp
+from flask_limiter.util import get_remote_address
 
 bp = Blueprint("ideas", __name__)
 
@@ -906,6 +907,166 @@ def delete_comment(user, comment_id):
     comment.body = "[deleted]"
     db.session.commit()
     return api_ok({"deleted": str(comment.id)})
+
+
+def _chat_rate_key():
+    """Per-user (fallback per-IP) key for the chat rate limit."""
+    try:
+        from flask_jwt_extended import get_jwt_identity
+
+        ident = get_jwt_identity()
+    except Exception:
+        ident = None
+    return f"chat:{ident or 'anon'}:{get_remote_address()}"
+
+
+def _chat_gate(idea):
+    """Per-instance enable switch. No config rows (pure Ollama) = open."""
+    from app.models import InstanceAIConfig
+
+    if idea.instance_id is None:
+        return None
+    rows = InstanceAIConfig.query.filter_by(instance_id=idea.instance_id).all()
+    if rows and not any(r.chat_enabled for r in rows):
+        return api_error(
+            "Chat is not enabled for this instance.",
+            status_code=403,
+            error_code="CHAT_DISABLED",
+        )
+    return None
+
+
+def _chat_provider_error(err):
+    from app.services.llm_backends import BudgetExhausted, ProviderError
+    from app.services.ollama_client import OllamaError
+
+    if isinstance(err, BudgetExhausted):
+        return api_error(str(err), status_code=429, error_code="BUDGET_EXHAUSTED")
+    if isinstance(err, OllamaError):
+        return api_error(f"Chat generation failed: {err}", status_code=502)
+    if isinstance(err, ProviderError):
+        return api_error(f"Chat generation failed: {err}", status_code=502)
+    raise err
+
+
+@bp.route("/ideas/<uuid:idea_id>/chat", methods=["POST"])
+@token_required
+@limiter.limit("3 per minute", key_func=_chat_rate_key)
+def chat_with_idea(user, idea_id):
+    """Chat with the AI about an idea (all phases, users and admins)."""
+    from app.services import chat as chat_svc
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    gated = _chat_gate(idea)
+    if gated is not None:
+        return gated
+    data = request.get_json(silent=True) or {}
+    message = data.get("message")
+    if not isinstance(message, str) or not message.strip():
+        return api_error("message is required.", status_code=400)
+    if len(message.strip()) > chat_svc.MESSAGE_MAX:
+        return api_error(
+            f"message must be {chat_svc.MESSAGE_MAX} characters or fewer.",
+            status_code=400,
+        )
+    model_override = data.get("model_override")
+    if model_override is not None and not _can_see_flags(user):
+        return api_error("model_override is admin-only.", status_code=403)
+    try:
+        session, reply = chat_svc.chat_turn(
+            idea, user, message.strip(), model_override=model_override
+        )
+    except Exception as err:
+        return _chat_provider_error(err)
+    return api_ok({"session": session.to_dict(), "reply": reply.to_dict()})
+
+
+@bp.route("/ideas/<uuid:idea_id>/chat", methods=["GET"])
+@token_required
+def list_chat_sessions(user, idea_id):
+    """Chat history for an idea (own sessions; admins see all)."""
+    from app.models import ChatSession
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    query = ChatSession.query.filter_by(idea_id=idea.id)
+    if not _can_see_flags(user):
+        query = query.filter_by(user_id=user.id)
+    sessions = query.order_by(ChatSession.created_at.desc()).all()
+    return api_ok({"sessions": [s.to_dict(include_turns=True) for s in sessions]})
+
+
+@bp.route("/ideas/<uuid:idea_id>/chat/iterate", methods=["POST"])
+@admin_required
+@limiter.limit("3 per minute", key_func=_chat_rate_key)
+def chat_iterate(user, idea_id):
+    """Apply explicit content updates as a versioned iteration (admin)."""
+    from app.services import chat as chat_svc
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    gated = _chat_gate(idea)
+    if gated is not None:
+        return gated
+    data = request.get_json(silent=True) or {}
+    content = data.get("content")
+    message = data.get("message")
+    if message is not None and (
+        not isinstance(message, str) or len(message) > chat_svc.MESSAGE_MAX
+    ):
+        return api_error("message must be a string within limits.", status_code=400)
+    try:
+        session, turn = chat_svc.iterate_idea(
+            idea,
+            user,
+            content or {},
+            message=message,
+            model_override=data.get("model_override"),
+        )
+    except chat_svc.ChatError as err:
+        return api_error(str(err), status_code=err.status_code)
+    return api_ok(
+        {
+            "session": session.to_dict(),
+            "turn": turn.to_dict(),
+            "idea": idea.to_dict(include_content=True),
+        }
+    )
+
+
+@bp.route("/ideas/<uuid:idea_id>/chat/rollback", methods=["POST"])
+@admin_required
+def chat_rollback(user, idea_id):
+    """Restore an iterate turn's before-snapshot (admin, fully audited)."""
+    from app.services import chat as chat_svc
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    data = request.get_json(silent=True) or {}
+    raw_turn = data.get("turn_id")
+    try:
+        turn_id = uuid.UUID(str(raw_turn))
+    except (ValueError, TypeError, AttributeError):
+        return api_error("turn_id is required and must be a UUID.", status_code=400)
+    try:
+        turn = chat_svc.rollback_turn(idea, user, turn_id)
+    except chat_svc.ChatError as err:
+        return api_error(str(err), status_code=err.status_code)
+    return api_ok(
+        {
+            "turn": turn.to_dict(),
+            "idea": idea.to_dict(include_content=True),
+        }
+    )
 
 
 @bp.route("/comments/<uuid:comment_id>/flag", methods=["PATCH"])

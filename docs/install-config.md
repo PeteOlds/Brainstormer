@@ -158,3 +158,19 @@ that instance into egress to that provider only; empty means local-only.
 Budgets cover a rolling 30-day window: 70% logs an alert, 100% fails
 runs fast (`refuse`; queue/degrade arrive later). Spend rows are
 append-only in `ai_spend_ledger` and included in site backups.
+
+## Chat-to-AI (Phase 4)
+
+```bash
+# Chat about an idea (all phases, any signed-in user):
+# POST /api/v1/ideas/<id>/chat {"message": "..."}
+# History: GET /api/v1/ideas/<id>/chat
+# Versioned iteration + rollback (admin only):
+# POST /api/v1/ideas/<id>/chat/iterate {"content": {"prompt_title": "..."}}
+# POST /api/v1/ideas/<id>/chat/rollback {"turn_id": "..."}
+```
+
+3/min/user rate limit. Per-instance switch: once an instance has AI
+config rows, at least one needs `chat_enabled: true` or chat returns
+403 `CHAT_DISABLED` (pure-Ollama instances without rows stay open).
+Turns persist content for history/rollback; logs carry hashes only.
