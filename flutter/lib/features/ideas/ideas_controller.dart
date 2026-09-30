@@ -67,11 +67,14 @@ class IdeasState {
 }
 
 class IdeasController extends StateNotifier<IdeasState> {
-  IdeasController(this._repo) : super(const IdeasState());
+  IdeasController(this._repo, this._ref) : super(const IdeasState());
 
   final IdeasRepository _repo;
+  final Ref _ref;
 
   Future<void> load({int? page}) async {
+    final previousTotal = state.total;
+    final firstLoad = state.items.isEmpty && previousTotal == 0;
     state = state.copyWith(loading: true, error: null);
     try {
       final result = await _repo.list(
@@ -80,13 +83,24 @@ class IdeasController extends StateNotifier<IdeasState> {
         sortBy: state.filter.sortBy,
         search: state.filter.search,
       );
+      final total = result['total'] as int;
       state = state.copyWith(
         loading: false,
         items: (result['ideas'] as List<IdeaSummary>),
-        total: result['total'] as int,
+        total: total,
         pages: result['pages'] as int,
         page: page ?? state.page,
       );
+      if (!firstLoad && total > previousTotal) {
+        // Digest: new ideas arrived since the last load.
+        try {
+          await _ref
+              .read(notificationServiceProvider)
+              .showIdeaDigest(total - previousTotal);
+        } catch (_) {
+          // Best effort by design.
+        }
+      }
     } on ApiException catch (e) {
       state = state.copyWith(loading: false, error: e.message);
     }
@@ -120,4 +134,4 @@ class IdeasController extends StateNotifier<IdeasState> {
 
 final ideasControllerProvider =
     StateNotifierProvider<IdeasController, IdeasState>(
-        (ref) => IdeasController(ref.watch(ideasRepositoryProvider)));
+        (ref) => IdeasController(ref.watch(ideasRepositoryProvider), ref));

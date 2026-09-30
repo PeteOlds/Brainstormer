@@ -43,3 +43,19 @@ flutter build web --release
   flow, pills) → golden (shared chrome, git-tracked) → integration
   (`integration_test`, staging backend) — pytest keeps API behaviour,
   Flutter owns widget/visual.
+
+## Offline + notifications
+
+- GETs accept a TTL (`cacheFor`): fresh cache serves instantly,
+  network failures fall back to stale cache, mutations invalidate by
+  collection prefix. The shell shows an offline banner via
+  `connectivity_plus` while cached content stays usable.
+- Local notifications (`flutter_local_notifications`): new-idea digest
+  on list growth, chat-reply alerts. No-op on unsupported platforms.
+- Remote push (FCM) is pending Firebase project credentials and is
+  deliberately NOT wired: adding `firebase_messaging` requires
+  `google-services.json` / `GoogleService-Info.plist`, without which
+  Android/iOS builds break. Follow-up when credentials exist:
+  1. `flutterfire configure`, 2. backend device-token table +
+  `POST /api/v1/devices`, 3. route `NotificationService` through FCM
+  (call sites already centralised).

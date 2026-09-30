@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'auth_store.dart';
+import 'offline_cache.dart';
 
 /// Backend error with the envelope message, HTTP status and optional
 /// machine-readable error_code (e.g. CONFIRMATION_REQUIRED).
@@ -25,11 +26,14 @@ class ApiClient {
     required this.baseUrl,
     required this.store,
     http.Client? httpClient,
-  }) : _http = httpClient ?? http.Client();
+    OfflineCache? cache,
+  })  : _http = httpClient ?? http.Client(),
+        _cache = cache ?? OfflineCache();
 
   final String baseUrl;
   final AuthStore store;
   final http.Client _http;
+  final OfflineCache _cache;
 
   Map<String, String> _headers(String? token) => {
         'Content-Type': 'application/json',
@@ -39,21 +43,35 @@ class ApiClient {
 
   /// Unwraps the {success, data|message} envelope. Throws ApiException
   /// on transport errors, envelope failures and auth expiry.
+  ///
+  /// GETs may pass [cacheFor]: fresh cache serves instantly, network
+  /// failures fall back to stale cache, and any mutation invalidates
+  /// the matching collection prefix.
   Future<dynamic> request(
     String method,
     String path, {
     Map<String, String>? query,
     Map<String, dynamic>? body,
     bool retryAuth = true,
+    Duration? cacheFor,
+    String? invalidatePrefix,
   }) async {
     final uri = Uri.parse('$baseUrl$path').replace(
       queryParameters: query?.isEmpty ?? true ? null : query,
     );
+    final cacheKey =
+        _cache.keyFor(method, path, uri.query);
+    if (method == 'GET' && cacheFor != null) {
+      final cached = _cache.get(cacheKey);
+      if (cached != null) return cached;
+    }
     final token = await store.readAccessToken();
     http.Response response;
     try {
       response = await _send(method, uri, token, body);
     } on Exception catch (e) {
+      final stale = method == 'GET' ? _cache.getStale(cacheKey) : null;
+      if (stale != null) return stale;
       throw ApiException('Network error: $e', statusCode: 0);
     }
     if (response.statusCode == 401 && retryAuth) {
@@ -71,7 +89,14 @@ class ApiClient {
       throw ApiException('Session expired. Please sign in again.',
           statusCode: 401);
     }
-    return _unwrap(response);
+    if (invalidatePrefix != null) {
+      _cache.invalidatePrefix(invalidatePrefix);
+    }
+    final data = _unwrap(response);
+    if (method == 'GET' && cacheFor != null) {
+      _cache.set(cacheKey, data, cacheFor);
+    }
+    return data;
   }
 
   static bool _isAnonymous(String path) =>
@@ -146,13 +171,21 @@ class ApiClient {
     return false;
   }
 
-  Future<dynamic> get(String path, {Map<String, String>? query}) =>
-      request('GET', path, query: query);
-  Future<dynamic> post(String path, {Map<String, dynamic>? body}) =>
-      request('POST', path, body: body);
-  Future<dynamic> patch(String path, {Map<String, dynamic>? body}) =>
-      request('PATCH', path, body: body);
-  Future<dynamic> put(String path, {Map<String, dynamic>? body}) =>
-      request('PUT', path, body: body);
-  Future<dynamic> delete(String path) => request('DELETE', path);
+  Future<dynamic> get(String path,
+          {Map<String, String>? query, Duration? cacheFor}) =>
+      request('GET', path, query: query, cacheFor: cacheFor);
+  Future<dynamic> post(String path,
+          {Map<String, dynamic>? body, String? invalidatePrefix}) =>
+      request('POST', path, body: body, invalidatePrefix: invalidatePrefix);
+  Future<dynamic> patch(String path,
+          {Map<String, dynamic>? body, String? invalidatePrefix}) =>
+      request('PATCH', path, body: body, invalidatePrefix: invalidatePrefix);
+  Future<dynamic> put(String path,
+          {Map<String, dynamic>? body, String? invalidatePrefix}) =>
+      request('PUT', path, body: body, invalidatePrefix: invalidatePrefix);
+  Future<dynamic> delete(String path, {String? invalidatePrefix}) =>
+      request('DELETE', path, invalidatePrefix: invalidatePrefix);
+
+  /// Clears cached GETs (logout, instance switch).
+  void clearCache() => _cache.invalidate();
 }

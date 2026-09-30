@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/tokens.dart';
+import 'connectivity_banner.dart';
 
 /// App shell: nav rail/drawer, version footer (golden rule — the build
 /// number is always available), and the routed child.
@@ -36,7 +37,7 @@ class AppShell extends ConsumerWidget {
         );
         final body = Column(
           children: [
-            Expanded(child: child),
+            Expanded(child: ConnectivityBanner(child: child)),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(

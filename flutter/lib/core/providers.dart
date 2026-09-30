@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import 'notifications/notification_service.dart';
 import 'network/api_client.dart';
 import 'network/auth_store.dart';
 
@@ -25,3 +26,9 @@ final currentUserProvider =
 
 /// Active instance id for scoped requests (null = unscoped legacy).
 final currentInstanceProvider = StateProvider<String?>((ref) => null);
+
+final notificationServiceProvider = Provider<NotificationService>((ref) {
+  final service = NotificationService();
+  service.init();
+  return service;
+});

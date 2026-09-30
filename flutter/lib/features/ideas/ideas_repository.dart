@@ -18,15 +18,17 @@ class IdeasRepository {
     String? model,
   }) async {
     final trimmedSearch = (search ?? '').trim();
-    final data = await api.get('/api/v1/ideas', query: {
-      'page': '$page',
-      'limit': '$limit',
-      'status': status,
-      'sort_by': sortBy,
-      if (trimmedSearch.isNotEmpty) 'search': trimmedSearch,
-      if (promptConfigId case final p?) 'prompt_config_id': p,
-      if (model case final m?) 'model': m,
-    });
+    final data = await api.get('/api/v1/ideas',
+        query: {
+          'page': '$page',
+          'limit': '$limit',
+          'status': status,
+          'sort_by': sortBy,
+          if (trimmedSearch.isNotEmpty) 'search': trimmedSearch,
+          if (promptConfigId case final p?) 'prompt_config_id': p,
+          if (model case final m?) 'model': m,
+        },
+        cacheFor: const Duration(seconds: 60));
     final map = data as Map<String, dynamic>;
     return {
       'ideas': [
@@ -45,22 +47,24 @@ class IdeasRepository {
 
   Future<Map<String, dynamic>> vote(String id, int direction) async {
     final data = await api.post('/api/v1/ideas/$id/vote',
-        body: {'direction': direction});
+        body: {'direction': direction},
+        invalidatePrefix: '/api/v1/ideas');
     return (data as Map<String, dynamic>);
   }
 
   Future<IdeaSummary> create(String title, String content) async {
-    final data =
-        await api.post('/api/v1/ideas', body: {
-      'prompt_title': title,
-      'raw_content': content,
-    }) as Map<String, dynamic>;
+    final data = await api.post('/api/v1/ideas',
+        body: {
+          'prompt_title': title,
+          'raw_content': content,
+        },
+        invalidatePrefix: '/api/v1/ideas') as Map<String, dynamic>;
     return IdeaSummary.fromJson(data);
   }
 
   Future<IdeaSummary> changeStatus(String id, String status) async {
-    final data =
-        await api.patch('/api/v1/ideas/$id/status', body: {'status': status});
+    final data = await api.patch('/api/v1/ideas/$id/status',
+        body: {'status': status}, invalidatePrefix: '/api/v1/ideas');
     // Status endpoint returns the bare idea (with user_vote); wrap leniently.
     final map = data as Map<String, dynamic>;
     final ideaJson = map.containsKey('idea')
