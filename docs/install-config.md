@@ -138,3 +138,23 @@ Login scoping is optional per token: `POST /api/v1/login` accepts
 `instance_id` (403 without membership); tokens without the claim keep the
 legacy unscoped behaviour. Numbers 2–19 (except 5) are reserved and the
 API/CLI refuse them.
+
+## Provider configuration (Phase 3)
+
+Hosted providers (OpenAI/Anthropic/Gemini via LiteLLM) are per-instance
+opt-in. Keys are Fernet-encrypted in `instance_ai_configs`, write-only
+over the API, and never copied between instances. Entering a key opts
+that instance into egress to that provider only; empty means local-only.
+
+```bash
+# Prompts select a provider (default ollama) and a litellm model id:
+# POST /api/v1/prompts {"provider": "openai", "model_name": "openai/gpt-4o-mini", ...}
+# Per-instance config + spend (instance admin):
+# PUT /api/v1/instances/<id>/ai-configs {"provider": "openai", "key": "sk-...",
+#   "model_allowlist": ["openai/gpt-4o-mini"], "budget_cents": 5000}
+# GET /api/v1/instances/<id>/spend
+```
+
+Budgets cover a rolling 30-day window: 70% logs an alert, 100% fails
+runs fast (`refuse`; queue/degrade arrive later). Spend rows are
+append-only in `ai_spend_ledger` and included in site backups.

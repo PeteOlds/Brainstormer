@@ -98,6 +98,45 @@ def _parse_slack_channel(value):
     return text, None
 
 
+def _parse_provider(value):
+    """Provider must be known. Returns (provider, error)."""
+    from app.models import PROVIDERS
+
+    text = (str(value).strip().lower() if value is not None else "ollama") or "ollama"
+    if text not in PROVIDERS:
+        return None, api_error(
+            f"Invalid provider: must be one of {', '.join(PROVIDERS)}.",
+            status_code=400,
+        )
+    return text, None
+
+
+def _check_model_allowlist(provider, model_name):
+    """Enforce the instance allowlist when one is configured.
+
+    Unscoped requests and instances without an allowlist keep the legacy
+    behaviour (any model). Returns an error response or None.
+    """
+    from app.models import InstanceAIConfig
+    from app.utils.tenancy import current_instance_id
+
+    if provider == "ollama":
+        return None
+    instance_id = current_instance_id()
+    if instance_id is None:
+        return None
+    config = InstanceAIConfig.query.filter_by(
+        instance_id=instance_id, provider=provider
+    ).first()
+    allowlist = (config.model_allowlist if config else None) or []
+    if allowlist and model_name not in allowlist:
+        return api_error(
+            f"Model '{model_name}' is not in this instance's {provider} allowlist.",
+            status_code=400,
+        )
+    return None
+
+
 @bp.route("/prompts/test", methods=["POST"])
 @admin_required
 def test_prompt(user):
@@ -318,6 +357,12 @@ def create_prompt(user):
     slack_channel, err = _parse_slack_channel(data.get("slack_channel"))
     if err:
         return err
+    provider, err = _parse_provider(data.get("provider", "ollama"))
+    if err:
+        return err
+    err = _check_model_allowlist(provider, data["model_name"])
+    if err:
+        return err
 
     # Check max active prompts (10 per instance when scoped, else global)
     active_query = apply_scope(PromptConfig.query, PromptConfig)
@@ -335,6 +380,7 @@ def create_prompt(user):
         interval_minutes=interval_minutes,
         cron_expression=data.get("cron_expression"),
         model_name=data["model_name"],
+        provider=provider,
         temperature=temperature,
         top_p=top_p,
         repeat_penalty=repeat_penalty,
@@ -453,6 +499,15 @@ def update_prompt(user, prompt_id):
         prompt.cron_expression = data["cron_expression"]
     if "model_name" in data:
         prompt.model_name = data["model_name"]
+    if "provider" in data:
+        provider, err = _parse_provider(data["provider"])
+        if err:
+            return err
+        prompt.provider = provider
+    if "model_name" in data or "provider" in data:
+        err = _check_model_allowlist(prompt.provider, prompt.model_name)
+        if err:
+            return err
     if "is_active" in data:
         # Check max active limit
         if data["is_active"] and not prompt.is_active:

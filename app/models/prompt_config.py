@@ -24,6 +24,7 @@ class PromptConfig(db.Model):
     interval_minutes = db.Column(db.Integer, nullable=False)
     cron_expression = db.Column(db.String(100))
     model_name = db.Column(db.String(100), nullable=False)
+    provider = db.Column(db.String(20), nullable=False, default="ollama")
     temperature = db.Column(db.Float, default=0.7)
     top_p = db.Column(db.Float, default=0.9)
     repeat_penalty = db.Column(db.Float, default=1.1)
@@ -99,6 +100,7 @@ class PromptConfig(db.Model):
             "interval_minutes": self.interval_minutes,
             "cron_expression": self.cron_expression,
             "model_name": self.model_name,
+            "provider": self.provider,
             "temperature": self.temperature,
             "top_p": self.top_p,
             "repeat_penalty": self.repeat_penalty,

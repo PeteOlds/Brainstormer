@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.32.0] - 2026-09-29
+### Added
+- Phase 3 provider abstraction (LiteLLM): `generate_for_prompt` routing with Ollama legacy-path parity, hosted JSON-mode generation with usage capture and static-fallback pricing, rolling 30d budgets (70% alert, 100% refuse-fast without retry), append-only `ai_spend_ledger`, encrypted per-instance provider configs with write-only keys and allowlists, per-prompt provider routing, hosted embedding override, spend dashboard API, Guardrail per-instance egress opt-in. Deferred honestly: proxy-server virtual keys (in-process for now), queue/degrade cutoffs, pricing auto-sync, DLP layer
+
 ## [0.31.0] - 2026-09-29
 ### Added
 - Phase 2 V2 lifecycle: 8-state `IdeaStatus` (Spark/Scope/Map/Ship/Scale/Drop/Freeze/Archive) with transition matrix enforcement (`ILLEGAL_TRANSITION` 400, bulk skips with count), per-phase comment threads (`phase` column + `?phase=` filter + composite index), admin-only Ignore flag (`PATCH /comments/<id>/flag`, hidden from users, excluded from all AI context, IdeaEdit-audited), stage-gated secondary actions (PRD at Scope+, Design docs at Map+, nothing on Drop/Archive), Jinja UI rewritten to V2 states with always-confirm status changes, transactional-safe enum migration with V1 map (PRD-bearing DESIGN ideas become MAP), fixed latent `Comment.user` crash in context builder

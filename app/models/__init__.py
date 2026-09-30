@@ -1,3 +1,9 @@
+from .ai_config import (
+    AISpendLedger,
+    CUTOFF_BEHAVIOURS,
+    PROVIDERS,
+    InstanceAIConfig,
+)
 from .comment import Comment
 from .idea import Idea, IdeaStatus
 from .idea_edit import IdeaEdit
@@ -43,4 +49,8 @@ __all__ = [
     "ROLE_SITE_ADMIN",
     "ROLE_INSTANCE_ADMIN",
     "ROLE_USER",
+    "InstanceAIConfig",
+    "AISpendLedger",
+    "PROVIDERS",
+    "CUTOFF_BEHAVIOURS",
 ]

@@ -20,11 +20,13 @@ from sqlalchemy import Column, DateTime, Enum
 
 from app.extensions import db
 from app.models import (
+    AISpendLedger,
     Comment,
     Idea,
     IdeaEdit,
     IdeaStatusHistory,
     Instance,
+    InstanceAIConfig,
     Membership,
     PromptConfig,
     PromptRun,
@@ -48,6 +50,7 @@ EXPORT_TABLES: list[Any] = [
     Instance,
     User,
     Membership,
+    InstanceAIConfig,
     SystemSettings,
     PromptConfig,
     Idea,
@@ -60,6 +63,7 @@ EXPORT_TABLES: list[Any] = [
     IdeaStatusHistory,
     SlackPost,
     SlackEvent,
+    AISpendLedger,
 ]
 
 

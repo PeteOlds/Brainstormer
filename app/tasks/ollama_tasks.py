@@ -17,6 +17,10 @@ from app.utils.crypto import decrypt
 logger = structlog.get_logger()
 
 
+class _AbortAction(Exception):
+    """Run already marked failed inside; unwind without Celery retry."""
+
+
 def _generate_reference_code() -> str:
     """Generate a unique reference code like IDEA-XXXX."""
     # Max over codes parsed in Python (the ideas table is tiny). Do NOT
@@ -208,16 +212,20 @@ def generate_idea(
 
     client = OllamaClient(timeout=600.0)
     model = prompt_config.model_name
+    provider = (prompt_config.provider or "ollama").lower()
+    hosted = provider != "ollama"
     logger.info(
         "ollama_task_start",
         task="generate_idea",
-        base_url=client.base_url,
+        base_url=None if hosted else client.base_url,
         model=model,
+        provider=provider,
         prompt_id=prompt_config_id,
     )
 
-    # Pre-flight: verify model exists in this Ollama instance
-    if not client.is_model_available(model):
+    # Pre-flight: verify model exists in this Ollama instance (local only;
+    # hosted keys prove themselves at call time).
+    if not hosted and not client.is_model_available(model):
         err_msg = f"Model '{model}' not installed at {client.base_url}"
         logger.error(
             "ollama_model_missing",
@@ -252,34 +260,70 @@ def generate_idea(
             MEMORY_EXPLORE=explore,
         )
 
-        # Call Ollama with the prompt's generation params.
-        try:
-            response = client.generate_sync(
-                model=model,
-                prompt=prompt_text,
-                system=base_prompt,
-                format="json",
-                options=_generation_options(prompt_config),
-                keep_alive=prompt_config.keep_alive or "2h",
+        # Hosted providers route via LiteLLM (budget gates, spend log);
+        # Ollama keeps the exact legacy call sequence.
+        if hosted:
+            from app.services.llm_backends import (
+                BudgetExhausted,
+                ProviderError,
+                generate_for_prompt,
             )
-        except OllamaError as e:
-            logger.error(
-                "ollama_generate_failed",
-                base_url=client.base_url,
-                model=model,
-                status=e.status_code,
-                body=e.response_body,
-            )
-            raise
+
+            try:
+                result = generate_for_prompt(
+                    prompt_config,
+                    prompt_text,
+                    system=base_prompt,
+                    options=_generation_options(prompt_config),
+                    keep_alive=prompt_config.keep_alive or "2h",
+                    timeout=600.0,
+                )
+            except BudgetExhausted as e:
+                logger.error("ai_budget_exhausted", prompt_id=prompt_config_id)
+                run = _get_run()
+                if run is not None:
+                    run.mark_failed(str(e))
+                    db.session.commit()
+                return
+            except ProviderError as e:
+                if not e.retryable:
+                    run = _get_run()
+                    if run is not None:
+                        run.mark_failed(str(e))
+                        db.session.commit()
+                    return
+                raise
+            raw_text = result.text
+        else:
+            # Call Ollama with the prompt's generation params.
+            try:
+                response = client.generate_sync(
+                    model=model,
+                    prompt=prompt_text,
+                    system=base_prompt,
+                    format="json",
+                    options=_generation_options(prompt_config),
+                    keep_alive=prompt_config.keep_alive or "2h",
+                )
+            except OllamaError as e:
+                logger.error(
+                    "ollama_generate_failed",
+                    base_url=client.base_url,
+                    model=model,
+                    status=e.status_code,
+                    body=e.response_body,
+                )
+                raise
+            raw_text = response["response"]
 
         # Validate response
-        structured = validate_ollama_output("REFINE", response["response"])
+        structured = validate_ollama_output("REFINE", raw_text)
 
         # Create idea
         idea = Idea(
             reference_code=_generate_reference_code(),
             prompt_title=prompt_config.title,
-            raw_content=response["response"],
+            raw_content=raw_text,
             structured_content=structured.model_dump(),
             prompt_config_id=prompt_config.id,
             instance_id=prompt_config.instance_id,
@@ -320,7 +364,9 @@ def generate_idea(
             )
 
             embedding_service = get_embedding_service()
-            embedding = embedding_service.generate_embedding_sync(embedding_text(idea))
+            embedding = embedding_service.generate_embedding_sync(
+                embedding_text(idea), instance_id=idea.instance_id
+            )
             embedding_service.store_embedding(idea.id, embedding)
             try:
                 dedup_threshold = float(os.getenv("DEDUP_SIMILARITY_THRESHOLD", "0.97"))
@@ -398,7 +444,8 @@ def generate_idea(
             _record_failure(run_id, e)
         raise
     finally:
-        client.close()
+        if not hosted:
+            client.close()
 
 
 def _drop_answered_questions(validated, idea_id, action_type):
@@ -504,17 +551,26 @@ def run_secondary_action(
         if idea.prompt_config
         else "llama3:8b"
     )
+    provider_cfg = idea.prompt_config
+    provider = (provider_cfg.provider or "ollama").lower() if provider_cfg else "ollama"
+    hosted = provider != "ollama"
+    # A model override on a hosted idea is a litellm model id; on a
+    # prompt-less idea the override alone cannot imply a provider.
+    if model_override and not provider_cfg:
+        hosted = False
+        provider = "ollama"
     logger.info(
         "ollama_task_start",
         task="run_secondary_action",
-        base_url=client.base_url,
+        base_url=None if hosted else client.base_url,
         model=model,
+        provider=provider,
         action_type=action_type,
         idea_id=idea_id,
     )
 
-    # Pre-flight: verify model exists in this Ollama instance
-    if not client.is_model_available(model):
+    # Pre-flight: verify model exists in this Ollama instance (local only)
+    if not hosted and not client.is_model_available(model):
         err_msg = f"Model '{model}' not installed at {client.base_url}"
         logger.error(
             "ollama_model_missing",
@@ -538,26 +594,64 @@ def run_secondary_action(
     def _call_and_validate(prompt_text):
         import re
 
-        try:
-            response = client.generate_sync(
-                model=model,
-                prompt=prompt_text,
-                system=base_prompt,
-                format="json",
-                options=options,
-                keep_alive=keep_alive,
+        if hosted:
+            from types import SimpleNamespace
+
+            from app.services.llm_backends import (
+                BudgetExhausted,
+                ProviderError,
+                generate_for_prompt,
             )
-        except OllamaError as e:
-            logger.error(
-                "ollama_generate_failed",
-                base_url=client.base_url,
-                model=model,
-                action_type=action_type,
-                status=e.status_code,
-                body=e.response_body,
+
+            shim = SimpleNamespace(
+                provider=provider,
+                model_name=model,
+                instance_id=idea.instance_id,
             )
-            raise
-        text = (response["response"] or "").strip()
+            try:
+                result = generate_for_prompt(
+                    shim,
+                    prompt_text,
+                    system=base_prompt,
+                    options=options,
+                    timeout=600.0,
+                )
+            except BudgetExhausted as e:
+                run = _get_run()
+                if run is not None:
+                    run.mark_failed(str(e))
+                    db.session.commit()
+                raise _AbortAction(str(e))
+            except ProviderError as e:
+                if not e.retryable:
+                    run = _get_run()
+                    if run is not None:
+                        run.mark_failed(str(e))
+                        db.session.commit()
+                    raise _AbortAction(str(e))
+                raise
+            text = (result.text or "").strip()
+        else:
+            try:
+                response = client.generate_sync(
+                    model=model,
+                    prompt=prompt_text,
+                    system=base_prompt,
+                    format="json",
+                    options=options,
+                    keep_alive=keep_alive,
+                )
+            except OllamaError as e:
+                logger.error(
+                    "ollama_generate_failed",
+                    base_url=client.base_url,
+                    model=model,
+                    action_type=action_type,
+                    status=e.status_code,
+                    body=e.response_body,
+                )
+                raise
+            text = (response["response"] or "").strip()
         # Strip markdown fences small models love to add.
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
@@ -748,6 +842,9 @@ def run_secondary_action(
     except OllamaError:
         # Re-raise OllamaError so autoretry can handle it; _record_failure will include body on final attempt
         raise
+    except _AbortAction:
+        # Budget/config failures already recorded on the run; just stop.
+        return
     except Exception as e:
         logger.error(
             "secondary_action_error",
@@ -763,7 +860,8 @@ def run_secondary_action(
             _record_failure(run_id, e)
         raise
     finally:
-        client.close()
+        if not hosted:
+            client.close()
 
 
 @celery.task(base=BaseTask, name="app.tasks.ollama_tasks.check_due_prompts")

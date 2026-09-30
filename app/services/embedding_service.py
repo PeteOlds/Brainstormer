@@ -66,8 +66,23 @@ class EmbeddingService:
             logger.error("embedding_generation_failed", error=str(e))
             raise
 
-    def generate_embedding_sync(self, text: str) -> List[float]:
-        """Synchronous version for use in Celery tasks."""
+    def generate_embedding_sync(self, text: str, instance_id=None) -> List[float]:
+        """Synchronous version for use in Celery tasks.
+
+        instance_id enables the hosted override: when the instance
+        configures a non-Ollama embedding model, vectors come from that
+        provider (spend-logged); otherwise nomic-embed-text locally.
+        """
+        if instance_id is not None:
+            try:
+                from app.services.llm_backends import embed_for_instance
+
+                hosted = embed_for_instance(text, instance_id)
+                if hosted:
+                    return hosted
+            except Exception as e:
+                logger.error("hosted_embedding_failed", error=str(e))
+                raise
         try:
             response = self.ollama_client.generate_sync(
                 model=self.EMBEDDING_MODEL,
