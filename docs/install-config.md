@@ -197,7 +197,15 @@ sub-second at this scale; re-measure on production data and log here):
 | Date | Scope | Rows | Restore time | Operator |
 |------|-------|------|--------------|----------|
 | 2026-09-29 | site (drill) | 14 | 0.03s | automated |
+| 2026-09-30 | site (PROD drill, scratch DB) | 2623 | 11.5s | drill |
 | _next drill_ | | | | |
+
+Known limitation (pre-existing): a fresh `flask db upgrade` from zero
+fails on the historical BUILD/DEVELOPMENT enum migration (new enum
+values cannot be used in the same transaction). New databases: build
+schema with `db.create_all()` (dev) or apply enum migrations via the
+psql-autocommit procedure above, then `flask db upgrade`. Upgrades of
+existing databases (the production path) are unaffected.
 
 Target RTO on current production size: under 15 minutes including
 verification. Instance restores never touch other instances (proven by
