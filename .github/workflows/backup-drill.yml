@@ -18,6 +18,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
       - name: Backup round-trip tests
+        env:
+          SECRET_KEY: drill-secret-key-min-32-chars-long
+          JWT_SECRET_KEY: drill-jwt-secret-min-32-chars-long
+          FERNET_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         run: pytest tests/integration/test_backup.py -q
       - name: CLI drill on a scratch SQLite database
         env:
