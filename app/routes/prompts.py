@@ -1,10 +1,11 @@
-from flask import Blueprint, request, current_app
+from flask import Blueprint, current_app, request
 from sqlalchemy import func
 
 from app.extensions import db
 from app.models import PromptConfig
 from app.utils.decorators import admin_required, token_required
-from app.utils.responses import api_ok, api_error, api_created
+from app.utils.responses import api_created, api_error, api_ok
+from app.utils.tenancy import apply_scope, check_access, current_instance_id, stamp
 
 bp = Blueprint("prompts", __name__)
 
@@ -18,7 +19,9 @@ def _parse_temperature(value):
     except (TypeError, ValueError):
         return None, api_error("Invalid temperature: must be a number", status_code=400)
     if not 0 <= temperature <= 2:
-        return None, api_error("Invalid temperature: must be between 0 and 2", status_code=400)
+        return None, api_error(
+            "Invalid temperature: must be between 0 and 2", status_code=400
+        )
     return temperature, None
 
 
@@ -31,7 +34,9 @@ def _parse_float_range(value, name, lo, hi, default):
     except (TypeError, ValueError):
         return None, api_error(f"Invalid {name}: must be a number", status_code=400)
     if not lo <= number <= hi:
-        return None, api_error(f"Invalid {name}: must be between {lo} and {hi}", status_code=400)
+        return None, api_error(
+            f"Invalid {name}: must be between {lo} and {hi}", status_code=400
+        )
     return number, None
 
 
@@ -41,9 +46,13 @@ def _parse_num_predict(value, default=1000):
     try:
         number = int(value)
     except (TypeError, ValueError):
-        return None, api_error("Invalid num_predict: must be an integer", status_code=400)
+        return None, api_error(
+            "Invalid num_predict: must be an integer", status_code=400
+        )
     if not 1 <= number <= 4096:
-        return None, api_error("Invalid num_predict: must be between 1 and 4096", status_code=400)
+        return None, api_error(
+            "Invalid num_predict: must be between 1 and 4096", status_code=400
+        )
     return number, None
 
 
@@ -54,7 +63,9 @@ def _parse_seed(value):
     try:
         number = int(value)
     except (TypeError, ValueError):
-        return None, api_error("Invalid seed: must be an integer or empty", status_code=400)
+        return None, api_error(
+            "Invalid seed: must be an integer or empty", status_code=400
+        )
     if number < 0:
         return None, api_error("Invalid seed: must be 0 or greater", status_code=400)
     return number, None
@@ -65,7 +76,9 @@ def _parse_keep_alive(value, default="2h"):
         return default, None
     text = str(value).strip()
     if len(text) > 20:
-        return None, api_error("Invalid keep_alive: too long (max 20 chars)", status_code=400)
+        return None, api_error(
+            "Invalid keep_alive: too long (max 20 chars)", status_code=400
+        )
     return text, None
 
 
@@ -75,11 +88,53 @@ def _parse_slack_channel(value):
         return None, None
     text = str(value).strip()
     if len(text) > 80:
-        return None, api_error("Invalid slack_channel: too long (max 80 chars)", status_code=400)
+        return None, api_error(
+            "Invalid slack_channel: too long (max 80 chars)", status_code=400
+        )
     if not (text.startswith("#") or text.startswith("C") or text.startswith("G")):
         return None, api_error(
-            "Invalid slack_channel: use #channel-name or a channel ID.", status_code=400)
+            "Invalid slack_channel: use #channel-name or a channel ID.", status_code=400
+        )
     return text, None
+
+
+def _parse_provider(value):
+    """Provider must be known. Returns (provider, error)."""
+    from app.models import PROVIDERS
+
+    text = (str(value).strip().lower() if value is not None else "ollama") or "ollama"
+    if text not in PROVIDERS:
+        return None, api_error(
+            f"Invalid provider: must be one of {', '.join(PROVIDERS)}.",
+            status_code=400,
+        )
+    return text, None
+
+
+def _check_model_allowlist(provider, model_name):
+    """Enforce the instance allowlist when one is configured.
+
+    Unscoped requests and instances without an allowlist keep the legacy
+    behaviour (any model). Returns an error response or None.
+    """
+    from app.models import InstanceAIConfig
+    from app.utils.tenancy import current_instance_id
+
+    if provider == "ollama":
+        return None
+    instance_id = current_instance_id()
+    if instance_id is None:
+        return None
+    config = InstanceAIConfig.query.filter_by(
+        instance_id=instance_id, provider=provider
+    ).first()
+    allowlist = (config.model_allowlist if config else None) or []
+    if allowlist and model_name not in allowlist:
+        return api_error(
+            f"Model '{model_name}' is not in this instance's {provider} allowlist.",
+            status_code=400,
+        )
+    return None
 
 
 @bp.route("/prompts/test", methods=["POST"])
@@ -99,12 +154,19 @@ def test_prompt(user):
     if temp_error:
         return temp_error
 
-    prompt = prompt_body.replace("{{topic}}", SAMPLE_TOPIC).replace("{{ topic }}", SAMPLE_TOPIC)
+    prompt = prompt_body.replace("{{topic}}", SAMPLE_TOPIC).replace(
+        "{{ topic }}", SAMPLE_TOPIC
+    )
     # num_predict keeps ad-hoc test runs bounded on CPU (full generations
     # run via Run Now / schedule with the task timeout instead).
-    payload = {"model": model_name, "prompt": prompt, "stream": False,
-               "options": {"temperature": temperature, "num_predict": 500}}
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": temperature, "num_predict": 500},
+    }
     import time as _time
+
     started = _time.monotonic()
     try:
         timeout = float(current_app.config.get("OLLAMA_TIMEOUT", 120))
@@ -115,14 +177,21 @@ def test_prompt(user):
             text = response.json().get("response", "")
         current_app.logger.info(
             "prompt_test_ok model=%s seconds=%.0f chars=%d",
-            model_name, _time.monotonic() - started, len(text))
+            model_name,
+            _time.monotonic() - started,
+            len(text),
+        )
     except httpx.TimeoutException:
         current_app.logger.warning(
             "prompt_test_timeout model=%s seconds=%.0f",
-            model_name, _time.monotonic() - started)
+            model_name,
+            _time.monotonic() - started,
+        )
         return api_error(
             "Test run timed out — the model took too long. Try a smaller "
-            "model (e.g. a 3b/7b/8b one) or a shorter prompt.", status_code=504)
+            "model (e.g. a 3b/7b/8b one) or a shorter prompt.",
+            status_code=504,
+        )
     except Exception as e:
         return api_error(f"Test run failed: {str(e)}", status_code=502)
 
@@ -147,20 +216,28 @@ def test_prompt_stream(user):
     if temp_error:
         return temp_error
 
-    prompt = prompt_body.replace("{{topic}}", SAMPLE_TOPIC).replace("{{ topic }}", SAMPLE_TOPIC)
+    prompt = prompt_body.replace("{{topic}}", SAMPLE_TOPIC).replace(
+        "{{ topic }}", SAMPLE_TOPIC
+    )
     # Keep ad-hoc tests short: a sanity sample, not a full generation.
-    payload = {"model": model_name, "prompt": prompt, "stream": True,
-               "options": {"temperature": temperature, "num_predict": 250}}
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "stream": True,
+        "options": {"temperature": temperature, "num_predict": 250},
+    }
     base_url = current_app.config["OLLAMA_BASE_URL"].rstrip("/")
     timeout = float(current_app.config.get("OLLAMA_TIMEOUT", 120))
 
     def generate():
         import json as _json
         import time as _time
+
         started = _time.monotonic()
         try:
-            with httpx.stream("POST", f"{base_url}/api/generate",
-                              json=payload, timeout=timeout) as response:
+            with httpx.stream(
+                "POST", f"{base_url}/api/generate", json=payload, timeout=timeout
+            ) as response:
                 response.raise_for_status()
                 for line in response.iter_lines():
                     if not line:
@@ -175,13 +252,18 @@ def test_prompt_stream(user):
                     if chunk.get("done"):
                         current_app.logger.info(
                             "prompt_test_stream_ok model=%s seconds=%.0f",
-                            model_name, _time.monotonic() - started)
+                            model_name,
+                            _time.monotonic() - started,
+                        )
                         yield "data: [DONE]\n\n"
                         return
         except Exception as e:
             current_app.logger.warning(
                 "prompt_test_stream_error model=%s seconds=%.0f error=%s",
-                model_name, _time.monotonic() - started, str(e)[:100])
+                model_name,
+                _time.monotonic() - started,
+                str(e)[:100],
+            )
             yield f"data: {_json.dumps({'error': str(e)[:200]})}\n\n"
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
@@ -195,22 +277,27 @@ def list_prompts(user):
     limit = request.args.get("limit", 20, type=int)
     is_active = request.args.get("is_active", type=lambda x: x.lower() == "true")
 
-    query = PromptConfig.query
+    query = apply_scope(PromptConfig.query, PromptConfig)
     if is_active is not None:
         query = query.filter(PromptConfig.is_active == is_active)
 
     query = query.order_by(PromptConfig.created_at.desc())
     pagination = query.paginate(page=page, per_page=limit, error_out=False)
 
-    return api_ok({
-        # include_prompt=True: the list table shows a body snippet and the
-        # edit modal needs the full body (non-admin detail view already
-        # exposes prompt_body, so this adds no new exposure).
-        "prompts": [p.to_dict(include_prompt=True, include_stats=True) for p in pagination.items],
-        "total": pagination.total,
-        "page": pagination.page,
-        "pages": pagination.pages,
-    })
+    return api_ok(
+        {
+            # include_prompt=True: the list table shows a body snippet and the
+            # edit modal needs the full body (non-admin detail view already
+            # exposes prompt_body, so this adds no new exposure).
+            "prompts": [
+                p.to_dict(include_prompt=True, include_stats=True)
+                for p in pagination.items
+            ],
+            "total": pagination.total,
+            "page": pagination.page,
+            "pages": pagination.pages,
+        }
+    )
 
 
 @bp.route("/prompts", methods=["POST"])
@@ -231,15 +318,21 @@ def create_prompt(user):
     raw_interval = data.get("interval_minutes")
     if isinstance(raw_interval, str) and raw_interval.strip().lower() == "custom":
         if not data.get("cron_expression"):
-            return api_error("Custom interval requires a cron_expression", status_code=400)
+            return api_error(
+                "Custom interval requires a cron_expression", status_code=400
+            )
         interval_minutes = 1440
     else:
         try:
             interval_minutes = int(raw_interval)
         except (TypeError, ValueError):
-            return api_error("Invalid interval_minutes: must be a number of minutes", status_code=400)
+            return api_error(
+                "Invalid interval_minutes: must be a number of minutes", status_code=400
+            )
         if interval_minutes <= 0:
-            return api_error("Invalid interval_minutes: must be positive", status_code=400)
+            return api_error(
+                "Invalid interval_minutes: must be positive", status_code=400
+            )
 
     temperature, temp_error = _parse_temperature(data.get("temperature", 0.7))
     if temp_error:
@@ -248,7 +341,8 @@ def create_prompt(user):
     if err:
         return err
     repeat_penalty, err = _parse_float_range(
-        data.get("repeat_penalty", 1.1), "repeat_penalty", 0, 2, 1.1)
+        data.get("repeat_penalty", 1.1), "repeat_penalty", 0, 2, 1.1
+    )
     if err:
         return err
     num_predict, err = _parse_num_predict(data.get("num_predict", 1000))
@@ -263,11 +357,22 @@ def create_prompt(user):
     slack_channel, err = _parse_slack_channel(data.get("slack_channel"))
     if err:
         return err
+    provider, err = _parse_provider(data.get("provider", "ollama"))
+    if err:
+        return err
+    err = _check_model_allowlist(provider, data["model_name"])
+    if err:
+        return err
 
-    # Check max active prompts (10)
-    active_count = PromptConfig.query.filter(PromptConfig.is_active == True).count()
+    # Check max active prompts (10 per instance when scoped, else global)
+    active_query = apply_scope(PromptConfig.query, PromptConfig)
+    active_count = active_query.filter(PromptConfig.is_active == True).count()
     if data.get("is_active", True) and active_count >= 10:
-        return api_error("Maximum of 10 active prompts allowed", status_code=409, error_code="MAX_ACTIVE_PROMPTS")
+        return api_error(
+            "Maximum of 10 active prompts allowed",
+            status_code=409,
+            error_code="MAX_ACTIVE_PROMPTS",
+        )
 
     prompt = PromptConfig(
         title=data["title"],
@@ -275,6 +380,7 @@ def create_prompt(user):
         interval_minutes=interval_minutes,
         cron_expression=data.get("cron_expression"),
         model_name=data["model_name"],
+        provider=provider,
         temperature=temperature,
         top_p=top_p,
         repeat_penalty=repeat_penalty,
@@ -285,14 +391,20 @@ def create_prompt(user):
         is_active=data.get("is_active", True),
         created_by_id=user.id,
     )
+    stamp(prompt)
 
     # Calculate next_run_at
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     if prompt.cron_expression:
         # TODO: Use croniter for cron expressions
-        prompt.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=prompt.interval_minutes)
+        prompt.next_run_at = datetime.now(timezone.utc) + timedelta(
+            minutes=prompt.interval_minutes
+        )
     else:
-        prompt.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=prompt.interval_minutes)
+        prompt.next_run_at = datetime.now(timezone.utc) + timedelta(
+            minutes=prompt.interval_minutes
+        )
 
     db.session.add(prompt)
     db.session.commit()
@@ -305,13 +417,18 @@ def create_prompt(user):
 def get_prompt(user, prompt_id):
     """Get a single prompt configuration."""
     prompt = PromptConfig.query.get_or_404(prompt_id)
+    denied = check_access(prompt)
+    if denied is not None:
+        return denied
     # Users (non-admin) only see title and answer/body
-    if user.role.value != 'ADMIN':
-        return api_ok({
-            'id': str(prompt.id),
-            'title': prompt.title,
-            'prompt_body': prompt.prompt_body,
-        })
+    if user.role.value != "ADMIN":
+        return api_ok(
+            {
+                "id": str(prompt.id),
+                "title": prompt.title,
+                "prompt_body": prompt.prompt_body,
+            }
+        )
     return api_ok(prompt.to_dict(include_prompt=True, include_stats=True))
 
 
@@ -320,6 +437,9 @@ def get_prompt(user, prompt_id):
 def update_prompt(user, prompt_id):
     """Update a prompt configuration."""
     prompt = PromptConfig.query.get_or_404(prompt_id)
+    denied = check_access(prompt)
+    if denied is not None:
+        return denied
     data = request.get_json() or {}
 
     # Update fields
@@ -331,13 +451,20 @@ def update_prompt(user, prompt_id):
         try:
             new_interval = int(data["interval_minutes"])
         except (TypeError, ValueError):
-            return api_error("Invalid interval_minutes: must be a number of minutes", status_code=400)
+            return api_error(
+                "Invalid interval_minutes: must be a number of minutes", status_code=400
+            )
         if new_interval <= 0:
-            return api_error("Invalid interval_minutes: must be positive", status_code=400)
+            return api_error(
+                "Invalid interval_minutes: must be positive", status_code=400
+            )
         prompt.interval_minutes = new_interval
         # Recalculate next_run_at
-        from datetime import datetime, timezone, timedelta
-        prompt.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=prompt.interval_minutes)
+        from datetime import datetime, timedelta, timezone
+
+        prompt.next_run_at = datetime.now(timezone.utc) + timedelta(
+            minutes=prompt.interval_minutes
+        )
     if "temperature" in data:
         prompt.temperature, temp_error = _parse_temperature(data["temperature"])
         if temp_error:
@@ -348,7 +475,8 @@ def update_prompt(user, prompt_id):
             return err
     if "repeat_penalty" in data:
         prompt.repeat_penalty, err = _parse_float_range(
-            data["repeat_penalty"], "repeat_penalty", 0, 2, 1.1)
+            data["repeat_penalty"], "repeat_penalty", 0, 2, 1.1
+        )
         if err:
             return err
     if "num_predict" in data:
@@ -371,12 +499,26 @@ def update_prompt(user, prompt_id):
         prompt.cron_expression = data["cron_expression"]
     if "model_name" in data:
         prompt.model_name = data["model_name"]
+    if "provider" in data:
+        provider, err = _parse_provider(data["provider"])
+        if err:
+            return err
+        prompt.provider = provider
+    if "model_name" in data or "provider" in data:
+        err = _check_model_allowlist(prompt.provider, prompt.model_name)
+        if err:
+            return err
     if "is_active" in data:
         # Check max active limit
         if data["is_active"] and not prompt.is_active:
-            active_count = PromptConfig.query.filter(PromptConfig.is_active == True).count()
+            scoped = apply_scope(PromptConfig.query, PromptConfig)
+            active_count = scoped.filter(PromptConfig.is_active == True).count()
             if active_count >= 10:
-                return api_error("Maximum of 10 active prompts allowed", status_code=409, error_code="MAX_ACTIVE_PROMPTS")
+                return api_error(
+                    "Maximum of 10 active prompts allowed",
+                    status_code=409,
+                    error_code="MAX_ACTIVE_PROMPTS",
+                )
         prompt.is_active = data["is_active"]
 
     db.session.commit()
@@ -395,6 +537,9 @@ def run_prompt_now(user, prompt_id):
     from app.models import PromptRun
 
     prompt = PromptConfig.query.get_or_404(prompt_id)
+    denied = check_access(prompt)
+    if denied is not None:
+        return denied
     data = request.get_json(silent=True) or {}
     try:
         count = int(data.get("count", 1))
@@ -405,24 +550,34 @@ def run_prompt_now(user, prompt_id):
 
     # Record the runs first so the UI can show them as pending immediately.
     from app.tasks.ollama_tasks import generate_idea
+
     runs = []
+    instance_id = current_instance_id()
     for _ in range(count):
         run = PromptRun(prompt_config_id=prompt.id, triggered_by="manual")
+        stamp(run)
         db.session.add(run)
         db.session.commit()
-        job = generate_idea.delay(str(prompt.id), run_id=str(run.id))
+        job = generate_idea.delay(
+            str(prompt.id),
+            run_id=str(run.id),
+            instance_id=str(instance_id) if instance_id else None,
+        )
         run.job_id = job.id
         db.session.commit()
         runs.append(run)
 
     first = runs[0]
-    return api_ok({
-        "job_id": first.job_id,
-        "run": first.to_dict(),
-        "runs": [r.to_dict() for r in runs],
-        "status": "PENDING",
-        "message": f"{count} generation(s) enqueued for processing.",
-    }, status_code=202)
+    return api_ok(
+        {
+            "job_id": first.job_id,
+            "run": first.to_dict(),
+            "runs": [r.to_dict() for r in runs],
+            "status": "PENDING",
+            "message": f"{count} generation(s) enqueued for processing.",
+        },
+        status_code=202,
+    )
 
 
 @bp.route("/prompts/<uuid:prompt_id>", methods=["DELETE"])
@@ -430,6 +585,9 @@ def run_prompt_now(user, prompt_id):
 def delete_prompt(user, prompt_id):
     """Delete a prompt configuration."""
     prompt = PromptConfig.query.get_or_404(prompt_id)
+    denied = check_access(prompt)
+    if denied is not None:
+        return denied
     db.session.delete(prompt)
     db.session.commit()
     return api_ok({"message": "Prompt deleted successfully"})

@@ -1,10 +1,44 @@
-from flask import Blueprint, render_template, request, jsonify, current_app
-
-from app.utils.decorators import admin_required
-from app.utils.responses import api_ok, api_error, api_created
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    render_template,
+    render_template_string,
+    request,
+)
 from sqlalchemy import func, or_
+
 from app.extensions import db
-from app.models import User, UserRole, Idea, PromptConfig
+from app.models import Idea, PromptConfig, User, UserRole
+from app.templates.admin_settings_template import SETTINGS_TEMPLATE
+from app.utils.decorators import admin_required
+from app.utils.responses import api_created, api_error, api_ok
+from app.utils.tenancy import apply_scope, current_instance_id
+
+# Blueprint for admin HTML pages (no URL prefix)
+admin_pages_bp = Blueprint("admin_pages", __name__)
+
+
+@admin_pages_bp.before_request
+def _legacy_web_gate():
+    """Same Phase 7 gate as pages: 410 when LEGACY_WEB_ENABLED is False."""
+    from flask import current_app, jsonify
+
+    if not current_app.config.get("LEGACY_WEB_ENABLED", True):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "This web UI is retired; use the Flutter client.",
+                }
+            ),
+            410,
+        )
+    return None
+
+
+# Blueprint for admin API routes (with /api/v1 prefix)
+admin_api_bp = Blueprint("admin_api", __name__)
 
 
 def _queue_depths():
@@ -31,32 +65,40 @@ def _workers_alive():
     """
     try:
         from app.tasks import celery
+
         inspect = celery.control.inspect(timeout=2)
         ping = inspect.ping() or {}
         return len(ping)
     except Exception:
         return None
 
+
 bp = Blueprint("admin", __name__)
 
 
+def _iid_filters(*columns):
+    """Instance equality filters for aggregate joins (empty when unscoped)."""
+    iid = current_instance_id()
+    if iid is None:
+        return []
+    return [c == iid for c in columns]
 
 
-@bp.route("/admin", methods=["GET"])
+@admin_pages_bp.route("/admin", methods=["GET"])
 @admin_required
 def admin_dashboard(user):
     """Admin dashboard page."""
     return render_template("admin/dashboard.html", user=user, current_user=user)
 
 
-@bp.route("/admin/users", methods=["GET"])
+@admin_pages_bp.route("/admin/users", methods=["GET"])
 @admin_required
 def admin_users(user):
     """User management page."""
     page = request.args.get("page", 1, type=int)
     limit = request.args.get("limit", 20, type=int)
     search = request.args.get("search", "", type=str)
-    
+
     query = User.query
 
     if search:
@@ -69,32 +111,38 @@ def admin_users(user):
         except KeyError:
             pass
         query = query.filter(or_(*conditions))
-    
+
     query = query.order_by(User.created_at.desc())
     pagination = query.paginate(page=page, per_page=limit, error_out=False)
-    
-    return render_template("admin/users.html", user=user, current_user=user, pagination=pagination, search=search)
+
+    return render_template(
+        "admin/users.html",
+        user=user,
+        current_user=user,
+        pagination=pagination,
+        search=search,
+    )
 
 
-@bp.route("/admin/users/<uuid:user_id>", methods=["PATCH"])
+@admin_pages_bp.route("/admin/users/<uuid:user_id>", methods=["PATCH"])
 @admin_required
 def admin_update_user(user, user_id):
     """Update user (promote/demote, activate/deactivate)."""
     target_user = User.query.get_or_404(user_id)
     data = request.get_json() or {}
-    
+
     if "role" in data:
         target_user.role = UserRole[data["role"].upper()]
     if "is_active" in data:
         target_user.is_active = data["is_active"]
     if "name" in data:
         target_user.name = data["name"]
-    
+
     db.session.commit()
     return api_ok(target_user.to_dict())
 
 
-@bp.route("/admin/users/<uuid:user_id>", methods=["DELETE"])
+@admin_pages_bp.route("/admin/users/<uuid:user_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_user(user, user_id):
     """Delete a user (soft delete - deactivate)."""
@@ -106,32 +154,32 @@ def admin_delete_user(user, user_id):
     return api_ok({"message": "User deactivated successfully"})
 
 
-@bp.route("/admin/users/create", methods=["POST"])
+@admin_pages_bp.route("/admin/users/create", methods=["POST"])
 @admin_required
 def admin_create_user(user):
     """Create a new user."""
     data = request.get_json() or {}
-    
+
     email = data.get("email")
     password = data.get("password")
     name = data.get("name")
     role = data.get("role", "USER")
-    
+
     if not email or not password:
         return api_error("Email and password are required", status_code=400)
-    
+
     if User.query.filter_by(email=email).first():
         return api_error("Email already exists", status_code=409)
-    
+
     new_user = User(email=email, name=name, role=UserRole[role.upper()])
     new_user.set_password(password)
     db.session.add(new_user)
     db.session.commit()
-    
+
     return api_created(new_user.to_dict())
 
 
-@bp.route("/admin/prompts/health", methods=["GET"])
+@admin_api_bp.route("/admin/prompts/health", methods=["GET"])
 @admin_required
 def prompts_health(user):
     """Per-prompt health over the trailing 7 days (PRD §9.2).
@@ -142,61 +190,92 @@ def prompts_health(user):
 
 
 def _prompts_health():
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     from app.models import IdeaStatus, PromptRun
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=7)
     report = []
-    for prompt in PromptConfig.query.filter_by(is_active=True).order_by(PromptConfig.title).all():
+    prompt_query = apply_scope(
+        PromptConfig.query.filter_by(is_active=True), PromptConfig
+    )
+    for prompt in prompt_query.order_by(PromptConfig.title).all():
         runs_7d = PromptRun.query.filter(
-            PromptRun.prompt_config_id == prompt.id,
-            PromptRun.created_at >= cutoff).count()
+            PromptRun.prompt_config_id == prompt.id, PromptRun.created_at >= cutoff
+        ).count()
         ideas_q = Idea.query.filter(
-            Idea.prompt_config_id == prompt.id,
-            Idea.created_at >= cutoff)
+            Idea.prompt_config_id == prompt.id, Idea.created_at >= cutoff
+        )
         ideas_7d = ideas_q.count()
-        discarded = ideas_q.filter(Idea.status == IdeaStatus.DISCARDED).count()
+        discarded = ideas_q.filter(Idea.status == IdeaStatus.DROP).count()
         discard_pct = round(discarded / ideas_7d * 100) if ideas_7d else None
-        avg_net = db.session.query(func.avg(Idea.net_score)).filter(
-            Idea.prompt_config_id == prompt.id,
-            Idea.created_at >= cutoff).scalar()
-        avg_feas = db.session.query(func.avg(Idea.feasibility_score)).filter(
-            Idea.prompt_config_id == prompt.id,
-            Idea.created_at >= cutoff,
-            Idea.feasibility_score.isnot(None)).scalar()
+        avg_net = (
+            db.session.query(func.avg(Idea.net_score))
+            .filter(Idea.prompt_config_id == prompt.id, Idea.created_at >= cutoff)
+            .scalar()
+        )
+        avg_feas = (
+            db.session.query(func.avg(Idea.feasibility_score))
+            .filter(
+                Idea.prompt_config_id == prompt.id,
+                Idea.created_at >= cutoff,
+                Idea.feasibility_score.isnot(None),
+            )
+            .scalar()
+        )
 
         flags = []
         # Tuning needs the full picture including discarded ideas.
-        links = {"edit": f"/prompts?edit={prompt.id}",
-                 "ideas": f"/ideas?prompt={prompt.id}&status=ALL"}
+        links = {
+            "edit": f"/prompts?edit={prompt.id}",
+            "ideas": f"/ideas?prompt={prompt.id}&status=ALL",
+        }
         if discard_pct is not None and discard_pct > 70:
-            flags.append({"code": "HIGH_DISCARD",
-                          "message": f"{discard_pct:.0f}% discarded — consider retiring or reframing.",
-                          **links})
+            flags.append(
+                {
+                    "code": "HIGH_DISCARD",
+                    "message": f"{discard_pct:.0f}% discarded — consider retiring or reframing.",
+                    **links,
+                }
+            )
         if ideas_7d == 0:
-            flags.append({"code": "STARVED",
-                          "message": "No ideas in 7 days — schedule starved or runs failing.",
-                          **links})
+            flags.append(
+                {
+                    "code": "STARVED",
+                    "message": "No ideas in 7 days — schedule starved or runs failing.",
+                    **links,
+                }
+            )
         if avg_feas is not None and float(avg_feas) < 5:
-            flags.append({"code": "LOW_FEASIBILITY",
-                          "message": f"Avg feasibility {float(avg_feas):.1f} — concepts may be too ambitious.",
-                          **links})
-        report.append({
-            "id": str(prompt.id),
-            "title": prompt.title,
-            "model_name": prompt.model_name,
-            "runs_7d": runs_7d,
-            "ideas_7d": ideas_7d,
-            "ideas_per_run": round(ideas_7d / runs_7d, 2) if runs_7d else None,
-            "discard_pct": discard_pct,
-            "avg_net_score": round(float(avg_net), 1) if avg_net is not None else None,
-            "avg_feasibility": round(float(avg_feas), 1) if avg_feas is not None else None,
-            "flags": flags,
-        })
+            flags.append(
+                {
+                    "code": "LOW_FEASIBILITY",
+                    "message": f"Avg feasibility {float(avg_feas):.1f} — concepts may be too ambitious.",
+                    **links,
+                }
+            )
+        report.append(
+            {
+                "id": str(prompt.id),
+                "title": prompt.title,
+                "model_name": prompt.model_name,
+                "runs_7d": runs_7d,
+                "ideas_7d": ideas_7d,
+                "ideas_per_run": round(ideas_7d / runs_7d, 2) if runs_7d else None,
+                "discard_pct": discard_pct,
+                "avg_net_score": (
+                    round(float(avg_net), 1) if avg_net is not None else None
+                ),
+                "avg_feasibility": (
+                    round(float(avg_feas), 1) if avg_feas is not None else None
+                ),
+                "flags": flags,
+            }
+        )
     return report
 
 
-@bp.route("/admin/prompts", methods=["GET"])
+@admin_pages_bp.route("/admin/prompts", methods=["GET"])
 @admin_required
 def admin_prompts(user):
     """Prompt management page.
@@ -206,14 +285,15 @@ def admin_prompts(user):
     """
     return render_template("prompts/list.html", user=user, current_user=user)
 
-@bp.route("/admin/activity", methods=["GET"])
+
+@admin_pages_bp.route("/admin/activity", methods=["GET"])
 @admin_required
 def activity_page(user):
     """Activity & performance dashboard page (Admin only)."""
     return render_template("admin/activity.html", user=user, current_user=user)
 
 
-@bp.route("/admin/activity/stats", methods=["GET"])
+@admin_api_bp.route("/admin/activity/stats", methods=["GET"])
 @admin_required
 def activity_stats(user):
     """Activity, performance and popularity stats for the admin dashboard."""
@@ -223,20 +303,36 @@ def activity_stats(user):
     # defaults to the 20 most recent runs; a filter widens the window so
     # older matching runs aren't cut off by pagination.
     status_filter = (request.args.get("run_status") or "").upper() or None
-    if status_filter and status_filter not in ("PENDING", "RUNNING", "SUCCESS", "FAILED"):
+    if status_filter and status_filter not in (
+        "PENDING",
+        "RUNNING",
+        "SUCCESS",
+        "FAILED",
+    ):
         return api_error("Invalid run_status filter", status_code=400)
     model_filter = request.args.get("model") or None
-    run_limit = 50 if (status_filter or model_filter) else 20
+
+    # Pagination params (PRD: 20 items per page)
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("limit", 20, type=int)
+    per_page = min(max(per_page, 1), 100)  # Clamp 1-100
 
     # --- Recent runs (activity stream, generations + follow-up actions) ---
     live_statuses = [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
     recent_runs = []
     idea_ids = set()
     prompt_ids = set()
-    run_query = PromptRun.query.order_by(PromptRun.created_at.desc())
+
+    run_query = apply_scope(
+        PromptRun.query.order_by(PromptRun.created_at.desc()), PromptRun
+    )
     if status_filter:
         run_query = run_query.filter(PromptRun.status == status_filter)
-    for run in run_query.limit(200).all():
+
+    # Paginate the base query (before model filter which requires Python)
+    pagination = run_query.paginate(page=page, per_page=per_page, error_out=False)
+
+    for run in pagination.items:
         item = run.to_dict()
         item["prompt_title"] = run.display_title
         recent_runs.append(item)
@@ -244,66 +340,102 @@ def activity_stats(user):
             idea_ids.add(run.idea_id)
         if run.prompt_config_id:
             prompt_ids.add(run.prompt_config_id)
+
     idea_refs = {}
     ideas_by_id = {}
     if idea_ids:
-        for idea in Idea.query.filter(Idea.id.in_(list(idea_ids))).all():
+        for idea in apply_scope(
+            Idea.query.filter(Idea.id.in_(list(idea_ids))), Idea
+        ).all():
             idea_refs[str(idea.id)] = idea.reference_code
             ideas_by_id[str(idea.id)] = idea
+
     # Model per run (for ?model= filtering): via the run's own prompt, else
     # via the linked idea's prompt (follow-up actions).
     prompt_ids.update(
-        str(i.prompt_config_id) for i in ideas_by_id.values()
-        if i.prompt_config_id)
+        str(i.prompt_config_id) for i in ideas_by_id.values() if i.prompt_config_id
+    )
     model_by_prompt = {}
     if prompt_ids:
-        for pc in PromptConfig.query.filter(
-                PromptConfig.id.in_(list(prompt_ids))).all():
+        for pc in apply_scope(
+            PromptConfig.query.filter(PromptConfig.id.in_(list(prompt_ids))),
+            PromptConfig,
+        ).all():
             model_by_prompt[str(pc.id)] = pc.model_name
+
     for item in recent_runs:
         model = None
-        if item["prompt_config_id"] and str(item["prompt_config_id"]) in model_by_prompt:
+        if (
+            item["prompt_config_id"]
+            and str(item["prompt_config_id"]) in model_by_prompt
+        ):
             model = model_by_prompt[str(item["prompt_config_id"])]
         elif item["idea_id"] and str(item["idea_id"]) in ideas_by_id:
             idea = ideas_by_id[str(item["idea_id"])]
             if idea.prompt_config_id and str(idea.prompt_config_id) in model_by_prompt:
                 model = model_by_prompt[str(idea.prompt_config_id)]
         item["model"] = model
+
+    # Apply model filter in Python (requires enriched data)
     if model_filter:
         recent_runs = [r for r in recent_runs if r["model"] == model_filter]
-    recent_runs = recent_runs[:run_limit]
+        # Note: model filter may reduce count below per_page; this is acceptable
+        # for filtered views. Total count reflects pre-filter for simplicity.
 
-    # Per-run timings for the model timing graph (?model= only): successful
-    # runs with a measured duration, newest first.
-    model_timings = []
-    if model_filter:
-        timing_rows = (
-            db.session.query(PromptConfig.title, PromptRun.duration_seconds,
-                             PromptRun.created_at)
-            .join(PromptRun, PromptRun.prompt_config_id == PromptConfig.id)
-            .filter(PromptConfig.model_name == model_filter,
-                    PromptRun.status == "SUCCESS",
-                    PromptRun.duration_seconds.isnot(None))
-            .order_by(PromptRun.created_at.desc())
-            .limit(20)
-            .all()
-        )
-        model_timings = [{
-            "prompt_title": title,
-            "duration_seconds": round(float(dur), 1),
-            "created_at": created.isoformat() if created else None,
-        } for title, dur, created in timing_rows]
     for item in recent_runs:
         if item["idea_id"] and item["idea_id"] in idea_refs:
             item["idea_reference"] = idea_refs[item["idea_id"]]
             if item["action_type"]:
                 item["prompt_title"] = (
                     f"{item['action_type'].title().replace('_', ' ')}"
-                    f" on {idea_refs[item['idea_id']]}")
+                    f" on {idea_refs[item['idea_id']]}"
+                )
+
+    # Per-run timings for the model timing graph (?model= only): successful
+    # runs with a measured duration, newest first.
+    model_timings = []
+    if model_filter:
+        timing_rows = (
+            db.session.query(
+                PromptConfig.title, PromptRun.duration_seconds, PromptRun.created_at
+            )
+            .join(PromptRun, PromptRun.prompt_config_id == PromptConfig.id)
+            .filter(
+                PromptConfig.model_name == model_filter,
+                PromptRun.status == "SUCCESS",
+                PromptRun.duration_seconds.isnot(None),
+                *_iid_filters(PromptRun.instance_id, PromptConfig.instance_id),
+            )
+            .order_by(PromptRun.created_at.desc())
+            .limit(20)
+            .all()
+        )
+        model_timings = [
+            {
+                "prompt_title": title,
+                "duration_seconds": round(float(dur), 1),
+                "created_at": created.isoformat() if created else None,
+            }
+            for title, dur, created in timing_rows
+        ]
+    for item in recent_runs:
+        if item["idea_id"] and item["idea_id"] in idea_refs:
+            item["idea_reference"] = idea_refs[item["idea_id"]]
+            if item["action_type"]:
+                item["prompt_title"] = (
+                    f"{item['action_type'].title().replace('_', ' ')}"
+                    f" on {idea_refs[item['idea_id']]}"
+                )
 
     pending_runs = []
-    for run in (PromptRun.query.filter(PromptRun.status.in_(live_statuses))
-                .order_by(PromptRun.created_at.desc()).limit(10).all()):
+    for run in (
+        apply_scope(
+            PromptRun.query.filter(PromptRun.status.in_(live_statuses)), PromptRun
+        )
+        .order_by(PromptRun.created_at.desc())
+        .limit(10)
+        .all()
+    ):
         item = run.to_dict()
         item["prompt_title"] = run.display_title
         if run.idea_id and str(run.idea_id) in idea_refs:
@@ -311,122 +443,296 @@ def activity_stats(user):
         pending_runs.append(item)
 
     # --- Performance ---
-    total_runs = PromptRun.query.count()
-    status_rows = (db.session.query(PromptRun.status, func.count(PromptRun.id))
-                   .group_by(PromptRun.status).all())
+    total_runs = apply_scope(PromptRun.query, PromptRun).count()
+    status_rows = (
+        db.session.query(PromptRun.status, func.count(PromptRun.id))
+        .filter(*_iid_filters(PromptRun.instance_id))
+        .group_by(PromptRun.status)
+        .all()
+    )
     by_status = {"PENDING": 0, "RUNNING": 0, "SUCCESS": 0, "FAILED": 0}
     for status, count in status_rows:
         by_status[status.value] = count
     successful = by_status.get("SUCCESS", 0)
-    avg_duration = db.session.query(func.avg(PromptRun.duration_seconds)).filter(
-        PromptRun.duration_seconds.isnot(None)).scalar()
-    per_model_rows = (
-        db.session.query(PromptConfig.model_name,
-                         func.count(PromptRun.id),
-                         func.avg(PromptRun.duration_seconds))
-        .join(PromptRun, PromptRun.prompt_config_id == PromptConfig.id)
-        .group_by(PromptConfig.model_name).all()
+    avg_duration = (
+        db.session.query(func.avg(PromptRun.duration_seconds))
+        .filter(
+            PromptRun.duration_seconds.isnot(None), *_iid_filters(PromptRun.instance_id)
+        )
+        .scalar()
     )
-    per_model = [{"model": name or "—", "runs": count,
-                  "avg_seconds": round(avg, 1) if avg is not None else None}
-                 for name, count, avg in per_model_rows]
-    last_failure = (PromptRun.query.filter_by(status=PromptRunStatus.FAILED)
-                    .order_by(PromptRun.finished_at.desc()).first())
+    per_model_rows = (
+        db.session.query(
+            PromptConfig.model_name,
+            func.count(PromptRun.id),
+            func.avg(PromptRun.duration_seconds),
+        )
+        .join(PromptRun, PromptRun.prompt_config_id == PromptConfig.id)
+        .filter(*_iid_filters(PromptRun.instance_id, PromptConfig.instance_id))
+        .group_by(PromptConfig.model_name)
+        .all()
+    )
+    per_model = [
+        {
+            "model": name or "—",
+            "runs": count,
+            "avg_seconds": round(avg, 1) if avg is not None else None,
+        }
+        for name, count, avg in per_model_rows
+    ]
+    last_failure = (
+        apply_scope(PromptRun.query.filter_by(status=PromptRunStatus.FAILED), PromptRun)
+        .order_by(PromptRun.finished_at.desc())
+        .first()
+    )
 
     # --- Popularity: ideas + votes per prompt ---
     popular_rows = (
-        db.session.query(PromptConfig.id, PromptConfig.title,
-                         func.count(Idea.id),
-                         func.coalesce(func.sum(Idea.net_score), 0))
+        db.session.query(
+            PromptConfig.id,
+            PromptConfig.title,
+            func.count(Idea.id),
+            func.coalesce(func.sum(Idea.net_score), 0),
+        )
         .outerjoin(Idea, Idea.prompt_config_id == PromptConfig.id)
+        .filter(*_iid_filters(PromptConfig.instance_id))
         .group_by(PromptConfig.id, PromptConfig.title)
-        .order_by(func.count(Idea.id).desc()).limit(8).all()
+        .order_by(func.count(Idea.id).desc())
+        .limit(8)
+        .all()
     )
-    popular_prompts = [{"id": str(pid), "title": title, "ideas": ideas, "net_votes": int(votes or 0)}
-                       for pid, title, ideas, votes in popular_rows]
+    popular_prompts = [
+        {"id": str(pid), "title": title, "ideas": ideas, "net_votes": int(votes or 0)}
+        for pid, title, ideas, votes in popular_rows
+    ]
+
+    # Runs by prompt (success vs failed): scheduled runs grouped directly,
+    # follow-up actions attributed via their idea's prompt.
+    def _bucket(mapping, pid, status, cnt):
+        entry = mapping.setdefault(str(pid), {"success": 0, "failed": 0})
+        val = getattr(status, "value", status)
+        if val == "SUCCESS":
+            entry["success"] += cnt
+        elif val == "FAILED":
+            entry["failed"] += cnt
+
+    prompt_run_health = {}
+    for pid, status, cnt in (
+        db.session.query(
+            PromptRun.prompt_config_id, PromptRun.status, func.count(PromptRun.id)
+        )
+        .filter(
+            PromptRun.prompt_config_id.isnot(None), *_iid_filters(PromptRun.instance_id)
+        )
+        .group_by(PromptRun.prompt_config_id, PromptRun.status)
+        .all()
+    ):
+        _bucket(prompt_run_health, pid, status, cnt)
+    for pid, status, cnt in (
+        db.session.query(
+            Idea.prompt_config_id, PromptRun.status, func.count(PromptRun.id)
+        )
+        .join(PromptRun, PromptRun.idea_id == Idea.id)
+        .filter(
+            Idea.prompt_config_id.isnot(None),
+            *_iid_filters(Idea.instance_id, PromptRun.instance_id),
+        )
+        .group_by(Idea.prompt_config_id, PromptRun.status)
+        .all()
+    ):
+        _bucket(prompt_run_health, pid, status, cnt)
+    for p in popular_prompts:
+        health = prompt_run_health.get(p["id"], {"success": 0, "failed": 0})
+        p["runs_success"] = health["success"]
+        p["runs_failed"] = health["failed"]
 
     # Ideas by Model (count DISTINCT ideas: the join to runs fans out
     # one row per idea x successful run, which inflated the counts).
     model_rows = (
-        db.session.query(PromptConfig.model_name,
-                         func.count(func.distinct(Idea.id)),
-                         func.avg(PromptRun.duration_seconds))
+        db.session.query(
+            PromptConfig.model_name,
+            func.count(func.distinct(Idea.id)),
+            func.avg(PromptRun.duration_seconds),
+        )
         .outerjoin(Idea, Idea.prompt_config_id == PromptConfig.id)
         .outerjoin(PromptRun, PromptRun.prompt_config_id == PromptConfig.id)
-        .filter(PromptRun.status == 'SUCCESS')
+        .filter(PromptRun.status == "SUCCESS", *_iid_filters(PromptConfig.instance_id))
         .group_by(PromptConfig.model_name)
         .all()
     )
-    ideas_by_model = [{"model": name or "—", "count": count,
-                       "avg_seconds": round(float(avg), 1) if avg is not None else None}
-                      for name, count, avg in model_rows]
+    ideas_by_model = [
+        {
+            "model": name or "—",
+            "count": count,
+            "avg_seconds": round(float(avg), 1) if avg is not None else None,
+        }
+        for name, count, avg in model_rows
+    ]
 
     # Ideas by Prompt
     prompt_rows = (
-        db.session.query(PromptConfig.id, PromptConfig.title,
-                         func.count(Idea.id),
-                         func.coalesce(func.sum(Idea.net_score), 0))
+        db.session.query(
+            PromptConfig.id,
+            PromptConfig.title,
+            func.count(Idea.id),
+            func.coalesce(func.sum(Idea.net_score), 0),
+        )
         .outerjoin(Idea, Idea.prompt_config_id == PromptConfig.id)
+        .filter(*_iid_filters(PromptConfig.instance_id))
         .group_by(PromptConfig.id, PromptConfig.title)
-        .order_by(func.count(Idea.id).desc()).limit(8).all()
+        .order_by(func.count(Idea.id).desc())
+        .limit(8)
+        .all()
     )
-    ideas_by_prompt = [{"id": str(pid), "title": title, "count": count, "net_votes": int(votes or 0)}
-                       for pid, title, count, votes in prompt_rows]
+    ideas_by_prompt = [
+        {"id": str(pid), "title": title, "count": count, "net_votes": int(votes or 0)}
+        for pid, title, count, votes in prompt_rows
+    ]
 
     # Ideas by Status (idea lifecycle states — not run outcomes).
-    idea_status_rows = (db.session.query(Idea.status, func.count(Idea.id))
-                        .group_by(Idea.status).all())
-    ideas_by_status = {"NEW": 0, "CONSIDERATION": 0, "DISCARDED": 0}
+    idea_status_rows = (
+        db.session.query(Idea.status, func.count(Idea.id))
+        .filter(*_iid_filters(Idea.instance_id))
+        .group_by(Idea.status)
+        .all()
+    )
+    ideas_by_status = {
+        "SPARK": 0,
+        "SCOPE": 0,
+        "MAP": 0,
+        "SHIP": 0,
+        "SCALE": 0,
+        "DROP": 0,
+        "FREEZE": 0,
+        "ARCHIVE": 0,
+    }
     for status, count in idea_status_rows:
         ideas_by_status[status.value] = count
 
-    pending_count = (PromptRun.query.filter(
-        PromptRun.status.in_(live_statuses)).count())
+    pending_count = apply_scope(
+        PromptRun.query.filter(PromptRun.status.in_(live_statuses)), PromptRun
+    ).count()
 
-    return api_ok({
-        "recent_runs": recent_runs,
-        "pending_runs": pending_runs,
-        "queues": _queue_depths(),
-        "workers_alive": _workers_alive(),
-        "performance": {
-            "total_runs": total_runs,
-            "pending_count": pending_count,
-            "by_status": by_status,
-            "success_rate": round(successful / total_runs, 3) if total_runs else None,
-            "avg_seconds": round(float(avg_duration), 1) if avg_duration is not None else None,
-            "per_model": per_model,
-            "last_error": last_failure.error if last_failure else None,
-        },
-        "popularity": {
-            "prompts": popular_prompts,
-        },
-        "ideas_by_model": ideas_by_model,
-        "ideas_by_prompt": ideas_by_prompt,
-        "ideas_by_status": ideas_by_status,
-        "model_timings": model_timings,
-        "prompt_health": _prompts_health(),
-    })
+    return api_ok(
+        {
+            "recent_runs": recent_runs,
+            "recent_runs_pagination": {
+                "page": pagination.page,
+                "per_page": pagination.per_page,
+                "total": pagination.total,
+                "pages": pagination.pages,
+                "has_next": pagination.has_next,
+                "has_prev": pagination.has_prev,
+            },
+            "pending_runs": pending_runs,
+            "queues": _queue_depths(),
+            "workers_alive": _workers_alive(),
+            "performance": {
+                "total_runs": total_runs,
+                "pending_count": pending_count,
+                "by_status": by_status,
+                "success_rate": (
+                    round(successful / total_runs, 3) if total_runs else None
+                ),
+                "avg_seconds": (
+                    round(float(avg_duration), 1) if avg_duration is not None else None
+                ),
+                "per_model": per_model,
+                "last_error": last_failure.error if last_failure else None,
+            },
+            "popularity": {
+                "prompts": popular_prompts,
+            },
+            "ideas_by_model": ideas_by_model,
+            "ideas_by_prompt": ideas_by_prompt,
+            "ideas_by_status": ideas_by_status,
+            "model_timings": model_timings,
+            "prompt_health": _prompts_health(),
+        }
+    )
 
 
-@bp.route("/admin/stats", methods=["GET"])
+@admin_api_bp.route("/admin/stats", methods=["GET"])
 @admin_required
 def get_stats(user):
     """Get system statistics (Admin only)."""
-    total_users = User.query.count()
-    total_ideas = Idea.query.count()
-    total_prompts = PromptConfig.query.count()
-    active_prompts = PromptConfig.query.filter(PromptConfig.is_active == True).count()
+    total_users = User.query.count()  # Users are global, never per-instance.
+    total_ideas = apply_scope(Idea.query, Idea).count()
+    total_prompts = apply_scope(PromptConfig.query, PromptConfig).count()
+    active_prompts = apply_scope(
+        PromptConfig.query.filter(PromptConfig.is_active == True), PromptConfig
+    ).count()
 
-    status_counts = db.session.query(
-        Idea.status,
-        func.count(Idea.id)
-    ).group_by(Idea.status).all()
+    status_counts = (
+        db.session.query(Idea.status, func.count(Idea.id))
+        .filter(*_iid_filters(Idea.instance_id))
+        .group_by(Idea.status)
+        .all()
+    )
 
-    return api_ok({
-        "users": {"total": total_users},
-        "ideas": {
-            "total": total_ideas,
-            "by_status": {status.value: count for status, count in status_counts},
-        },
-        "prompts": {"total": total_prompts, "active": active_prompts},
-    })
+    return api_ok(
+        {
+            "users": {"total": total_users},
+            "ideas": {
+                "total": total_ideas,
+                "by_status": {status.value: count for status, count in status_counts},
+            },
+            "prompts": {"total": total_prompts, "active": active_prompts},
+        }
+    )
+
+
+@admin_pages_bp.route("/admin/settings", methods=["GET"])
+@admin_required
+def admin_settings(user):
+    from app.models import SystemSettings
+
+    settings = SystemSettings.get_instance()
+    return render_template_string(
+        SETTINGS_TEMPLATE, user=user, current_user=user, settings=settings
+    )
+
+
+@admin_api_bp.route("/admin/settings", methods=["GET"])
+@admin_required
+def get_settings(user):
+    from app.models import SystemSettings
+
+    settings = SystemSettings.get_instance()
+    return api_ok(settings.to_dict())
+
+
+@admin_api_bp.route("/admin/settings/platform", methods=["PATCH"])
+@admin_required
+def update_platform_settings(user):
+    from app.models import SystemSettings
+
+    data = request.get_json() or {}
+    settings = SystemSettings.get_instance()
+    settings.update_platform(data)
+    db.session.commit()
+    return api_ok(settings.to_dict())
+
+
+@admin_api_bp.route("/admin/settings/location", methods=["PATCH"])
+@admin_required
+def update_location_settings(user):
+    from app.models import SystemSettings
+
+    data = request.get_json() or {}
+    settings = SystemSettings.get_instance()
+    settings.update_location(data)
+    db.session.commit()
+    return api_ok(settings.to_dict())
+
+
+@admin_api_bp.route("/admin/settings/ai_connections", methods=["PATCH"])
+@admin_required
+def update_ai_connections_settings(user):
+    from app.models import SystemSettings
+
+    data = request.get_json() or {}
+    settings = SystemSettings.get_instance()
+    settings.update_ai_connections(data)
+    db.session.commit()
+    return api_ok(settings.to_dict())

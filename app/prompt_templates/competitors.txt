@@ -2,9 +2,14 @@
 ${ORIGINAL_IDEA_CONTENT}
 
 ---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
 ### INSTRUCTIONS:
 1. Identify existing companies, legacy solutions, workarounds.
 2. Output STRICTLY valid JSON matching the schema below.
+3. Never leave arrays empty — include at least one entry per list.
 
 ### OUTPUT JSON SCHEMA:
 {

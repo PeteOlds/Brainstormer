@@ -33,7 +33,7 @@
         <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Quick Actions</h2>
             <div class="space-y-3">
-                <a href="/api/v1/admin/users" class="block px-4 py-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors">
+                <a href="/admin/users" class="block px-4 py-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors">
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="font-medium text-indigo-700 dark:text-indigo-300">Manage Users</h3>
@@ -42,7 +42,7 @@
                         <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
                     </div>
                 </a>
-                <a href="/api/v1/admin/prompts" class="block px-4 py-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
+                <a href="/admin/prompts" class="block px-4 py-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="font-medium text-emerald-700 dark:text-emerald-300">Manage Prompts</h3>
@@ -51,7 +51,7 @@
                         <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     </div>
                 </a>
-                <a href="/api/v1/admin/activity" class="block px-4 py-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors">
+                <a href="/admin/activity" class="block px-4 py-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors">
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="font-medium text-violet-700 dark:text-violet-300">Activity & Performance</h3>
@@ -60,13 +60,13 @@
                         <svg class="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
                     </div>
                 </a>
-                <a href="/prompts/create" class="block px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
+                <a href="/admin/settings" class="block px-4 py-3 rounded-lg bg-slate-50 dark:bg-slate-900/20 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/30 transition-colors">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h3 class="font-medium text-amber-700 dark:text-amber-300">Create Prompt</h3>
-                            <p class="text-sm text-amber-600 dark:text-amber-400">Create a new prompt configuration</p>
+                            <h3 class="font-medium text-slate-700 dark:text-slate-300">System Settings</h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">Platform, location, AI connections</p>
                         </div>
-                        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     </div>
                 </a>
             </div>
@@ -210,8 +210,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Breakdowns: horizontal bars rendered with vanilla JS (no Alpine
     // scope on this page). Rows link to the filtered Ideas page.
     const dotFor = (status) => ({
-        NEW: 'bg-blue-500', CONSIDERATION: 'bg-amber-400',
-        DISCARDED: 'bg-slate-400', SUCCESS: 'bg-emerald-500',
+        SPARK: 'bg-blue-500', SCOPE: 'bg-violet-400', MAP: 'bg-cyan-500',
+        SHIP: 'bg-indigo-500', SCALE: 'bg-emerald-500', DROP: 'bg-slate-400',
+        FREEZE: 'bg-purple-400', ARCHIVE: 'bg-amber-400', SUCCESS: 'bg-emerald-500',
         RUNNING: 'bg-blue-500', PENDING: 'bg-amber-400',
         FAILED: 'bg-red-500',
     }[String(status).toUpperCase()] || 'bg-slate-400');

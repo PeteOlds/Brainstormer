@@ -1,6 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 
+from sqlalchemy import event
+
 from app.extensions import db
 from app.models.types import GUID
 
@@ -9,11 +11,33 @@ class Vote(db.Model):
     __tablename__ = "votes"
 
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(GUID(), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    idea_id = db.Column(GUID(), db.ForeignKey("ideas.id", ondelete="CASCADE"), nullable=False, index=True)
+    instance_id = db.Column(
+        GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
+    )
+    user_id = db.Column(
+        GUID(),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    idea_id = db.Column(
+        GUID(),
+        db.ForeignKey("ideas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     value = db.Column(db.SmallInteger, nullable=False)  # +1 or -1
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     # Unique constraint: one vote per user per idea
     __table_args__ = (
@@ -32,3 +56,74 @@ class Vote(db.Model):
 
     def __repr__(self):
         return f"<Vote user={self.user_id} idea={self.idea_id} value={self.value}>"
+
+
+@event.listens_for(Vote, "after_insert")
+def _increment_vote_counts(mapper, connection, target):
+    from app.extensions import db
+    from app.models import Idea
+
+    # Increment the appropriate count directly
+    db.session.execute(
+        Idea.__table__.update()
+        .where(Idea.id == target.idea_id)
+        .values(
+            upvotes_count=Idea.upvotes_count + (1 if target.value > 0 else 0),
+            downvotes_count=Idea.downvotes_count + (1 if target.value < 0 else 0),
+            net_score=Idea.net_score + target.value,
+        )
+    )
+
+
+@event.listens_for(Vote, "after_delete")
+def _decrement_vote_counts(mapper, connection, target):
+    from app.extensions import db
+    from app.models import Idea
+
+    # Decrement the appropriate count directly
+    db.session.execute(
+        Idea.__table__.update()
+        .where(Idea.id == target.idea_id)
+        .values(
+            upvotes_count=Idea.upvotes_count - (1 if target.value > 0 else 0),
+            downvotes_count=Idea.downvotes_count - (1 if target.value < 0 else 0),
+            net_score=Idea.net_score - target.value,
+        )
+    )
+
+
+@event.listens_for(Vote, "after_update")
+def _update_vote_counts_on_update(mapper, connection, target):
+    from sqlalchemy.orm.attributes import get_history
+
+    from app.extensions import db
+    from app.models import Idea
+
+    # Only update if the vote value changed
+    try:
+        history = get_history(target, "value")
+        if history.has_changes():
+            old_value = history.deleted[0] if history.deleted else 0
+            new_value = target.value
+            diff = new_value - old_value
+            db.session.execute(
+                Idea.__table__.update()
+                .where(Idea.id == target.idea_id)
+                .values(
+                    upvotes_count=Idea.upvotes_count
+                    + (
+                        1
+                        if diff > 0 and new_value > 0
+                        else -1 if diff < 0 and old_value > 0 else 0
+                    ),
+                    downvotes_count=Idea.downvotes_count
+                    + (
+                        1
+                        if diff > 0 and new_value < 0
+                        else -1 if diff < 0 and old_value < 0 else 0
+                    ),
+                    net_score=Idea.net_score + diff,
+                )
+            )
+    except Exception:
+        pass

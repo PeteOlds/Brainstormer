@@ -8,9 +8,15 @@
         <div>
             <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Ideas Dashboard</h1>
             <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Review, vote, and analyze generated business ideas</p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400"><span class="font-semibold tabular-nums text-slate-700 dark:text-slate-300" x-text="total"></span> matching / <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-300" x-text="totalIdeas"></span> total ideas</p>
         </div>
         <div class="mt-4 sm:mt-0 flex items-center space-x-3">
             <span class="text-xs text-slate-500 dark:text-slate-400" x-show="lastUpdated">Updated <span x-text="lastUpdated"></span> · auto-refreshes</span>
+            <template x-if="canCreateIdeas">
+                <button @click="openCreateIdeaModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 border border-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center" aria-label="Create new idea manually">
+                    <span>Create Idea</span>
+                </button>
+            </template>
             <button @click="refreshIdeas()" :disabled="loading" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center" aria-label="Refresh ideas now">
                 <svg class="w-4 h-4 mr-2" :class="{'animate-spin': loading}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                 <span x-text="loading ? 'Refreshing...' : 'Refresh'">Refresh</span>
@@ -26,9 +32,14 @@
                 <select id="status-filter" x-model="filters.status" class="block w-full pl-3 pr-10 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none">
                     <option value="ACTIVE_ONLY">Active Only (default)</option>
                     <option value="">All Statuses</option>
-                    <option value="NEW">New</option>
-                    <option value="CONSIDERATION">Consideration</option>
-                    <option value="DISCARDED">Discarded</option>
+                    <option value="SPARK">Spark</option>
+                    <option value="SCOPE">Scope</option>
+                    <option value="MAP">Map</option>
+                    <option value="SHIP">Ship</option>
+                    <option value="SCALE">Scale</option>
+                    <option value="DROP">Drop</option>
+                    <option value="FREEZE">Freeze</option>
+                    <option value="ARCHIVE">Archive</option>
                 </select>
             </div>
             <div class="flex-1 sm:w-64">
@@ -71,12 +82,19 @@
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead class="bg-slate-50 dark:bg-slate-900">
                     <tr>
+                        <template x-if="isAdmin">
+                            <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-12">
+                                <input type="checkbox" :checked="selectedIdeaIds.length === paginatedIdeas.length && paginatedIdeas.length > 0"
+                                    :indeterminate="selectedIdeaIds.length > 0 && selectedIdeaIds.length < paginatedIdeas.length"
+                                    @click="toggleSelectAll()" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500" aria-label="Select all ideas">
+                            </th>
+                        </template>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ref</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Prompt</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Summary</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Similarity</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Comments</th>
                         <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Votes</th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
                     </tr>
@@ -84,6 +102,12 @@
                 <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
                     <template x-for="idea in paginatedIdeas" :key="idea.id">
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                            <template x-if="isAdmin">
+                                <td class="px-6 py-4 whitespace-nowrap text-center">
+                                    <input type="checkbox" :checked="selectedIdeaIds.includes(idea.id)"
+                                        @change="toggleIdeaSelection(idea.id)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500" aria-label="Select idea">
+                                </td>
+                            </template>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="font-mono text-sm text-slate-900 dark:text-white" x-text="idea.reference_code"></span>
                             </td>
@@ -108,52 +132,52 @@
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="idea.status"></span>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <template x-if="idea.embedding && idea.embedding.length">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" :title="idea.embedding ? 'Has embedding' : 'No embedding'">
-                                        <svg class="mr-1 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                        <span class="ml-1" x-text="'Similar'"></span>
-                                    </span>
-                                </template>
-                                <template x-if="!idea.embedding || !idea.embedding.length">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                                        <svg class="mr-1 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                        <span class="ml-1">No match</span>
-                                    </span>
-                                </template>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="idea.comments_count"></span>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <div class="flex items-center justify-center space-x-2">
-                                    <button @click="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-1.5 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Upvote">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                <div class="flex items-center justify-center gap-1">
+                                    <button @click="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Upvote">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
                                     </button>
-                                    <span class="text-lg font-bold text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
-                                    <button @click="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-1.5 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Downvote">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    <span class="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400" x-text="'▲ ' + idea.upvotes_count"></span>
+                                    <span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
+                                    <span class="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400" x-text="'▼ ' + idea.downvotes_count"></span>
+                                    <button @click="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Downvote">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                     </button>
                                 </div>
                                 <span class="text-xs text-slate-500 dark:text-slate-400" x-show="idea.user_vote === 1 || idea.user_vote === -1" x-text="idea.user_vote === 1 ? 'You upvoted' : 'You downvoted'"></span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div class="flex items-center justify-end space-x-2" x-data="{ dropdownOpen: false }">
-                                    <button @click="dropdownOpen = !dropdownOpen" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
+                                <div class="flex items-center justify-end space-x-2 relative">
+                                    <button @click="dropdownOpenId = dropdownOpenId === idea.id ? null : idea.id" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
                                     </button>
-                                    <div x-show="dropdownOpen" @click.outside="dropdownOpen = false" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
-                                        <button @click="openDetailModal(idea); dropdownOpen = false" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">View Details</button>
+                                    <div x-show="dropdownOpenId === idea.id" @click.outside="dropdownOpenId = null" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
+                                        <button @click="openDetailModal(idea); dropdownOpenId = null" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">View Details</button>
                                         <template x-if="isAdmin">
                                             <div>
                                             <hr class="border-slate-200 dark:border-slate-700 my-1">
-                                            <button @click="changeStatus('CONSIDERATION', idea.id); dropdownOpen = false" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Mark as under consideration">
-                                                <svg class="mr-2 h-4 w-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                                Consider
-                                            </button>
-                                            <button @click="confirmDiscard(idea, () => dropdownOpen = false)" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Discard (hidden by the default filter)">
+                                            <div class="px-4 py-1 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Change Status</div>
+                                            <select @change="changeStatus($event.target.value, idea.id); dropdownOpenId = null" class="w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" aria-label="Change status">
+                                                <option value="">Select status...</option>
+                                                <option value="SPARK">Spark</option>
+                                                <option value="SCOPE">Scope</option>
+                                                <option value="MAP">Map</option>
+                                                <option value="SHIP">Ship</option>
+                                                <option value="SCALE">Scale</option>
+                                                <option value="DROP">Drop</option>
+                                                <option value="FREEZE">Freeze</option>
+                                                <option value="ARCHIVE">Archive</option>
+                                            </select>
+                                            <hr class="border-slate-200 dark:border-slate-700 my-1">
+                                            <button @click="confirmDiscard(idea, () => dropdownOpenId = null)" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Discard (hidden by the default filter)">
                                                 <svg class="mr-2 h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                                 Discard
                                             </button>
                                             <hr class="border-slate-200 dark:border-slate-700 my-1">
                                             <template x-for="action in refinedActions" :key="action.key">
-                                                <button @click="runAction(idea.id, action.key); dropdownOpen = false" :title="action.description" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+                                                <button @click="runAction(idea.id, action.key); dropdownOpenId = null" :title="action.description" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
                                                     <span class="font-medium" x-text="action.label"></span>
                                                     <span class="ml-2 text-xs text-slate-500" x-show="idea.actions_run.includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
                                                 </button>
@@ -166,14 +190,14 @@
                         </tr>
                     </template>
                     <tr x-show="filteredIdeas.length === 0 && !loading">
-                        <td colspan="7" class="px-6 py-12 text-center">
+                        <td :colspan="isAdmin ? 9 : 8" class="px-6 py-12 text-center">
                             <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No ideas found</h3>
                             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">No ideas match your current filters.</p>
                         </td>
                     </tr>
                     <tr x-show="loading">
-                        <td colspan="7" class="px-6 py-12 text-center">
+                        <td :colspan="isAdmin ? 9 : 8" class="px-6 py-12 text-center">
                             <svg class="animate-spin mx-auto h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
                             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Loading ideas...</p>
                         </td>
@@ -189,6 +213,7 @@
                     <div class="flex items-center justify-between gap-2">
                         <span class="font-mono text-xs text-slate-500 dark:text-slate-400" x-text="idea.reference_code"></span>
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="idea.status"></span>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="'💬 ' + idea.comments_count"></span>
                     </div>
                     <p class="text-sm text-slate-700 dark:text-slate-300" x-text="prettySummary(idea)"></p>
                     <span x-show="actionChips(idea).length" class="flex flex-wrap items-center gap-1.5">
@@ -207,7 +232,9 @@
                             <button @click="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" :disabled="voteLoading === idea.id" aria-label="Upvote">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
                             </button>
+                            <span class="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400" x-text="'▲ ' + idea.upvotes_count"></span>
                             <span class="text-lg font-bold tabular-nums text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
+                            <span class="text-sm font-semibold tabular-nums text-red-600 dark:text-red-400" x-text="'▼ ' + idea.downvotes_count"></span>
                             <button @click="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" :disabled="voteLoading === idea.id" aria-label="Downvote">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
@@ -225,7 +252,67 @@
                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Loading ideas...</p>
             </div>
         </div>
-        
+
+        </div>
+
+        <!-- Bulk Actions Bar (Admin only, fixed at bottom when selections exist) -->
+        <div x-show="isAdmin && selectedIdeaIds.length > 0" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-4" class="fixed bottom-0 left-0 right-0 z-40 px-4 md:px-6 lg:px-8 pb-4 pointer-events-none">
+            <div class="max-w-7xl mx-auto pointer-events-auto">
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl shadow-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div class="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        <span x-text="selectedIdeaIds.length"></span> idea<span x-show="selectedIdeaIds.length !== 1">s</span> selected
+                    </div>
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+                        <select x-model="bulkStatus" class="w-full sm:w-48 px-3 py-2 min-h-[44px] text-sm border border-amber-300 dark:border-amber-600 rounded-lg bg-white dark:bg-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500" aria-label="Select new status">
+                            <option value="">Change status to...</option>
+                            <option value="SPARK">Spark</option>
+                            <option value="SCOPE">Scope</option>
+                            <option value="MAP">Map</option>
+                            <option value="SHIP">Ship</option>
+                            <option value="SCALE">Scale</option>
+                            <option value="DROP">Drop</option>
+                            <option value="FREEZE">Freeze</option>
+                            <option value="ARCHIVE">Archive</option>
+                        </select>
+                        <button @click="confirmBulkAction()" :disabled="bulkUpdating || !bulkStatus" class="w-full sm:w-auto px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
+                            <span x-show="!bulkUpdating">Apply</span>
+                            <span x-show="bulkUpdating" class="flex items-center gap-2">
+                                <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                Applying…
+                            </span>
+                        </button>
+                        <button @click="clearSelection()" class="w-full sm:w-auto px-4 py-2 min-h-[44px] text-sm font-medium text-amber-700 dark:text-amber-300 bg-white dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-800/50 transition-colors">Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Action Confirmation Modal -->
+        <div x-show="showBulkConfirm" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeBulkConfirm()" aria-labelledby="bulk-confirm-modal-title" role="dialog" aria-modal="true" style="display: none;">
+            <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+            <div class="relative flex min-h-full items-center justify-center p-4">
+                <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-slate-300 dark:border-slate-500">
+                    <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
+                        <h2 id="bulk-confirm-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Confirm Bulk Status Change</h2>
+                        <button @click="closeBulkConfirm()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                    <div class="p-4 space-y-4">
+                        <p class="text-sm text-slate-700 dark:text-slate-300" x-html="bulkConfirmMessage"></p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400" x-text="bulkConfirmDetail"></p>
+                    </div>
+                    <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
+                        <button @click="closeBulkConfirm()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                        <button @click="executeBulkAction()" :disabled="bulkUpdating" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-3">
+                            <span x-show="!bulkUpdating" x-text="bulkConfirmActionLabel"></span>
+                            <span x-show="bulkUpdating">Applying…</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Pagination -->
         <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700" x-show="totalPages > 1">
             <nav class="flex items-center justify-between">
@@ -233,15 +320,14 @@
                     Showing <span x-text="((currentPage - 1) * pageSize) + 1"></span> to <span x-text="Math.min(currentPage * pageSize, total)"></span> of <span x-text="total"></span> results
                 </div>
                 <div class="flex space-x-2">
-                    <button @click="currentPage--" :disabled="currentPage === 1" class="px-3 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                    <button @click="currentPage++" :disabled="currentPage === totalPages" class="px-3 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+                    <button @click="prevPage()" :disabled="currentPage === 1" class="px-3 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                    <button @click="nextPage()" :disabled="currentPage === totalPages" class="px-3 py-1 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
                 </div>
             </nav>
         </div>
-    </div>
 
     <!-- Detail Modal -->
-    <div x-show="detailModalOpen" x-cloak style="display: none;" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeDetailModal()" onclick="if(event.target===this) this.style.display='none'" aria-labelledby="detail-modal-title" role="dialog" aria-modal="true">
+    <div x-show="detailModalOpen" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeDetailModal()" aria-labelledby="detail-modal-title" role="dialog" aria-modal="true">
         <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
         <div class="relative flex min-h-full items-end sm:items-center justify-center sm:p-4">
             <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full sm:max-w-4xl bg-white dark:bg-slate-800 sm:rounded-xl rounded-t-2xl shadow-2xl border-2 border-slate-300 dark:border-slate-500 border-b-0 sm:border-b-2 max-h-[92vh] sm:max-h-[90vh] flex flex-col outline-none" tabindex="-1">
@@ -250,38 +336,45 @@
                         <span class="font-mono text-lg font-semibold text-slate-900 dark:text-white" x-text="selectedIdea?.reference_code"></span>
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(selectedIdea?.status)" x-text="selectedIdea?.status"></span>
                     </div>
-                    <button @click="closeDetailModal()" onclick="try{this.closest("[x-show]").style.display="none"}catch(e){}" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
+                    <button @click="closeDetailModal()"  class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
                 
-                <div class="flex-1 overflow-y-auto p-4 space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Prompt</label>
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200" x-text="selectedIdea?.prompt_title"></span>
+                <div class="flex-1 overflow-y-auto">
+                    <div class="px-4 pt-3">
+                    <div class="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1 py-2 sm:py-0 sm:h-12 min-w-0" aria-label="Idea details">
+                        <div class="min-w-0 max-w-[38%]">
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Prompt</label>
+                            <a href="#"
+                               @click.prevent="window.location.href = '/ideas?prompt=' + selectedIdea.prompt_config_id"
+                               class="block truncate px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 hover:bg-primary-200 dark:hover:bg-primary-800 cursor-pointer"
+                               title="View all ideas for this prompt"
+                               x-text="selectedIdea?.prompt_title"></a>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Generated</label>
-                            <span class="text-sm text-slate-700 dark:text-slate-300" x-text="formatDate(selectedIdea?.created_at)"></span>
+                        <div class="shrink-0">
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Generated</label>
+                            <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap"><span x-text="formatDate(selectedIdea?.created_at)"></span><template x-if="isAdmin && selectedIdea && selectedIdea.generation_seconds !== null && selectedIdea.generation_seconds !== undefined"><span class="text-slate-500 dark:text-slate-400" x-text="' · ' + formatDuration(selectedIdea.generation_seconds)"></span></template></p>
                         </div>
-                        <div>
-                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Net Votes</label>
-                            <span class="text-2xl font-bold text-slate-900 dark:text-white" x-text="selectedIdea?.net_votes"></span>
+                        <div class="shrink-0">
+                            <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">Net Votes · Comments</span>
+                            <p class="whitespace-nowrap"><span class="text-2xl font-bold text-slate-900 dark:text-white" x-text="selectedIdea?.net_votes"></span><span class="ml-2 text-xs text-slate-500 dark:text-slate-300"><span x-text="commentCount()"></span> comments</span></p>
                         </div>
-                        <template x-if="isAdmin && selectedIdea?.generation_seconds !== null && selectedIdea?.generation_seconds !== undefined">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Generation time <span class="normal-case font-normal">(admin)</span></label>
-                                <span class="text-sm text-slate-700 dark:text-slate-300" x-text="formatDuration(selectedIdea?.generation_seconds)"></span>
-                            </div>
-                        </template>
                     </div>
-                    
-                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4"></div>
-                    
-                    <div class="flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-700" role="tablist" aria-label="Idea sections">
-                        <button @click="activeTab = 'overview'" role="tab" :aria-selected="activeTab === 'overview'" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'overview' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
-                            Overview
+                    </div>
+
+                    <div class="sticky top-0 z-10 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                        <div class="flex items-stretch">
+                        <div class="flex items-center gap-1 overflow-x-auto px-4 flex-1 min-w-0" role="tablist" aria-label="Idea sections">
+                        <a href="#"
+                           @click.prevent="window.location.href = '/ideas?prompt=' + selectedIdea.prompt_config_id"
+                           class="shrink-0 inline-flex items-center gap-1 px-3 py-2 min-h-[44px] text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                           title="Back to all ideas for this prompt">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                            <span>Prompt</span>
+                        </a>
+                        <button @click="activeTab = 'overview'" role="tab" :aria-selected="activeTab === 'overview'" :aria-label="'View original idea content'" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'overview' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
+                            Idea
                         </button>
                         <template x-for="tab in actionTabs()" :key="tab.key">
                             <button @click="activeTab = tab.key" role="tab" :aria-selected="activeTab === tab.key" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === tab.key ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
@@ -289,14 +382,34 @@
                                 <span x-show="actionLoading === tab.key" class="ml-1 inline-block align-middle"><svg class="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span>
                             </button>
                         </template>
-                    </div>
-                    <div x-show="activeTab === 'overview'" class="contents">
-                    <div>
+                        </div>
+                        <template x-if="isAdmin">
+                        <div class="shrink-0 relative border-l border-slate-200 dark:border-slate-700">
+                            <button @click="newActionOpen = !newActionOpen" class="inline-flex items-center gap-1 px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 transition-colors" aria-haspopup="menu" :aria-expanded="newActionOpen" title="Run a new secondary action on this idea">
+                                <span>+ New</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7-7 7-7"></path></svg>
+                            </button>
+                            <div x-show="newActionOpen" @click.outside="newActionOpen = false" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-1 w-72 max-h-80 overflow-y-auto bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50" role="menu" aria-label="Run a new secondary action">
+                                <template x-for="action in availableActions" :key="action.key">
+                                    <button x-show="docActionVisible(action.key)" @click="openRunDialog(selectedIdea.id, action.key); newActionOpen = false" :disabled="actionLoading === action.key" :title="action.description" class="flex w-full items-start gap-2 text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50" role="menuitem">
+                                        <span class="font-medium shrink-0" x-text="action.label"></span>
+                                        <span class="ml-auto text-xs text-slate-500 dark:text-slate-400" x-show="(selectedIdea?.actions_run || []).includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
+                                        <svg x-show="actionLoading === action.key" class="animate-spin h-4 w-4 ml-auto shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                        </template>
+                        </div>
+                        </div>
+                    <div class="p-4 space-y-4">
+                    <div x-show="activeTab === 'overview'" class="space-y-4">
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                         <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Idea Content</h3>
                         <div class="prose prose-slate dark:prose-invert max-w-none" x-html="selectedIdea?.rendered_content"></div>
                     </div>
-                    
-                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                         <div class="flex items-center justify-between mb-3">
                             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Voting</h3>
                             <div class="flex items-center space-x-2">
@@ -313,22 +426,20 @@
                     </div>
                     
                     <template x-if="isAdmin">
-                        <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                             <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Admin Actions</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Run a new analysis from the <span class="font-medium">+ New</span> menu in the tab bar above.</p>
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <select @change="changeStatus($event.target.value, selectedIdea.id)" class="flex-1 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" :value="selectedIdea?.status">
-                                    <option value="NEW">New</option>
-                                    <option value="CONSIDERATION">Consideration</option>
-                                    <option value="DISCARDED">Discarded</option>
+                                    <option value="SPARK">Spark</option>
+                                    <option value="SCOPE">Scope</option>
+                                    <option value="MAP">Map</option>
+                                    <option value="SHIP">Ship</option>
+                                    <option value="SCALE">Scale</option>
+                                    <option value="DROP">Drop</option>
+                                    <option value="FREEZE">Freeze</option>
+                                    <option value="ARCHIVE">Archive</option>
                                 </select>
-                                <button @click="runAction(selectedIdea.id, 'REFINE')" :disabled="actionLoading === 'REFINE'" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                    <span x-show="actionLoading !== 'REFINE'">Refine Idea</span>
-                                    <span x-show="actionLoading === 'REFINE'" class="flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Refining...</span>
-                                </button>
-                                <button @click="runAction(selectedIdea.id, 'COMPETITORS')" :disabled="actionLoading === 'COMPETITORS'" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                    <span x-show="actionLoading !== 'COMPETITORS'">Competitor Analysis</span>
-                                    <span x-show="actionLoading === 'COMPETITORS'" class="flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Analyzing...</span>
-                                </button>
                                 <button @click="startIdeaEdit()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Edit content</button>
                             </div>
                             <div x-show="editingIdea" class="mt-3 space-y-3">
@@ -372,7 +483,7 @@
                         </div>
                     </template>
                     
-                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                         <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Comments <span class="text-sm font-normal text-slate-500" x-show="commentCount()" x-text="'(' + commentCount() + ')'"></span></h3>
                         <div class="space-y-3">
                             <template x-for="c in flatComments()" :key="c.id">
@@ -411,15 +522,48 @@
                         </div>
                     </div>
                 </div>
-                
-                    </div>
                     <template x-for="tab in actionTabs()" :key="'panel-' + tab.key">
-                        <div x-show="activeTab === tab.key" class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                        <div x-show="activeTab === tab.key" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                             <div class="flex items-center justify-between mb-2">
                                 <h3 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="tab.label"></h3>
                                 <span class="text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(actionTabResult(tab.key)?.executed_at)"></span>
                             </div>
                             <div class="prose prose-sm prose-slate dark:prose-invert max-w-none" x-html="actionTabResult(tab.key)?.rendered_output"></div>
+                            <template x-if="tab.key === 'PRD_DOC' || tab.key === 'DESIGN_DOC'">
+                                <div class="mt-3 flex flex-wrap items-center gap-2">
+                                    <span class="text-xs text-slate-500 dark:text-slate-400" x-text="docVersionLabel(tab.key)"></span>
+                                    <template x-if="isAdmin">
+                                        <span class="flex gap-2">
+                                            <button @click="openRunDialog(selectedIdea.id, tab.key)" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Recreate</button>
+                                            <button @click="startDocEdit(tab.key)" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Edit</button>
+                                        </span>
+                                    </template>
+                                </div>
+                                <div class="mt-4 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-4" x-init="loadDocComments(actionTabResult(tab.key)?.id)">
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Discussion</h4>
+                                    <div class="space-y-3">
+                                        <template x-for="c in (docThreads[actionTabResult(tab.key)?.id] || [])" :key="c.id">
+                                            <div>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400"><span class="font-medium text-slate-700 dark:text-slate-300" x-text="c.author"></span> · <span x-text="c.created_at"></span></p>
+                                                <p class="text-sm text-slate-700 dark:text-slate-300" x-text="c.body"></p>
+                                                <div class="ml-4 mt-1 space-y-2 border-l-2 border-slate-200 dark:border-slate-700 pl-3">
+                                                    <template x-for="r in (c.replies || [])" :key="r.id">
+                                                        <div>
+                                                            <p class="text-xs text-slate-500 dark:text-slate-400"><span class="font-medium text-slate-700 dark:text-slate-300" x-text="r.author"></span> · <span x-text="r.created_at"></span></p>
+                                                            <p class="text-sm text-slate-700 dark:text-slate-300" x-text="r.body"></p>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <p x-show="!(docThreads[actionTabResult(tab.key)?.id] || []).length" class="text-xs text-slate-500 dark:text-slate-400">No comments yet — start the discussion.</p>
+                                    </div>
+                                    <div class="mt-3 flex gap-2">
+                                        <input x-model="docDrafts[actionTabResult(tab.key)?.id]" @keyup.enter="postDocComment(actionTabResult(tab.key)?.id)" maxlength="2000" placeholder="Comment on this document..." class="flex-1 px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                        <button @click="postDocComment(actionTabResult(tab.key)?.id)" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">Post</button>
+                                    </div>
+                                </div>
+                            </template>
                             <template x-if="tab.key === 'PRD_DOC'">
                                 <div class="mt-4 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-4">
                                     <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Open questions</h4>
@@ -438,12 +582,173 @@
                                         <span x-show="actionLoading !== 'PRD_DOC'">Answer & regenerate</span>
                                         <span x-show="actionLoading === 'PRD_DOC'">Regenerating…</span>
                                     </button>
+                                    <div x-show="(actionTabResult(tab.key)?.answers || []).length" class="mt-4 border-t border-slate-200 dark:border-slate-700 pt-3">
+                                        <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Your answers <span class="font-normal text-slate-500 dark:text-slate-400">(saved with this version)</span></h4>
+                                        <div class="space-y-2">
+                                            <template x-for="(a, i) in (actionTabResult(tab.key)?.answers || [])" :key="i">
+                                                <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap" x-text="a"></p>
+                                            </template>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
                         </div>
                     </template>
+                    </div>
+                    <template x-if="docEditorResult()">
+                        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Edit <span x-text="docEditorLabel()"></span> <span class="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400" x-text="docEditorVersion()"></span></h3>
+                                <button @click="cancelDocEdit()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close editor">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+                            <template x-for="f in docEditList" :key="f.key">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1" x-text="f.label"></label>
+                                    <textarea x-model="f.value" :rows="f.kind === 'json' ? 8 : (f.kind === 'list' ? 3 : 5)" :spellcheck="f.kind === 'json' ? 'false' : 'true'" :class="f.kind === 'json' ? 'font-mono text-xs' : 'text-sm'" class="block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
+                                    <p x-show="f.kind === 'list'" class="mt-1 text-xs text-slate-500 dark:text-slate-400">One entry per line.</p>
+                                </div>
+                            </template>
+                            <p x-show="docEditError" class="mt-2 text-xs text-red-600 dark:text-red-400" x-text="docEditError"></p>
+                            <div class="mt-2 flex gap-2">
+                                <button @click="saveDocEdit()" :disabled="docEditSaving" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save as new version</button>
+                                <button @click="cancelDocEdit()" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                            </div>
+                        </div>
+                    </template>
                 <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
-                    <button @click="closeDetailModal()" onclick="try{this.closest("[x-show]").style.display="none"}catch(e){}" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Close</button>
+                    <button @click="closeDetailModal()"  class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Close</button>
+                </div>
+            </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Run Action Dialog (model + skills + guidelines per run) -->
+    <div x-show="runDialogOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeRunDialog()" aria-labelledby="run-dialog-title" role="dialog" aria-modal="true" style="display: none;">
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+        <div class="relative flex min-h-full items-center justify-center p-4">
+            <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-slate-300 dark:border-slate-500">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 id="run-dialog-title" class="text-lg font-semibold text-slate-900 dark:text-white">Run <span x-text="runDialogActionLabel"></span></h2>
+                    <button @click="closeRunDialog()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close dialog">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">AI Model <span class="font-normal text-slate-500 dark:text-slate-400">(blank = idea default)</span></label>
+                        <select x-model="runDialogModel" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <option value="">Idea default</option>
+                            <template x-for="m in ollamaModels" :key="m">
+                                <option :value="m" x-text="m"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div x-show="['SCOPE', 'MAP', 'SHIP', 'SCALE', 'FREEZE'].includes(selectedIdea?.status)">
+                        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Skills</span>
+                        <p x-show="!discoverySkills.length" class="text-xs text-slate-500 dark:text-slate-400">No opencode skills discovered. Mount skill directories and set SKILLS_DIRS.</p>
+                        <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
+                            <template x-for="s in discoverySkills" :key="s.name">
+                                <label class="flex items-start gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                                    <input type="checkbox" :checked="runDialogSkills.includes(s.name)" @change="toggleRunList(runDialogSkills, s.name)" class="mt-1 w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                                    <span><span class="block text-sm font-medium text-slate-700 dark:text-slate-300" x-text="s.name"></span><span class="block text-xs text-slate-500 dark:text-slate-400" x-text="s.description"></span></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Guidelines</span>
+                        <p x-show="!discoveryGuidelines.length" class="text-xs text-slate-500 dark:text-slate-400">No guideline files in <span class="font-mono">guidelines/</span> yet.</p>
+                        <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
+                            <template x-for="g in discoveryGuidelines" :key="g.name">
+                                <label class="flex items-center gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                                    <input type="checkbox" :checked="runDialogGuidelines.includes(g.name)" @change="toggleRunList(runDialogGuidelines, g.name)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                                    <span class="text-sm text-slate-700 dark:text-slate-300" x-text="g.name"></span>
+                                </label>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 rounded-b-xl">
+                    <button @click="closeRunDialog()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                    <button @click="confirmRunDialog()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors ml-3">Run</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Idea Modal -->
+    <div x-show="createIdeaModalOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeCreateIdeaModal()" aria-labelledby="create-idea-modal-title" role="dialog" aria-modal="true" style="display: none;">
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+        <div class="relative flex min-h-full items-end sm:items-center justify-center sm:p-4">
+            <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full sm:max-w-2xl bg-white dark:bg-slate-800 sm:rounded-xl rounded-t-2xl shadow-2xl border-2 border-slate-300 dark:border-slate-500 border-b-0 sm:border-b-2 max-h-[92vh] sm:max-h-[90vh] flex flex-col outline-none" tabindex="-1">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
+                    <h2 id="create-idea-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Create New Idea</h2>
+                    <button @click="closeCreateIdeaModal()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Enter your idea manually. The format matches generated ideas.</p>
+                    
+                    <div class="space-y-2">
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Title <span class="text-red-500">*</span></label>
+                        <input x-model="createIdeaTitle" type="text" maxlength="200" placeholder="e.g., AI-powered meal planning app" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Max 200 characters</p>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Content <span class="text-red-500">*</span></label>
+                        <textarea x-model="createIdeaContent" rows="6" placeholder="Describe your idea in detail..." class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"></textarea>
+                    </div>
+                    
+                    <template x-for="f in createIdeaFieldDefs" :key="f.key">
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400" x-text="f.label + ' (optional)'"></label>
+                            <textarea x-model="createIdeaStructured[f.key]" rows="2" :maxlength="f.max" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
+                            <p class="text-xs text-slate-500 dark:text-slate-400" x-text="'Max ' + f.max + ' characters'"></p>
+                        </div>
+                    </template>
+                    
+                    <div x-show="createIdeaError" class="rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 p-3">
+                        <p class="text-sm text-red-700 dark:text-red-300" x-text="createIdeaError"></p>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
+                    <button @click="closeCreateIdeaModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                    <button @click="createIdea()" :disabled="createIdeaLoading" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-3">
+                        <span x-show="!createIdeaLoading">Create Idea</span>
+                        <span x-show="createIdeaLoading">Creating…</span>
+                    </button>
+                </div>
+</div>
+    </div>
+</div>
+
+    <!-- Confirmation Modal (reusable for Refine/PRD) -->
+    <div x-show="confirmModalOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeConfirmModal()" aria-labelledby="confirm-modal-title" role="dialog" aria-modal="true" style="display: none;">
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+        <div class="relative flex min-h-full items-center justify-center p-4">
+            <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-slate-300 dark:border-slate-500">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
+                    <h2 id="confirm-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Confirm Action</h2>
+                    <button @click="closeConfirmModal()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <p class="text-sm text-slate-700 dark:text-slate-300" x-text="confirmModalMessage"></p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400" x-text="confirmModalDetail"></p>
+                </div>
+                <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
+                    <button @click="closeConfirmModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                    <button @click="executeConfirmedAction()" :disabled="confirmModalLoading" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-3">
+                        <span x-show="!confirmModalLoading" x-text="confirmModalActionLabel"></span>
+                        <span x-show="confirmModalLoading">Processing…</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -460,6 +765,7 @@ function ideasApp() {
         voteLoading: null,
         actionLoading: null,
         detailModalOpen: false,
+        newActionOpen: false,
         selectedIdea: null,
         commentDraft: '',
         replyTo: null,
@@ -482,13 +788,66 @@ function ideasApp() {
         pageSize: 10,
         total: 0,
         totalPages: 1,
+        totalIdeas: 0,
         isAdmin: false,
         currentUserId: null,
+        dropdownOpenId: null,
         lastUpdated: '',
         availableActions: [],
         activeTab: 'overview',
         prdAnswers: {},
+        docThreads: {},
+        docDrafts: {},
+        docEditing: null,
+        docEditList: [],
+        docEditError: '',
+        docEditSaving: false,
         filters: { status: 'ACTIVE_ONLY', sort: 'created_at', search: '', prompt_id: '', model: '' },
+        canCreateIdeas: true,
+        createIdeaModalOpen: false,
+        createIdeaTitle: '',
+        createIdeaContent: '',
+        createIdeaStructured: {},
+        createIdeaLoading: false,
+        createIdeaError: '',
+        createIdeaFieldDefs: [
+            { key: 'elevator_pitch', label: 'Elevator Pitch', max: 500 },
+            { key: 'target_audience', label: 'Target Audience', max: 300 },
+            { key: 'core_value_proposition', label: 'Core Value Proposition', max: 500 },
+            { key: 'monetization_strategy', label: 'Monetization Strategy', max: 300 },
+        ],
+
+        // Confirmation modal state (reusable for Refine/PRD)
+        confirmModalOpen: false,
+        confirmModalLoading: false,
+        confirmModalMessage: '',
+        confirmModalDetail: '',
+        confirmModalActionLabel: '',
+        confirmModalActionType: '',
+        confirmModalIdeaId: null,
+        confirmModalAnswers: [],
+        pendingRunExtra: null,
+
+        // Run dialog state (model + skills + guidelines per run)
+        runDialogOpen: false,
+        runDialogIdeaId: null,
+        runDialogActionType: '',
+        runDialogActionLabel: '',
+        runDialogModel: '',
+        runDialogSkills: [],
+        runDialogGuidelines: [],
+        ollamaModels: [],
+        discoverySkills: [],
+        discoveryGuidelines: [],
+
+        // Bulk actions state
+        selectedIdeaIds: [],
+        bulkStatus: '',
+        bulkUpdating: false,
+        showBulkConfirm: false,
+        bulkConfirmMessage: '',
+        bulkConfirmDetail: '',
+        bulkConfirmActionLabel: '',
 
         // Follow-up AI actions come from the server registry
         // (GET /api/v1/actions), so new actions appear with no UI changes.
@@ -500,6 +859,20 @@ function ideasApp() {
                 this.availableActions = payload.actions || [];
             } catch (error) {
                 console.error('Failed to load actions:', error);
+            }
+        },
+
+        async loadUserSettings() {
+            try {
+                const response = await authFetch('/api/v1/me');
+                if (response.ok) {
+                    const data = await response.json();
+                    const user = (data.data || data).user || {};
+                    this.canCreateIdeas = user.can_create_ideas ?? true;
+                }
+            } catch (error) {
+                console.error('Failed to load user settings:', error);
+                this.canCreateIdeas = true;
             }
         },
 
@@ -517,7 +890,10 @@ function ideasApp() {
             if (qPrompt) this.filters.prompt_id = qPrompt;
             const qModel = query.get('model');
             if (qModel) this.filters.model = qModel;
-            await Promise.all([this.loadIdeas(), this.loadPrompts(), this.checkAdmin(), this.loadActions()]);
+            await Promise.all([this.loadIdeas(), this.loadTotalIdeas(), this.loadPrompts(), this.checkAdmin(), this.loadActions(), this.loadUserSettings()]);
+            // Deep link from admin activity: ?idea=<id> opens the detail modal.
+            const qIdea = query.get('idea');
+            if (qIdea) await this.openIdeaById(qIdea);
             // Live updates: refresh the list every 30s while the page is
             // visible and no modal is open, so new ideas appear by themselves.
             setInterval(() => {
@@ -530,12 +906,13 @@ function ideasApp() {
                     this.loadIdeas();
                 }
             });
-            // Auto-refresh when filters change
-            this.$watch('filters.status', () => { this.loadIdeas(); });
-            this.$watch('filters.search', () => { this.loadIdeas(); });
-            this.$watch('filters.prompt_id', () => { this.loadIdeas(); });
-            this.$watch('filters.model', () => { this.applyFilters(); });
-            this.$watch('filters.sort', () => { this.loadIdeas(); });
+            // Auto-refresh when filters change (reset to first page: the
+            // server paginates, so a stale page could be empty).
+            this.$watch('filters.status', () => { this.currentPage = 1; this.loadIdeas(); });
+            this.$watch('filters.search', () => { this.currentPage = 1; this.loadIdeas(); });
+            this.$watch('filters.prompt_id', () => { this.currentPage = 1; this.loadIdeas(); });
+            this.$watch('filters.model', () => { this.currentPage = 1; this.loadIdeas(); });
+            this.$watch('filters.sort', () => { this.currentPage = 1; this.loadIdeas(); });
         },
         
         async loadIdeas() {
@@ -546,8 +923,8 @@ function ideasApp() {
                     limit: this.pageSize,
                     sort_by: this.filters.sort,
                 });
-                // Don't send ACTIVE_ONLY to API - handle locally
-                if (this.filters.status && this.filters.status !== 'ACTIVE_ONLY') {
+                // ACTIVE_ONLY is understood by the API (excludes DROP/ARCHIVE).
+                if (this.filters.status) {
                     params.append('status', this.filters.status);
                 }
                 if (this.filters.search) params.append('search', this.filters.search);
@@ -558,8 +935,15 @@ function ideasApp() {
                 const data = await response.json();
                 const payload = data.data || data;
                 this.ideas = payload.ideas || [];
-                this.total = payload.total || this.ideas.length;
-                this.applyFilters();
+                // Server-side filtering/sorting/pagination: the payload is
+                // the current page; totals come from the server.
+                this.filteredIdeas = [...this.ideas];
+                this.total = payload.total ?? this.ideas.length;
+                const pages = payload.pages ?? Math.ceil(this.total / this.pageSize);
+                this.totalPages = Math.max(pages, 1);
+                if (this.currentPage > this.totalPages) {
+                    this.currentPage = this.totalPages;
+                }
             } catch (error) {
                 console.error('Failed to load ideas:', error);
             } finally {
@@ -599,37 +983,41 @@ function ideasApp() {
         },
         
         applyFilters() {
-            let filtered = [...this.ideas];
-            // Default: hide DISCARDED unless explicitly selected
-            if (this.filters.status === 'ACTIVE_ONLY') {
-                filtered = filtered.filter(i => i.status !== 'DISCARDED');
-            } else if (this.filters.status) {
-                filtered = filtered.filter(i => i.status === this.filters.status);
-            }
-            if (this.filters.search) {
-                const search = this.filters.search.toLowerCase();
-                filtered = filtered.filter(i => 
-                    (i.summary || '').toLowerCase().includes(search) ||
-                    (i.prompt_title || '').toLowerCase().includes(search) ||
-                    (i.reference_code || '').toLowerCase().includes(search)
-                );
-            }
-            if (this.filters.prompt_id) {
-                filtered = filtered.filter(i => i.prompt_config_id === this.filters.prompt_id);
-            }
-            if (this.filters.model) {
-                const modelByPrompt = Object.fromEntries(
-                    (this.prompts || []).map(p => [p.id, p.model_name]));
-                filtered = filtered.filter(i => modelByPrompt[i.prompt_config_id] === this.filters.model);
-            }
-            this.filteredIdeas = filtered;
-            this.total = filtered.length;
-            this.totalPages = Math.ceil(this.total / this.pageSize);
+            // Filtering, sorting and pagination happen server-side
+            // (see loadIdeas). This keeps client copies in sync when
+            // auxiliary data (e.g. prompts) finishes loading.
+            this.filteredIdeas = [...this.ideas];
         },
         
         get paginatedIdeas() {
-            const start = (this.currentPage - 1) * this.pageSize;
-            return this.filteredIdeas.slice(start, start + this.pageSize);
+            // The server already returns the current page.
+            return this.filteredIdeas;
+        },
+
+        async prevPage() {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                await this.loadIdeas();
+            }
+        },
+
+        async nextPage() {
+            if (this.currentPage < this.totalPages) {
+                this.currentPage++;
+                await this.loadIdeas();
+            }
+        },
+
+        async loadTotalIdeas() {
+            // Grand total (unfiltered) for the header count indicator.
+            try {
+                const response = await authFetch('/api/v1/ideas?limit=1');
+                const data = await response.json();
+                const payload = data.data || data;
+                this.totalIdeas = payload.total ?? 0;
+            } catch (error) {
+                console.error('Failed to load total ideas:', error);
+            }
         },
         
         async refreshIdeas() {
@@ -665,13 +1053,110 @@ function ideasApp() {
             this.loadComments(idea.id);
             this.detailModalOpen = true;
         },
+
+        async openIdeaById(ideaId) {
+            try {
+                const res = await authFetch(`/api/v1/ideas/${ideaId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const idea = (data.data || data).idea;
+                if (idea) this.openDetailModal(idea);
+            } catch (e) {
+                console.error('Failed to open linked idea:', e);
+            }
+        },
         
         closeDetailModal() {
             this.detailModalOpen = false;
+            this.newActionOpen = false;
+            this.dropdownOpenId = null;
             this.selectedIdea = null;
             this.commentDraft = '';
             this.replyTo = null;
             this.editingCommentId = null;
+            this.docThreads = {};
+            this.docDrafts = {};
+            this.cancelDocEdit();
+            // Actions may have run inside the modal: refresh the list so
+            // chips, counts and statuses stop showing stale data.
+            this.loadIdeas();
+            this.loadTotalIdeas();
+        },
+
+        openCreateIdeaModal() {
+            this.createIdeaTitle = '';
+            this.createIdeaContent = '';
+            this.createIdeaStructured = {};
+            this.createIdeaError = '';
+            this.createIdeaModalOpen = true;
+        },
+
+        closeCreateIdeaModal() {
+            this.createIdeaModalOpen = false;
+            this.createIdeaTitle = '';
+            this.createIdeaContent = '';
+            this.createIdeaStructured = {};
+            this.createIdeaError = '';
+        },
+
+        async createIdea() {
+            this.createIdeaError = '';
+            const title = (this.createIdeaTitle || '').trim();
+            const content = (this.createIdeaContent || '').trim();
+            if (!title) {
+                this.createIdeaError = 'Title is required.';
+                return;
+            }
+            if (title.length > 200) {
+                this.createIdeaError = 'Title must be 200 characters or fewer.';
+                return;
+            }
+            if (!content) {
+                this.createIdeaError = 'Content is required.';
+                return;
+            }
+            // Validate structured fields if any
+            const structured = {};
+            for (const def of this.createIdeaFieldDefs) {
+                const val = (this.createIdeaStructured[def.key] || '').trim();
+                if (val) {
+                    if (val.length > def.max) {
+                        this.createIdeaError = `${def.label} must be ${def.max} characters or fewer.`;
+                        return;
+                    }
+                    structured[def.key] = val;
+                }
+            }
+            this.createIdeaLoading = true;
+            try {
+                const response = await authFetch('/api/v1/ideas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt_title: title,
+                        raw_content: content,
+                        structured_content: Object.keys(structured).length ? structured : null,
+                    }),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    const err = data.error || data.message || 'Failed to create idea';
+                    this.createIdeaError = err;
+                    return;
+                }
+                this.closeCreateIdeaModal();
+                await this.loadIdeas();
+                await this.loadTotalIdeas();
+                // Open the new idea in the detail modal
+                if (data.data?.id) {
+                    this.openDetailModal(data.data);
+                }
+            } catch (error) {
+                console.error('Failed to create idea:', error);
+                this.createIdeaError = 'Failed to create idea. Please try again.';
+            } finally {
+                this.createIdeaLoading = false;
+            }
         },
 
         async loadComments(ideaId) {
@@ -858,10 +1343,14 @@ function ideasApp() {
                 if (idea) {
                     idea.net_votes = payload.net_votes;
                     idea.user_vote = payload.current_user_vote;
+                    if (payload.upvotes_count !== undefined) idea.upvotes_count = payload.upvotes_count;
+                    if (payload.downvotes_count !== undefined) idea.downvotes_count = payload.downvotes_count;
                 }
                 if (this.selectedIdea?.id === ideaId) {
                     this.selectedIdea.net_votes = payload.net_votes;
                     this.selectedIdea.user_vote = payload.current_user_vote;
+                    if (payload.upvotes_count !== undefined) this.selectedIdea.upvotes_count = payload.upvotes_count;
+                    if (payload.downvotes_count !== undefined) this.selectedIdea.downvotes_count = payload.downvotes_count;
                 }
             } catch (error) {
                 alert('Failed to vote: ' + error.message);
@@ -876,41 +1365,270 @@ function ideasApp() {
         },
         
         get refinedActions() {
-            // 3-dot menu: Refine + Competitors + Five Forces + PESTEL + PRD.
-            return (this.availableActions || []).filter((a) => ['REFINE', 'COMPETITORS', 'FIVE_FORCES', 'PESTEL', 'PRD_DOC'].includes(a.key));
+            // 3-dot menu: all available actions from the registry
+            return this.availableActions || [];
+        },
+
+        docActionVisible(actionKey) {
+            // V2 stage gates: PRD unlocks at Scope, Design docs at Map.
+            // Dropped/archived ideas are read-only (menu is admin-only).
+            const st = this.selectedIdea?.status;
+            if (actionKey === 'PRD_DOC') {
+                return st && st !== 'SPARK' && st !== 'DROP' && st !== 'ARCHIVE';
+            }
+            if (actionKey === 'DESIGN_DOC') {
+                return ['MAP', 'SHIP', 'SCALE', 'FREEZE'].includes(st);
+            }
+            return true;
         },
 
         async confirmDiscard(idea, close) {
-            if (!confirm('Discard this idea? It will be hidden by the default filter.')) return;
-            await this.changeStatus('DISCARDED', idea.id);
+            if (!confirm('Drop this idea? It will be hidden by the default filter.')) return;
+            await this.changeStatus('DROP', idea.id, true);
             if (close) close();
         },
 
-        async changeStatus(status, ideaId) {            try {
+        async changeStatus(status, ideaId, confirmed) {
+            if (!status) return;
+            // Contract: the UI always prompts the admin on a status change.
+            if (!confirmed && !confirm(`Change status to ${status}?`)) {
+                await this.loadIdeas();
+                return;
+            }
+            try {
                 const response = await authFetch(`/api/v1/ideas/${ideaId}/status`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status })
                 });
-                if (!response.ok) throw new Error('Failed to update status');
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error((payload && payload.message) || 'Failed to update status');
                 await this.loadIdeas();
+                await this.loadTotalIdeas();
                 if (this.selectedIdea?.id === ideaId) {
                     this.selectedIdea.status = status;
                 }
             } catch (error) {
                 alert('Failed to update status: ' + error.message);
+                await this.loadIdeas();
             }
         },
         
         async runAction(ideaId, actionType, extra) {
+            // V2 stage gates mirror the server (admin enforced server-side too).
+            const target = (this.selectedIdea?.id === ideaId)
+                ? this.selectedIdea
+                : (this.ideas || []).find(i => i.id === ideaId);
+            const st = target ? target.status : null;
+            if (st === 'DROP' || st === 'ARCHIVE') {
+                alert('No actions can run on dropped or archived ideas.');
+                return;
+            }
+            if (actionType === 'PRD_DOC' && (!st || st === 'SPARK')) {
+                alert('PRD creation requires the idea to reach Scope stage.');
+                return;
+            }
+            if (actionType === 'DESIGN_DOC' && !['MAP', 'SHIP', 'SCALE', 'FREEZE'].includes(st)) {
+                alert('Design documents require the idea to reach Map stage.');
+                return;
+            }
+            // Check if this action requires confirmation (Refine or PRD)
+            if ((actionType === 'REFINE' || actionType === 'PRD_DOC') && this.selectedIdea) {
+                const idea = this.selectedIdea;
+                const commentCount = idea.comments ? idea.comments.length : 0;
+                const actionsDone = idea.actions_run || [];
+                if (commentCount === 0 && actionsDone.length < 3) {
+                    await this.requestConfirmation(ideaId, actionType, extra);
+                    return;
+                }
+            }
+            await this.executeAction(ideaId, actionType, extra);
+        },
+
+        async requestConfirmation(ideaId, actionType, extra) {
+            const action = (this.availableActions || []).find(a => a.key === actionType);
+            const label = action ? action.label : actionType;
+            this.confirmModalMessage = 'Are you sure you want to continue? This idea doesn\'t have much more additional information yet.';
+            this.confirmModalDetail = `Running ${label} on an idea with no comments and fewer than 3 secondary actions may produce less useful results.`;
+            this.confirmModalActionLabel = `Run ${label}`;
+            this.confirmModalActionType = actionType;
+            this.confirmModalIdeaId = ideaId;
+            this.confirmModalAnswers = extra?.answers || [];
+            this.pendingRunExtra = {
+                ...(extra?.model_override ? { model_override: extra.model_override } : {}),
+                ...(extra?.skills?.length ? { skills: extra.skills } : {}),
+                ...(extra?.guidelines?.length ? { guidelines: extra.guidelines } : {}),
+            };
+            this.confirmModalOpen = true;
+        },
+
+        closeConfirmModal() {
+            this.confirmModalOpen = false;
+            this.confirmModalMessage = '';
+            this.confirmModalDetail = '';
+            this.confirmModalActionLabel = '';
+            this.confirmModalActionType = '';
+            this.confirmModalIdeaId = null;
+            this.confirmModalAnswers = [];
+            this.pendingRunExtra = null;
+        },
+
+        async openRunDialog(ideaId, actionType) {
+            const action = (this.availableActions || []).find(a => a.key === actionType);
+            this.runDialogIdeaId = ideaId;
+            this.runDialogActionType = actionType;
+            this.runDialogActionLabel = action ? action.label : actionType;
+            this.runDialogModel = '';
+            this.runDialogSkills = [];
+            this.runDialogGuidelines = [];
+            this.runDialogOpen = true;
+            await Promise.all([this.loadOllamaModels(), this.loadDiscovery()]);
+        },
+
+        closeRunDialog() {
+            this.runDialogOpen = false;
+            this.runDialogIdeaId = null;
+            this.runDialogActionType = '';
+            this.runDialogActionLabel = '';
+            this.runDialogModel = '';
+            this.runDialogSkills = [];
+            this.runDialogGuidelines = [];
+        },
+
+        async loadOllamaModels() {
+            try {
+                const res = await authFetch('/api/v1/ollama/models');
+                const data = await res.json();
+                const raw = (data.data || data).models || [];
+                this.ollamaModels = raw
+                    .map(m => typeof m === 'string' ? m : (m.name || m.model || m.id))
+                    .filter(Boolean);
+            } catch (e) {
+                console.error('Failed to load models:', e);
+                this.ollamaModels = [];
+            }
+        },
+
+        async loadDiscovery() {
+            try {
+                const res = await authFetch('/api/v1/discovery');
+                if (!res.ok) return;
+                const data = await res.json();
+                const payload = data.data || data;
+                this.discoverySkills = payload.skills || [];
+                this.discoveryGuidelines = payload.guidelines || [];
+            } catch (e) {
+                console.error('Failed to load skills/guidelines:', e);
+            }
+        },
+
+        toggleRunList(list, name) {
+            const i = list.indexOf(name);
+            if (i === -1) list.push(name);
+            else list.splice(i, 1);
+        },
+
+        async confirmRunDialog() {
+            const extra = {};
+            if (this.runDialogModel) extra.model_override = this.runDialogModel;
+            if (this.runDialogSkills.length) extra.skills = [...this.runDialogSkills];
+            if (this.runDialogGuidelines.length) extra.guidelines = [...this.runDialogGuidelines];
+            const ideaId = this.runDialogIdeaId;
+            const actionType = this.runDialogActionType;
+            this.closeRunDialog();
+            await this.runAction(ideaId, actionType, extra);
+        },
+
+        // Bulk actions functions
+        toggleSelectAll() {
+            if (this.selectedIdeaIds.length === this.paginatedIdeas.length) {
+                this.selectedIdeaIds = [];
+            } else {
+                this.selectedIdeaIds = this.paginatedIdeas.map(i => i.id);
+            }
+        },
+
+        toggleIdeaSelection(ideaId) {
+            const idx = this.selectedIdeaIds.indexOf(ideaId);
+            if (idx === -1) {
+                this.selectedIdeaIds.push(ideaId);
+            } else {
+                this.selectedIdeaIds.splice(idx, 1);
+            }
+        },
+
+        clearSelection() {
+            this.selectedIdeaIds = [];
+            this.bulkStatus = '';
+        },
+
+        confirmBulkAction() {
+            if (!this.bulkStatus || this.selectedIdeaIds.length === 0) return;
+            const count = this.selectedIdeaIds.length;
+            const statusLabel = this.bulkStatus.charAt(0) + this.bulkStatus.slice(1).toLowerCase();
+            this.bulkConfirmMessage = `Are you sure you want to change the status of <strong>${count}</strong> idea${count !== 1 ? 's' : ''} to <strong>${statusLabel}</strong>?`;
+            this.bulkConfirmDetail = 'This action will create a status history record for each idea.';
+            this.bulkConfirmActionLabel = `Confirm & Apply`;
+            this.showBulkConfirm = true;
+        },
+
+        closeBulkConfirm() {
+            this.showBulkConfirm = false;
+            this.bulkConfirmMessage = '';
+            this.bulkConfirmDetail = '';
+            this.bulkConfirmActionLabel = '';
+        },
+
+        async executeBulkAction() {
+            if (!this.bulkStatus || this.selectedIdeaIds.length === 0) return;
+            this.bulkUpdating = true;
+            try {
+                const response = await authFetch('/api/v1/ideas/bulk-status', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        idea_ids: this.selectedIdeaIds,
+                        status: this.bulkStatus
+                    })
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || 'Failed to bulk update status');
+                }
+                this.closeBulkConfirm();
+                this.clearSelection();
+                await this.loadIdeas();
+                await this.loadTotalIdeas();
+            } catch (error) {
+                alert('Failed to update status: ' + error.message);
+            } finally {
+                this.bulkUpdating = false;
+            }
+        },
+
+        async executeConfirmedAction() {
+            if (!this.confirmModalIdeaId || !this.confirmModalActionType) return;
+            const ideaId = this.confirmModalIdeaId;
+            const actionType = this.confirmModalActionType;
+            const extra = { ...(this.pendingRunExtra || {}), ...(this.confirmModalAnswers ? { answers: this.confirmModalAnswers } : {}) };
+            this.pendingRunExtra = null;
+            this.closeConfirmModal();
+            await this.executeAction(ideaId, actionType, extra);
+        },
+
+        async executeAction(ideaId, actionType, extra) {
             this.actionLoading = actionType;
             try {
+                const body = { action_type: actionType, confirm: true, ...(extra || {}) };
                 const response = await authFetch(`/api/v1/ideas/${ideaId}/actions`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action_type: actionType, ...(extra || {}) })
+                    body: JSON.stringify(body)
                 });
-                if (!response.ok) throw new Error('Failed to run action');
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.message || 'Failed to run action');
+                }
                 
                 // Poll for result
                 const poll = async () => {
@@ -943,6 +1661,8 @@ function ideasApp() {
         actionTabs() {
             const seen = [];
             for (const a of (this.selectedIdea?.actions || [])) {
+                // Existing result tabs always display (history survives
+                // every transition); creation is gated by docActionVisible.
                 if (!seen.find((t) => t.key === a.action_type)) {
                     const reg = (this.availableActions || []).find((r) => r.key === a.action_type);
                     const label = reg ? reg.label : a.action_type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -954,7 +1674,155 @@ function ideasApp() {
 
         actionTabResult(key) {
             const rows = (this.selectedIdea?.actions || []).filter((a) => a.action_type === key);
-            return rows[rows.length - 1];
+            return rows.find((a) => a.is_current) || rows[rows.length - 1];
+        },
+
+        docVersionLabel(key) {
+            const rows = (this.selectedIdea?.actions || []).filter((a) => a.action_type === key);
+            const cur = rows.find((a) => a.is_current) || rows[rows.length - 1];
+            if (!cur) return '';
+            let label = 'v' + (cur.version || 1);
+            if (cur.edited_by_id) label += ' · edited';
+            if (rows.length > 1) label += ` · ${rows.length - 1} prior`;
+            return label;
+        },
+
+        async loadDocComments(resultId, force) {
+            if (!resultId) return;
+            if (!force && this.docThreads[resultId]) return;
+            try {
+                const res = await authFetch(`/api/v1/actions/${resultId}/comments`);
+                const data = await res.json();
+                const payload = data.data || data;
+                this.docThreads[resultId] = payload.comments || [];
+            } catch (e) {
+                console.error('Failed to load document comments:', e);
+            }
+        },
+
+        async postDocComment(resultId) {
+            const body = (this.docDrafts[resultId] || '').trim();
+            if (!body) return;
+            try {
+                const res = await authFetch(`/api/v1/actions/${resultId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ body }),
+                });
+                if (!res.ok) throw new Error('Failed to post comment');
+                this.docDrafts[resultId] = '';
+                await this.loadDocComments(resultId, true);
+            } catch (e) {
+                alert('Failed to post comment: ' + e.message);
+            }
+        },
+
+        startDocEdit(key) {
+            try {
+                const cur = this.docCurrentResult(key) || this.actionTabResult(key);
+                if (!cur || !cur.id) {
+                    alert('Could not load this document for editing. Try closing and reopening the details.');
+                    return;
+                }
+                const data = cur.output || cur.result_data || {};
+                this.docEditing = cur.id;
+                this.docEditList = [];
+                for (const k of Object.keys(data)) {
+                    const v = data[k];
+                    let kind = 'text';
+                    let value = v ?? '';
+                    if (Array.isArray(v)) {
+                        kind = 'list';
+                        value = v.map((x) => typeof x === 'string' ? x : JSON.stringify(x)).join('\n');
+                    } else if (v && typeof v === 'object') {
+                        kind = 'json';
+                        value = JSON.stringify(v, null, 2);
+                    } else {
+                        value = String(value ?? '');
+                    }
+                    const label = k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                    this.docEditList.push({ key: k, label, kind, value,
+                        isList: Array.isArray(v),
+                        isObj: !!(v && typeof v === 'object' && !Array.isArray(v)) });
+                }
+                this.docEditError = '';
+            } catch (e) {
+                alert('Could not open the editor: ' + (e && e.message ? e.message : e));
+            }
+        },
+
+        cancelDocEdit() {
+            this.docEditing = null;
+            this.docEditList = [];
+            this.docEditError = '';
+        },
+
+        async saveDocEdit() {
+            const parsed = {};
+            for (const f of (this.docEditList || [])) {
+                const raw = f.value ?? '';
+                if (f.isList) {
+                    parsed[f.key] = String(raw).split('\n').map((s) => s.trim()).filter(Boolean);
+                } else if (f.isObj) {
+                    try {
+                        parsed[f.key] = JSON.parse(String(raw) || '{}');
+                    } catch (e) {
+                        this.docEditError = '\u201c' + f.key + '\u201d is not valid JSON: ' + e.message;
+                        return;
+                    }
+                } else {
+                    parsed[f.key] = String(raw);
+                }
+            }
+            if (!Object.keys(parsed).length) {
+                this.docEditError = 'Nothing to save.';
+                return;
+            }
+            this.docEditSaving = true;
+            try {
+                const res = await authFetch(`/api/v1/actions/${this.docEditing}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ result_data: parsed }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data.data || data).message || data.message || 'Save failed');
+                const id = this.docEditing;
+                this.cancelDocEdit();
+                await this.loadIdeas();
+                const idea = (this.ideas || []).find(i => i.id === this.selectedIdea?.id);
+                if (idea) await this.openDetailModal(idea);
+                await this.loadDocComments(id, true);
+            } catch (e) {
+                this.docEditError = e.message;
+            } finally {
+                this.docEditSaving = false;
+            }
+        },
+
+        docCurrentResult(key) {
+            const rows = (this.selectedIdea?.actions || []).filter((a) => a.action_type === key);
+            return rows.find((a) => a.is_current) || rows[rows.length - 1];
+        },
+
+        docEditorResult() {
+            if (!this.docEditing) return null;
+            return (this.selectedIdea?.actions || []).find((a) => a.id === this.docEditing) || null;
+        },
+
+        docEditorLabel() {
+            const r = this.docEditorResult();
+            if (!r) return '';
+            const reg = (this.availableActions || []).find((x) => x.key === r.action_type);
+            return reg ? reg.label : r.action_type;
+        },
+
+        docEditorVersion() {
+            const r = this.docEditorResult();
+            if (!r) return '';
+            let label = 'v' + (r.version || 1);
+            if (r.edited_by_id) label += ' · edited';
+            return label;
         },
 
         prdQuestions() {
@@ -983,11 +1851,16 @@ function ideasApp() {
 
         getStatusClass(status) {
             const classes = {
-                'NEW': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-                'CONSIDERATION': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-                'DISCARDED': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+                'SPARK': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                'SCOPE': 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
+                'MAP': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+                'SHIP': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
+                'SCALE': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+                'DROP': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
+                'FREEZE': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+                'ARCHIVE': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
             };
-            return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${classes[status] || classes.NEW}`;
+            return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${classes[status] || classes.SPARK}`;
         },
         
         formatDate(dateStr) {
@@ -1056,9 +1929,16 @@ function ideasApp() {
 
         actionChips(idea) {
             // Richness signals: which follow-up analyses already live inside.
-            const done = idea && Array.isArray(idea.actions_run) ? idea.actions_run : [];
-            const labels = { REFINE: 'Refined', COMPETITORS: 'Competitors', FEASIBILITY_SCORE: 'Scored', FIVE_FORCES: 'Five Forces', PESTEL: 'PESTEL' };
-            return done.filter((k) => labels[k]).map((k) => ({ key: k, label: labels[k] }));
+            // Registry-driven (like the detail tabs) so new actions appear
+            // with no UI changes; deduped (versions share one chip).
+            const done = idea && Array.isArray(idea.actions_run) ? [...new Set(idea.actions_run)] : [];
+            return done.map((k) => {
+                const reg = (this.availableActions || []).find((r) => r.key === k);
+                const label = reg
+                    ? (reg.done_label || reg.label)
+                    : k.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                return { key: k, label };
+            });
         },
 
         prettySummary(idea) {

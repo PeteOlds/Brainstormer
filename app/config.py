@@ -42,8 +42,12 @@ class Config:
 
     # JWT Authentication
     JWT_SECRET_KEY = get_env("JWT_SECRET_KEY", required=True)
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=int(get_env("JWT_ACCESS_TOKEN_EXPIRES", "900")))
-    JWT_REFRESH_TOKEN_EXPIRES = timedelta(seconds=int(get_env("JWT_REFRESH_TOKEN_EXPIRES", "604800")))
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(
+        seconds=int(get_env("JWT_ACCESS_TOKEN_EXPIRES", "900"))
+    )
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(
+        seconds=int(get_env("JWT_REFRESH_TOKEN_EXPIRES", "604800"))
+    )
     JWT_TOKEN_LOCATION = ["headers", "cookies"]
     JWT_COOKIE_SECURE = FLASK_ENV == "production"
     JWT_COOKIE_CSRF_PROTECT = True
@@ -76,10 +80,36 @@ class Config:
             "task": "app.tasks.ollama_tasks.check_due_prompts",
             "schedule": 60.0,
         },
+        "scheduled-site-backup": {
+            "task": "app.tasks.maintenance_tasks.scheduled_site_backup",
+            "schedule": 86400.0,
+        },
     }
 
+    # Backups (Phase 6): daily site export to BACKUP_DIR (a Docker
+    # volume in production). No auto-pruning: files accumulate.
+    BACKUP_DIR = get_env("BACKUP_DIR", "./backups")
+
+    # LiteLLM proxy (item 10): sidecar for virtual-key isolation. Empty
+    # master key disables provisioning; direct litellm-library calls
+    # remain the fallback path.
+    LITELLM_PROXY_URL = get_env("LITELLM_PROXY_URL", "http://litellm:4000")
+    LITELLM_MASTER_KEY = get_env("LITELLM_MASTER_KEY", "")
+
+    # Stripe billing (Phase 12): webhook signing secret authenticates
+    # ingress; empty disables the endpoint with a clear error. The API
+    # secret key is only needed for the customer portal link.
+    STRIPE_WEBHOOK_SECRET = get_env("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_SECRET_KEY = get_env("STRIPE_SECRET_KEY", "")
+
+    # Legacy Jinja web UI (Phase 7): True keeps serving it; False makes
+    # the pages blueprint answer 410 pointing at the Flutter client.
+    LEGACY_WEB_ENABLED = get_env("LEGACY_WEB_ENABLED", "True") == "True"
+
     # Rate Limiting
-    RATE_LIMIT_STORAGE_URL = get_env("RATE_LIMIT_STORAGE_URL", "redis://localhost:6379/2")
+    RATE_LIMIT_STORAGE_URL = get_env(
+        "RATE_LIMIT_STORAGE_URL", "redis://localhost:6379/2"
+    )
     RATE_LIMIT_DEFAULT = "100 per minute"
     RATE_LIMIT_HEADERS_ENABLED = True
 

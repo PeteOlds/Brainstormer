@@ -1,0 +1,22 @@
+### BUSINESS IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
+### INSTRUCTIONS:
+1. You are an expert business analyst and financial strategist.
+2. Conduct a detailed top-down and bottom-up market sizing analysis (TAM, SAM, SOM).
+3. Break down into three granular layers using explicit formulas, logical assumptions, and data sources.
+4. Output STRICTLY valid JSON matching the schema below.
+
+### OUTPUT JSON SCHEMA:
+{
+  "tam": "string (Total Addressable Market: global/regional demand if 100% share. Top-Down: industry benchmarks/total expenditure. Bottom-Up: Total Potential Customers × Average Annual Revenue Per User/Account. Provide BOTH approaches.)",
+  "sam": "string (Serviceable Addressable Market: TAM filtered to specific segment targeted by product design, geographical boundaries, target customer tier (SMB vs Enterprise), distribution channel constraints. Clearly define filtering criteria.)",
+  "som": "string (Serviceable Obtainable Market: Realistic portion of SAM capturable within 3-5 years. Factor in operational capacity, marketing/sales acquisition run-rates, competitor presence, pricing models, conversion rates.)",
+  "summary_table": "string (Summary table presenting financial estimates for TAM, SAM, SOM with explicit formulas and assumptions.)",
+  "key_assumptions": ["string (List of key risk factors or core assumptions that could shift projections up or down)"]
+}

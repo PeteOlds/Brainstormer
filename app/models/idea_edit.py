@@ -11,12 +11,29 @@ class IdeaEdit(db.Model):
     __tablename__ = "idea_edits"
 
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
-    idea_id = db.Column(GUID(), db.ForeignKey("ideas.id", ondelete="CASCADE"), nullable=False, index=True)
-    editor_id = db.Column(GUID(), db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    instance_id = db.Column(
+        GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
+    )
+    idea_id = db.Column(
+        GUID(),
+        db.ForeignKey("ideas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    editor_id = db.Column(
+        GUID(),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     field = db.Column(db.String(50), nullable=False)
     old_value = db.Column(db.Text)
     new_value = db.Column(db.Text)
-    edited_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    edited_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     def to_dict(self, editor_name=None):
         return {

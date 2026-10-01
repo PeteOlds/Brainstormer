@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from app.extensions import db
-from app.utils.crypto import encrypt, decrypt
 from app.models.types import GUID
+from app.utils.crypto import decrypt, encrypt
 
 
 class PromptStatus(str, Enum):
@@ -16,11 +16,15 @@ class PromptConfig(db.Model):
     __tablename__ = "prompt_configs"
 
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    instance_id = db.Column(
+        GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
+    )
     title = db.Column(db.String(200), nullable=False)
     _prompt_body = db.Column("prompt_body", db.Text, nullable=False)
     interval_minutes = db.Column(db.Integer, nullable=False)
     cron_expression = db.Column(db.String(100))
     model_name = db.Column(db.String(100), nullable=False)
+    provider = db.Column(db.String(20), nullable=False, default="ollama")
     temperature = db.Column(db.Float, default=0.7)
     top_p = db.Column(db.Float, default=0.9)
     repeat_penalty = db.Column(db.Float, default=1.1)
@@ -32,8 +36,17 @@ class PromptConfig(db.Model):
     last_run_at = db.Column(db.DateTime(timezone=True))
     next_run_at = db.Column(db.DateTime(timezone=True), index=True)
     created_by_id = db.Column(GUID(), db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     # Relationships
     created_by = db.relationship("User", foreign_keys=[created_by_id])
@@ -57,13 +70,22 @@ class PromptConfig(db.Model):
 
         total = PromptRun.query.filter_by(prompt_config_id=self.id).count()
         failures = PromptRun.query.filter_by(
-            prompt_config_id=self.id, status=PromptRunStatus.FAILED).count()
-        pending = PromptRun.query.filter(
-            PromptRun.prompt_config_id == self.id,
-            PromptRun.status.in_([PromptRunStatus.PENDING, PromptRunStatus.RUNNING]),
-        ).count() > 0
-        last = (PromptRun.query.filter_by(prompt_config_id=self.id)
-                .order_by(PromptRun.created_at.desc()).first())
+            prompt_config_id=self.id, status=PromptRunStatus.FAILED
+        ).count()
+        pending = (
+            PromptRun.query.filter(
+                PromptRun.prompt_config_id == self.id,
+                PromptRun.status.in_(
+                    [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
+                ),
+            ).count()
+            > 0
+        )
+        last = (
+            PromptRun.query.filter_by(prompt_config_id=self.id)
+            .order_by(PromptRun.created_at.desc())
+            .first()
+        )
         return {
             "run_count": total,
             "failure_count": failures,
@@ -78,6 +100,7 @@ class PromptConfig(db.Model):
             "interval_minutes": self.interval_minutes,
             "cron_expression": self.cron_expression,
             "model_name": self.model_name,
+            "provider": self.provider,
             "temperature": self.temperature,
             "top_p": self.top_p,
             "repeat_penalty": self.repeat_penalty,

@@ -4,6 +4,10 @@ Act as an expert technical product manager and business analyst. Take the produc
 ${ORIGINAL_IDEA_CONTENT}
 
 ---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
 
 ### INSTRUCTIONS:
 1. Structure the PRD with professional rigor across these sections:
@@ -14,7 +18,7 @@ ${ORIGINAL_IDEA_CONTENT}
    - Non-Functional Requirements: performance benchmarks, security/compliance, data privacy, scalability, platform constraints.
    - User Experience & Interface Guidelines: core navigation flows, layout principles, key UX states (loading, empty, error).
    - Assumptions, Dependencies & Risks: technical dependencies, third-party integrations, assumptions, risks with mitigations.
-2. End with up to 5 open questions: things you could not determine from the idea alone that a human should answer before engineering starts. If there is nothing genuinely unclear, return an empty list.
+2. End with up to 5 open questions: things you could not determine from the idea alone that a human should answer before engineering starts. Never repeat a question already answered in the supporting material or user answers — only ask genuinely new questions. If there is nothing genuinely unclear, return an empty list.
 3. Output STRICTLY a valid JSON object matching the schema below. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
 
 ### OUTPUT JSON SCHEMA:

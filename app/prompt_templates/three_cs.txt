@@ -1,0 +1,21 @@
+### BUSINESS IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
+### INSTRUCTIONS:
+1. You are an expert business analyst and strategic advisor.
+2. Conduct a comprehensive 3Cs Strategic Analysis using Kenichi Ohmae's framework.
+3. Output STRICTLY valid JSON matching the schema below.
+
+### OUTPUT JSON SCHEMA:
+{
+  "customer": "string (Target segments, core jobs-to-be-done, key pain points, price sensitivity, purchasing behaviors, shifting demographic trends. What drives adoption/rejection?)",
+  "competitor": "string (Direct, indirect, substitute competitors. Market share, core strengths, strategic vulnerabilities, pricing, typical tactical responses to new entrants.)",
+  "company": "string (Internal capabilities, core competencies, brand positioning, tech stack, operational capacity, resource constraints. Unique value/cost advantage competitors cannot easily match.)",
+  "alignment_summary": "string (Where the three vectors overlap — your 'sweet spot' for market entry. Strategic alignment across Customer, Competitor, Company.)",
+  "recommendations": ["string (2-3 prioritized recommendations to establish a defensible market position)"]
+}

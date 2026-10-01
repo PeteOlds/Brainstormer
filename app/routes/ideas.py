@@ -1,12 +1,30 @@
-from flask import Blueprint, request
-from sqlalchemy import func, desc, asc
 import json
+import random
+import string
 import uuid
 
-from app.extensions import db
-from app.models import Idea, Vote, SecondaryActionResult, IdeaStatusHistory, User, Comment, IdeaEdit
-from app.utils.decorators import token_required, admin_required
-from app.utils.responses import api_ok, api_error, api_created
+from flask import Blueprint, request
+from sqlalchemy import asc, desc, func, or_
+
+from app.extensions import db, limiter
+from app.models import (
+    Comment,
+    Idea,
+    IdeaEdit,
+    IdeaStatusHistory,
+    SecondaryActionResult,
+    User,
+    Vote,
+)
+from app.models.enums import IdeaStatus
+from app.utils.decorators import (
+    admin_required,
+    require_permission,
+    token_required,
+)
+from app.utils.responses import api_created, api_error, api_ok
+from app.utils.tenancy import apply_scope, check_access, current_instance_role, stamp
+from flask_limiter.util import get_remote_address
 
 bp = Blueprint("ideas", __name__)
 
@@ -25,29 +43,46 @@ def list_ideas(user):
     limit = request.args.get("limit", 20, type=int)
     status = request.args.get("status")
     sort_by = request.args.get("sort_by", "created_at")
-    prompt_config_id = request.args.get("prompt_config_id", type=lambda x: uuid.UUID(x) if x else None)
+    search = request.args.get("search")
+    prompt_config_id = request.args.get(
+        "prompt_config_id", type=lambda x: uuid.UUID(x) if x else None
+    )
     model = request.args.get("model")
 
-    query = Idea.query
+    query = apply_scope(Idea.query, Idea)
 
-    if status and status.upper() not in ('ACTIVE_ONLY', 'ALL'):
+    if status and status.upper() not in ("ACTIVE_ONLY", "ALL"):
         query = query.filter(Idea.status == status.upper())
-    elif status and status.upper() == 'ACTIVE_ONLY':
-        # ACTIVE_ONLY is a frontend-only filter - exclude DISCARDED ideas
-        query = query.filter(Idea.status != 'DISCARDED')
+    elif status and status.upper() == "ACTIVE_ONLY":
+        # ACTIVE_ONLY is a frontend-only filter - exclude dropped/archived ideas
+        query = query.filter(Idea.status.notin_(["DROP", "ARCHIVE"]))
+    # 'ALL' (or absent) means no status filter.
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            or_(
+                Idea.reference_code.ilike(like),
+                Idea.prompt_title.ilike(like),
+                Idea.raw_content.ilike(like),
+            )
+        )
     # 'ALL' (or absent) means no status filter.
     if prompt_config_id:
         query = query.filter(Idea.prompt_config_id == prompt_config_id)
     if model:
         from app.models import PromptConfig
-        query = query.join(PromptConfig, Idea.prompt_config_id == PromptConfig.id).filter(
-            PromptConfig.model_name == model)
 
-    # Sorting
+        query = query.join(
+            PromptConfig, Idea.prompt_config_id == PromptConfig.id
+        ).filter(PromptConfig.model_name == model)
+
+    # Sorting (matches the dashboard sort dropdown values)
     if sort_by == "votes":
         query = query.order_by(desc(Idea.net_score), desc(Idea.created_at))
-    elif sort_by == "created_at":
-        query = query.order_by(desc(Idea.created_at))
+    elif sort_by == "-votes":
+        query = query.order_by(asc(Idea.net_score), desc(Idea.created_at))
+    elif sort_by == "-created_at":
+        query = query.order_by(asc(Idea.created_at))
     else:
         query = query.order_by(desc(Idea.created_at))
 
@@ -58,12 +93,102 @@ def list_ideas(user):
         user_vote = _get_user_vote(user.id, idea.id)
         ideas_data.append(idea.to_dict(user_vote=user_vote))
 
-    return api_ok({
-        "ideas": ideas_data,
-        "total": pagination.total,
-        "page": pagination.page,
-        "pages": pagination.pages,
-    })
+    return api_ok(
+        {
+            "ideas": ideas_data,
+            "total": pagination.total,
+            "page": pagination.page,
+            "pages": pagination.pages,
+        }
+    )
+
+
+@bp.route("/ideas", methods=["POST"])
+@token_required
+def create_idea(user):
+    """Create a new idea manually.
+
+    Available to all users with can_create_ideas=True (default).
+    Format matches generated ideas: prompt_title, raw_content, structured_content (optional).
+    """
+    if not user.can_create_ideas:
+        return api_error(
+            "Manual idea creation is disabled for your account.", status_code=403
+        )
+
+    data = request.get_json() or {}
+
+    prompt_title = (data.get("prompt_title") or "").strip()
+    raw_content = (data.get("raw_content") or "").strip()
+    structured_content = data.get("structured_content")
+
+    if not prompt_title:
+        return api_error("prompt_title is required.", status_code=400)
+    if len(prompt_title) > 200:
+        return api_error(
+            "prompt_title must be 200 characters or fewer.", status_code=400
+        )
+    if not raw_content:
+        return api_error("raw_content is required.", status_code=400)
+
+    # Validate structured_content if provided
+    if structured_content is not None:
+        if not isinstance(structured_content, dict):
+            return api_error("structured_content must be an object.", status_code=400)
+        allowed = {
+            "elevator_pitch": 500,
+            "target_audience": 300,
+            "core_value_proposition": 500,
+            "monetization_strategy": 300,
+        }
+        unknown = [k for k in structured_content if k not in allowed]
+        if unknown:
+            return api_error(
+                f"Unknown structured fields: {', '.join(unknown)}.", status_code=400
+            )
+        cleaned = {}
+        for key, cap in allowed.items():
+            if key not in structured_content:
+                continue
+            val = structured_content[key]
+            if not isinstance(val, str) or not val.strip():
+                return api_error(f"{key} must be a non-empty string.", status_code=400)
+            if len(val.strip()) > cap:
+                return api_error(
+                    f"{key} must be {cap} characters or fewer.", status_code=400
+                )
+            cleaned[key] = val.strip()
+        if not cleaned:
+            return api_error(
+                "structured_content must include at least one known field.",
+                status_code=400,
+            )
+        structured_content = cleaned
+
+    # Generate reference code (IDEA-XXXX format)
+    import random
+    import string
+
+    while True:
+        ref_code = f"IDEA-{''.join(random.choices(string.digits, k=4))}"
+        if not Idea.query.filter_by(reference_code=ref_code).first():
+            break
+
+    idea = Idea(
+        reference_code=ref_code,
+        prompt_title=prompt_title,
+        raw_content=raw_content,
+        structured_content=structured_content,
+        status="SPARK",
+        prompt_config_id=None,  # Manual ideas have no associated prompt config
+        created_by_id=user.id,  # Authorship drives edit-own permissions.
+    )
+    stamp(idea)
+
+    db.session.add(idea)
+    db.session.commit()
+
+    return api_created(idea.to_dict(user_vote=None))
 
 
 @bp.route("/ideas/<uuid:idea_id>/similar", methods=["GET"])
@@ -73,14 +198,23 @@ def find_similar_ideas(user, idea_id):
     from app.services.embedding_service import get_embedding_service
 
     idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
     if not idea.embedding:
-        return api_error("This idea has no embedding yet. Try again later.", status_code=404)
+        return api_error(
+            "This idea has no embedding yet. Try again later.", status_code=404
+        )
 
     threshold = request.args.get("threshold", 0.85, type=float)
     limit = request.args.get("limit", 10, type=int)
 
+    from app.utils.tenancy import current_instance_id
+
     svc = get_embedding_service()
-    similar = svc.find_similar_ideas(idea.id, threshold=threshold, limit=limit)
+    similar = svc.find_similar_ideas(
+        idea.id, threshold=threshold, limit=limit, instance_id=current_instance_id()
+    )
 
     similar_data = []
     for similar_idea, score in similar:
@@ -88,12 +222,14 @@ def find_similar_ideas(user, idea_id):
         data["similarity_score"] = round(score, 3)
         similar_data.append(data)
 
-    return api_ok({
-        "idea_id": str(idea_id),
-        "similar_ideas": similar_data,
-        "threshold": threshold,
-        "count": len(similar_data),
-    })
+    return api_ok(
+        {
+            "idea_id": str(idea_id),
+            "similar_ideas": similar_data,
+            "threshold": threshold,
+            "count": len(similar_data),
+        }
+    )
 
 
 @bp.route("/ideas/<uuid:idea_id>", methods=["GET"])
@@ -101,42 +237,60 @@ def find_similar_ideas(user, idea_id):
 def get_idea(user, idea_id):
     """Get full idea details with action history."""
     idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
     user_vote = _get_user_vote(user.id, idea.id)
 
     # Get action results
-    actions = SecondaryActionResult.query.filter_by(idea_id=idea_id).order_by(SecondaryActionResult.executed_at).all()
+    actions = (
+        SecondaryActionResult.query.filter_by(idea_id=idea_id)
+        .order_by(SecondaryActionResult.executed_at)
+        .all()
+    )
 
     payload = {
         "idea": idea.to_dict(include_content=True, user_vote=user_vote),
         "actions": [a.to_dict() for a in actions],
         "edit_history": _edit_history(idea_id),
     }
-    if user.role.value == "ADMIN":
+    if user.role.value == "ADMIN" or current_instance_role() in (
+        "INSTANCE_ADMIN",
+        "SITE_ADMIN",
+    ):
         # Generation duration is admin-only: how long the linked run took.
         from app.models import PromptRun, PromptRunStatus
-        run = (PromptRun.query.filter_by(idea_id=idea.id, status=PromptRunStatus.SUCCESS)
-               .order_by(PromptRun.finished_at.desc()).first())
+
+        run = (
+            PromptRun.query.filter_by(idea_id=idea.id, status=PromptRunStatus.SUCCESS)
+            .order_by(PromptRun.finished_at.desc())
+            .first()
+        )
         payload["generation_seconds"] = run.duration_seconds if run else None
 
     return api_ok(payload)
 
 
 @bp.route("/ideas/<uuid:idea_id>/status", methods=["PATCH"])
-@admin_required
+@require_permission("change_status")
 def update_idea_status(user, idea_id):
     """Update idea status (Admin only)."""
     idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
     data = request.get_json() or {}
 
     new_status = data.get("status")
     if not new_status:
         return api_error("Missing required field: status", status_code=400)
 
-    if new_status.upper() == 'ACTIVE_ONLY':
+    if new_status.upper() == "ACTIVE_ONLY":
         return api_error("ACTIVE_ONLY is not a valid status value", status_code=400)
-    
+
     try:
-        from app.models import IdeaStatus
+        from app.models.lifecycle import allowed_from, can_transition
+
         new_status_enum = IdeaStatus[new_status.upper()]
     except KeyError:
         return api_error(f"Invalid status: {new_status}", status_code=400)
@@ -144,6 +298,13 @@ def update_idea_status(user, idea_id):
     old_status = idea.status
     if old_status == new_status_enum:
         return api_ok(idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)))
+    if not can_transition(old_status, new_status_enum):
+        return api_error(
+            f"Illegal transition {old_status.value} -> {new_status_enum.value}. "
+            f"Allowed: {', '.join(allowed_from(old_status)) or 'none (terminal)'}.",
+            status_code=400,
+            error_code="ILLEGAL_TRANSITION",
+        )
 
     # Update status
     idea.status = new_status_enum
@@ -155,10 +316,65 @@ def update_idea_status(user, idea_id):
         old_status=old_status,
         new_status=new_status_enum,
     )
+    stamp(history)
     db.session.add(history)
     db.session.commit()
 
     return api_ok(idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)))
+
+
+@bp.route("/ideas/bulk-status", methods=["PATCH"])
+@require_permission("change_status")
+def bulk_update_idea_status(user):
+    """Update status for multiple ideas at once (Admin only)."""
+    data = request.get_json() or {}
+    idea_ids = data.get("idea_ids", [])
+    new_status = data.get("status")
+
+    if not idea_ids:
+        return api_error("Missing required field: idea_ids", status_code=400)
+    if not new_status:
+        return api_error("Missing required field: status", status_code=400)
+
+    try:
+        from app.models.lifecycle import can_transition
+
+        new_status_enum = IdeaStatus[new_status.upper()]
+    except KeyError:
+        return api_error(f"Invalid status: {new_status}", status_code=400)
+
+    ideas = Idea.query.filter(Idea.id.in_(idea_ids)).all()
+    updated_count = 0
+    skipped_illegal = 0
+    for idea in ideas:
+        if check_access(idea) is not None:
+            continue  # Other instances' ideas are silently skipped.
+        if idea.status == new_status_enum:
+            continue
+        if not can_transition(idea.status, new_status_enum):
+            skipped_illegal += 1
+            continue
+        history = IdeaStatusHistory(
+            idea_id=idea.id,
+            changed_by_id=user.id,
+            old_status=idea.status,
+            new_status=new_status_enum,
+        )
+        stamp(history)
+        db.session.add(history)
+        idea.status = new_status_enum
+        updated_count += 1
+
+    db.session.commit()
+
+    return api_ok(
+        {
+            "updated_count": updated_count,
+            "total_selected": len(idea_ids),
+            "skipped_illegal": skipped_illegal,
+            "status": new_status_enum.value,
+        }
+    )
 
 
 @bp.route("/ideas/<uuid:idea_id>/vote", methods=["POST"])
@@ -166,11 +382,16 @@ def update_idea_status(user, idea_id):
 def vote_idea(user, idea_id):
     """Cast or update vote on an idea."""
     idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
     data = request.get_json() or {}
 
     direction = data.get("direction")
     if direction not in (1, -1):
-        return api_error("Invalid direction. Must be 1 (upvote) or -1 (downvote)", status_code=400)
+        return api_error(
+            "Invalid direction. Must be 1 (upvote) or -1 (downvote)", status_code=400
+        )
 
     # Check existing vote
     existing_vote = Vote.query.filter_by(user_id=user.id, idea_id=idea_id).first()
@@ -185,6 +406,7 @@ def vote_idea(user, idea_id):
     else:
         # New vote
         vote = Vote(user_id=user.id, idea_id=idea_id, value=direction)
+        stamp(vote)
         db.session.add(vote)
 
     # Update cached counts
@@ -192,28 +414,54 @@ def vote_idea(user, idea_id):
     db.session.commit()
 
     user_vote = _get_user_vote(user.id, idea_id)
-    return api_ok({
-        "idea_id": str(idea_id),
-        "net_votes": idea.net_score,
-        "current_user_vote": user_vote,
-    })
+    return api_ok(
+        {
+            "idea_id": str(idea_id),
+            "net_votes": idea.net_score,
+            "upvotes_count": idea.upvotes_count,
+            "downvotes_count": idea.downvotes_count,
+            "current_user_vote": user_vote,
+        }
+    )
 
 
 @bp.route("/actions", methods=["GET"])
 @token_required
 def list_actions(user):
-    """List available follow-up AI actions (driven by the registry)."""
+    """List all follow-up AI actions (driven by the registry)."""
     from app.services.secondary_actions import list_actions as registry_actions
+
     return api_ok({"actions": registry_actions()})
 
 
+@bp.route("/discovery", methods=["GET"])
+@require_permission("view_discovery")
+def discovery(user):
+    """Discoverable opencode skills + guideline docs for run customization."""
+    from app.services.discovery import list_guidelines, list_skills
+
+    return api_ok(
+        {
+            "skills": list_skills(),
+            "guidelines": list_guidelines(),
+        }
+    )
+
+
 @bp.route("/ideas/<uuid:idea_id>/actions", methods=["POST"])
-@admin_required
+@require_permission("run_actions")
 def run_action(user, idea_id):
     """Run a secondary action on an idea (Admin only)."""
-    from app.services.secondary_actions import get_action, list_actions as registry_actions
+    from app.models import Comment
+    from app.services.secondary_actions import (
+        get_action,
+    )
+    from app.services.secondary_actions import list_actions as registry_actions
 
     idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
     data = request.get_json() or {}
 
     action_type = data.get("action_type")
@@ -222,10 +470,78 @@ def run_action(user, idea_id):
     entry = get_action(action_type)
     if entry is None:
         known = [a["key"] for a in registry_actions()]
-        return api_error(f"Unknown action_type: {action_type}. Known: {', '.join(known)}", status_code=400)
+        return api_error(
+            f"Unknown action_type: {action_type}. Known: {', '.join(known)}",
+            status_code=400,
+        )
     action_type = entry["key"]
 
+    # V2 stage gates (PRD_V2 §5.4): dropped/archived ideas are read-only
+    # history; PRD unlocks at Scope; Design docs unlock at Map.
+    from app.models.lifecycle import (
+        ACTIONS_BLOCKED_STATES,
+        DESIGN_DOC_STATES,
+        PRD_MIN_STATES,
+    )
+
+    if idea.status in ACTIONS_BLOCKED_STATES:
+        return api_error(
+            "No actions can run on dropped or archived ideas.", status_code=400
+        )
+    if action_type == "PRD_DOC" and idea.status not in PRD_MIN_STATES:
+        return api_error(
+            "PRD creation requires the idea to reach Scope stage.",
+            status_code=400,
+        )
+    if action_type == "DESIGN_DOC" and idea.status not in DESIGN_DOC_STATES:
+        return api_error(
+            "Design documents require the idea to reach Map stage.",
+            status_code=400,
+        )
+    # Design doc requires an existing PRD (pipeline order: PRD first).
+    if action_type == "DESIGN_DOC":
+        from app.models import SecondaryActionResult
+
+        has_prd = (
+            SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="PRD_DOC"
+            ).first()
+            is not None
+        )
+        if not has_prd:
+            return api_error(
+                "Design requires an existing PRD for this idea.", status_code=400
+            )
+
+    # Confirmation check for Refine and PRD (PRD §13.33-13.38)
+    # If no comments and <3 secondary actions done, require explicit confirmation
+    confirm = data.get("confirm", False)
+    actions_done = idea.actions_run or []
+    comment_count = Comment.query.filter_by(idea_id=idea.id).count()
+    if (
+        action_type in ("REFINE", "PRD_DOC")
+        and comment_count == 0
+        and len(actions_done) < 3
+        and not confirm
+    ):
+        return api_error(
+            "Are you sure you want to continue? This idea doesn't have much more additional information yet",
+            status_code=409,
+            error_code="CONFIRMATION_REQUIRED",
+            errors={"action_type": action_type},
+        )
+
     model_override = data.get("model_override")
+
+    # Optional run customization: opencode skills + guideline docs to inject.
+    skills = data.get("skills") or []
+    guidelines = data.get("guidelines") or []
+    if not isinstance(skills, list) or not isinstance(guidelines, list):
+        return api_error(
+            "skills and guidelines must be lists of names", status_code=400
+        )
+    skills = [str(s) for s in skills if str(s).strip()][:20]
+    guidelines = [str(g) for g in guidelines if str(g).strip()][:20]
 
     # Rerun answers: optional list of user answers to a previous run's open
     # questions. Only PRD_DOC consumes them; ignored for other actions.
@@ -234,34 +550,51 @@ def run_action(user, idea_id):
         return api_error("answers must be a list of strings", status_code=400)
     answers = [str(a) for a in answers if str(a).strip()]
 
-    # PRD_DOC reruns replace: one current PRD per idea.
-    if action_type == "PRD_DOC":
-        from app.models import SecondaryActionResult
-        SecondaryActionResult.query.filter_by(
-            idea_id=idea.id, action_type="PRD_DOC").delete()
-        db.session.commit()
+    # NOTE: PRD_DOC/DESIGN_DOC reruns no longer delete history — the task
+    # appends a new version (is_current flip) so doc threads stay pinned.
 
     # Record the run first so it shows as pending immediately.
     from app.models import PromptRun
-    run = PromptRun(prompt_config_id=None, action_type=action_type,
-                    idea_id=idea.id, triggered_by="manual")
+
+    run = PromptRun(
+        prompt_config_id=None,
+        action_type=action_type,
+        idea_id=idea.id,
+        triggered_by="manual",
+    )
+    stamp(run)
     db.session.add(run)
     db.session.commit()
 
     # Enqueue action task
     from app.tasks.ollama_tasks import run_secondary_action
-    job = run_secondary_action.delay(str(idea_id), action_type, model_override,
-                                     run_id=str(run.id),
-                                     extra_context={"answers": answers} if answers else None)
+
+    extra = {}
+    if answers:
+        extra["answers"] = answers
+    if skills:
+        extra["skills"] = skills
+    if guidelines:
+        extra["guidelines"] = guidelines
+    job = run_secondary_action.delay(
+        str(idea_id),
+        action_type,
+        model_override,
+        run_id=str(run.id),
+        extra_context=extra or None,
+    )
     run.job_id = job.id
     db.session.commit()
 
-    return api_ok({
-        "job_id": job.id,
-        "run": run.to_dict(),
-        "status": "PENDING",
-        "message": f"{action_type} analysis enqueued for processing.",
-    }, status_code=202)
+    return api_ok(
+        {
+            "job_id": job.id,
+            "run": run.to_dict(),
+            "status": "PENDING",
+            "message": f"{action_type} analysis enqueued for processing.",
+        },
+        status_code=202,
+    )
 
 
 @bp.route("/ideas/<uuid:idea_id>/actions", methods=["GET"])
@@ -269,25 +602,36 @@ def run_action(user, idea_id):
 def get_actions(user, idea_id):
     """Get action results for an idea."""
     idea = Idea.query.get_or_404(idea_id)
-    actions = SecondaryActionResult.query.filter_by(idea_id=idea_id).order_by(SecondaryActionResult.executed_at).all()
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    actions = (
+        SecondaryActionResult.query.filter_by(idea_id=idea_id)
+        .order_by(SecondaryActionResult.executed_at)
+        .all()
+    )
     return api_ok({"results": [a.to_dict() for a in actions]})
 
-def _edit_history(idea_id):
-    """Audit trail newest-first with editor names."""
-    edits = (IdeaEdit.query.filter_by(idea_id=idea_id)
-             .order_by(IdeaEdit.edited_at.desc()).all())
-    names = {}
-    editor_ids = {e.editor_id for e in edits}
-    if editor_ids:
-        for u in User.query.filter(User.id.in_(list(editor_ids))).all():
-            names[u.id] = u.name or u.email
-    return [e.to_dict(editor_name=names.get(e.editor_id, "Unknown")) for e in edits]
+
+def _can_see_flags(user) -> bool:
+    """Ignore-flag visibility: admins and flag_comments holders (BA)."""
+    from app.models import has_permission
+    from flask import g
+
+    if user.role.value == "ADMIN":
+        return True
+    if current_instance_role() in ("INSTANCE_ADMIN", "SITE_ADMIN"):
+        return True
+    return has_permission(user, "flag_comments", getattr(g, "instance_id", None))
 
 
-def _comment_tree(idea_id):
-    """Nested comment tree for an idea, oldest first, with author names."""
-    comments = (Comment.query.filter_by(idea_id=idea_id)
-                .order_by(Comment.created_at).all())
+def _doc_comment_tree(result, include_flag=False):
+    """Threaded comments scoped to one document version, oldest first."""
+    comments = (
+        Comment.query.filter_by(action_result_id=result.id, scope="doc")
+        .order_by(Comment.created_at)
+        .all()
+    )
     authors = {}
     user_ids = {c.user_id for c in comments}
     if user_ids:
@@ -298,10 +642,167 @@ def _comment_tree(idea_id):
         by_parent.setdefault(c.parent_id, []).append(c)
 
     def build(node):
-        return [child.to_dict(
-            author_name=authors.get(child.user_id, "Unknown"),
-            children=build(child),
-        ) for child in by_parent.get(node.id if node else None, [])]
+        return [
+            child.to_dict(
+                author_name=authors.get(child.user_id, "Unknown"),
+                children=build(child),
+                include_flag=include_flag,
+            )
+            for child in by_parent.get(node.id if node else None, [])
+        ]
+
+    return build(None)
+
+
+@bp.route("/actions/<uuid:result_id>/comments", methods=["GET"])
+@token_required
+def list_doc_comments(user, result_id):
+    """Comment thread for one PRD/Design document version."""
+    result = SecondaryActionResult.query.get_or_404(result_id)
+    denied = check_access(result)
+    if denied is not None:
+        return denied
+    return api_ok({"comments": _doc_comment_tree(result, _can_see_flags(user))})
+
+
+@bp.route("/actions/<uuid:result_id>/comments", methods=["POST"])
+@token_required
+def create_doc_comment(user, result_id):
+    """Post a comment (or reply) on one PRD/Design document version."""
+    result = SecondaryActionResult.query.get_or_404(result_id)
+    denied = check_access(result)
+    if denied is not None:
+        return denied
+    data = request.get_json() or {}
+    body = (data.get("body") or "").strip()
+    if not body:
+        return api_error("Comment body is required.", status_code=400)
+    if len(body) > 2000:
+        return api_error(
+            "Comment body must be 2000 characters or fewer.", status_code=400
+        )
+
+    parent = None
+    if data.get("parent_id"):
+        try:
+            parent = Comment.query.get(uuid.UUID(str(data["parent_id"])))
+        except (ValueError, TypeError):
+            return api_error("Invalid parent_id.", status_code=400)
+        if not parent or parent.action_result_id != result.id or parent.scope != "doc":
+            return api_error(
+                "parent_id must belong to this document thread.", status_code=400
+            )
+
+    comment = Comment(
+        idea_id=result.idea_id,
+        user_id=user.id,
+        parent_id=parent.id if parent else None,
+        body=body,
+        scope="doc",
+        action_result_id=result.id,
+    )
+    stamp(comment)
+    doc_idea = Idea.query.get(result.idea_id)
+    comment.phase = doc_idea.status.value if doc_idea is not None else None
+    db.session.add(comment)
+    db.session.commit()
+    return api_created(
+        {
+            "comment": comment.to_dict(
+                author_name=user.name or user.email,
+                include_flag=_can_see_flags(user),
+            )
+        }
+    )
+
+
+@bp.route("/actions/<uuid:result_id>", methods=["PATCH"])
+@require_permission("edit_docs")
+def edit_action_result(user, result_id):
+    """Manually edit a PRD/Design document (Admin only).
+
+    Stores the edited content as a NEW version (history preserved,
+    threads stay pinned to their version) and flips is_current.
+    """
+    result = SecondaryActionResult.query.get_or_404(result_id)
+    denied = check_access(result)
+    if denied is not None:
+        return denied
+    if result.action_type not in ("PRD_DOC", "DESIGN_DOC"):
+        return api_error("Only PRD and Design documents are editable.", status_code=400)
+    data = request.get_json() or {}
+    edited = data.get("result_data")
+    if not isinstance(edited, dict):
+        return api_error("result_data must be a JSON object.", status_code=400)
+
+    from pydantic import ValidationError as PydanticValidationError
+
+    from app.schemas.ollama_schemas import get_action_schema
+
+    schema = get_action_schema(result.action_type)
+    try:
+        validated = schema.model_validate(edited)
+    except PydanticValidationError as e:
+        return api_error(f"Edited content fails validation: {e}", status_code=400)
+
+    for old in SecondaryActionResult.query.filter_by(
+        idea_id=result.idea_id, action_type=result.action_type, is_current=True
+    ).all():
+        old.is_current = False
+    new_result = SecondaryActionResult(
+        idea_id=result.idea_id,
+        action_type=result.action_type,
+        model_used=result.model_used,
+        result_data=validated.model_dump(),
+        version=result.version + 1,
+        is_current=True,
+        edited_by_id=user.id,
+    )
+    stamp(new_result)
+    db.session.add(new_result)
+    db.session.commit()
+    return api_ok(new_result.to_dict())
+
+
+def _edit_history(idea_id):
+    """Audit trail newest-first with editor names."""
+    edits = (
+        IdeaEdit.query.filter_by(idea_id=idea_id)
+        .order_by(IdeaEdit.edited_at.desc())
+        .all()
+    )
+    names = {}
+    editor_ids = {e.editor_id for e in edits}
+    if editor_ids:
+        for u in User.query.filter(User.id.in_(list(editor_ids))).all():
+            names[u.id] = u.name or u.email
+    return [e.to_dict(editor_name=names.get(e.editor_id, "Unknown")) for e in edits]
+
+
+def _comment_tree(idea_id, phase=None, include_flag=False):
+    """Nested comment tree for an idea, oldest first, with author names."""
+    query = Comment.query.filter_by(idea_id=idea_id, scope="idea")
+    if phase:
+        query = query.filter_by(phase=phase)
+    comments = query.order_by(Comment.created_at).all()
+    authors = {}
+    user_ids = {c.user_id for c in comments}
+    if user_ids:
+        for u in User.query.filter(User.id.in_(list(user_ids))).all():
+            authors[u.id] = u.name or u.email
+    by_parent = {}
+    for c in comments:
+        by_parent.setdefault(c.parent_id, []).append(c)
+
+    def build(node):
+        return [
+            child.to_dict(
+                author_name=authors.get(child.user_id, "Unknown"),
+                children=build(child),
+                include_flag=include_flag,
+            )
+            for child in by_parent.get(node.id if node else None, [])
+        ]
 
     return build(None)
 
@@ -309,22 +810,38 @@ def _comment_tree(idea_id):
 @bp.route("/ideas/<uuid:idea_id>/comments", methods=["GET"])
 @token_required
 def list_comments(user, idea_id):
-    """Nested comment thread for an idea."""
-    Idea.query.get_or_404(idea_id)
-    return api_ok({"comments": _comment_tree(idea_id)})
+    """Nested comment thread for an idea (?phase= filters to one phase)."""
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    phase = (request.args.get("phase") or "").upper() or None
+    if phase:
+        from app.models import IdeaStatus
+
+        try:
+            IdeaStatus[phase]
+        except KeyError:
+            return api_error(f"Invalid phase: {phase}", status_code=400)
+    return api_ok({"comments": _comment_tree(idea_id, phase, _can_see_flags(user))})
 
 
 @bp.route("/ideas/<uuid:idea_id>/comments", methods=["POST"])
 @token_required
 def create_comment(user, idea_id):
     """Post a comment or a reply (parent_id must belong to the same idea)."""
-    Idea.query.get_or_404(idea_id)
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
     data = request.get_json() or {}
     body = (data.get("body") or "").strip()
     if not body:
         return api_error("Comment body is required.", status_code=400)
     if len(body) > 2000:
-        return api_error("Comment body must be 2000 characters or fewer.", status_code=400)
+        return api_error(
+            "Comment body must be 2000 characters or fewer.", status_code=400
+        )
 
     parent = None
     if data.get("parent_id"):
@@ -335,17 +852,39 @@ def create_comment(user, idea_id):
         if not parent or parent.idea_id != idea_id:
             return api_error("parent_id must belong to the same idea.", status_code=400)
 
-    comment = Comment(idea_id=idea_id, user_id=user.id,
-                      parent_id=parent.id if parent else None, body=body)
+    comment = Comment(
+        idea_id=idea_id,
+        user_id=user.id,
+        parent_id=parent.id if parent else None,
+        body=body,
+    )
+    stamp(comment)
+    comment.phase = idea.status.value
     db.session.add(comment)
     db.session.commit()
-    return api_created({"comment": comment.to_dict(
-        author_name=user.name or user.email)})
+    return api_created(
+        {
+            "comment": comment.to_dict(
+                author_name=user.name or user.email,
+                include_flag=_can_see_flags(user),
+            )
+        }
+    )
 
 
 def _comment_or_403(user, comment_id):
+    from app.models import has_permission
+    from flask import g
+
     comment = Comment.query.get_or_404(comment_id)
-    if comment.user_id != user.id and user.role.value != "ADMIN":
+    denied = check_access(comment)
+    if denied is not None:
+        return None, denied
+    if (
+        comment.user_id != user.id
+        and user.role.value != "ADMIN"
+        and not has_permission(user, "flag_comments", getattr(g, "instance_id", None))
+    ):
         return None, api_error("Not permitted.", status_code=403)
     return comment, None
 
@@ -364,7 +903,9 @@ def update_comment(user, comment_id):
     if not body:
         return api_error("Comment body is required.", status_code=400)
     if len(body) > 2000:
-        return api_error("Comment body must be 2000 characters or fewer.", status_code=400)
+        return api_error(
+            "Comment body must be 2000 characters or fewer.", status_code=400
+        )
     comment.body = body
     db.session.commit()
     return api_ok({"comment": comment.to_dict()})
@@ -385,26 +926,242 @@ def delete_comment(user, comment_id):
     return api_ok({"deleted": str(comment.id)})
 
 
+def _chat_rate_key():
+    """Per-user (fallback per-IP) key for the chat rate limit."""
+    try:
+        from flask_jwt_extended import get_jwt_identity
+
+        ident = get_jwt_identity()
+    except Exception:
+        ident = None
+    return f"chat:{ident or 'anon'}:{get_remote_address()}"
+
+
+def _chat_gate(idea):
+    """Per-instance enable switch. No config rows (pure Ollama) = open."""
+    from app.models import InstanceAIConfig
+
+    if idea.instance_id is None:
+        return None
+    rows = InstanceAIConfig.query.filter_by(instance_id=idea.instance_id).all()
+    if rows and not any(r.chat_enabled for r in rows):
+        return api_error(
+            "Chat is not enabled for this instance.",
+            status_code=403,
+            error_code="CHAT_DISABLED",
+        )
+    return None
+
+
+def _chat_provider_error(err):
+    from app.models import EntitlementError
+    from app.services.llm_backends import BudgetExhausted, ProviderError
+    from app.services.ollama_client import OllamaError
+
+    if isinstance(err, EntitlementError):
+        return api_error(str(err), status_code=402, error_code="ENTITLEMENT_REQUIRED")
+    if isinstance(err, BudgetExhausted):
+        details = None
+        if getattr(err, "retry_after", None):
+            details = {"retry_after_seconds": err.retry_after}
+        return api_error(
+            str(err), status_code=429, errors=details, error_code="BUDGET_EXHAUSTED"
+        )
+    if isinstance(err, OllamaError):
+        return api_error(f"Chat generation failed: {err}", status_code=502)
+    if isinstance(err, ProviderError):
+        return api_error(f"Chat generation failed: {err}", status_code=502)
+    raise err
+
+
+@bp.route("/ideas/<uuid:idea_id>/chat", methods=["POST"])
+@token_required
+@limiter.limit("3 per minute", key_func=_chat_rate_key)
+def chat_with_idea(user, idea_id):
+    """Chat with the AI about an idea (all phases, users and admins)."""
+    from app.services import chat as chat_svc
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    gated = _chat_gate(idea)
+    if gated is not None:
+        return gated
+    data = request.get_json(silent=True) or {}
+    message = data.get("message")
+    if not isinstance(message, str) or not message.strip():
+        return api_error("message is required.", status_code=400)
+    if len(message.strip()) > chat_svc.MESSAGE_MAX:
+        return api_error(
+            f"message must be {chat_svc.MESSAGE_MAX} characters or fewer.",
+            status_code=400,
+        )
+    model_override = data.get("model_override")
+    if model_override is not None and not _can_see_flags(user):
+        return api_error("model_override is admin-only.", status_code=403)
+    try:
+        session, reply = chat_svc.chat_turn(
+            idea, user, message.strip(), model_override=model_override
+        )
+    except Exception as err:
+        return _chat_provider_error(err)
+    return api_ok({"session": session.to_dict(), "reply": reply.to_dict()})
+
+
+@bp.route("/ideas/<uuid:idea_id>/chat", methods=["GET"])
+@token_required
+def list_chat_sessions(user, idea_id):
+    """Chat history for an idea (own sessions; admins see all)."""
+    from app.models import ChatSession
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    query = ChatSession.query.filter_by(idea_id=idea.id)
+    if not _can_see_flags(user):
+        query = query.filter_by(user_id=user.id)
+    sessions = query.order_by(ChatSession.created_at.desc()).all()
+    return api_ok({"sessions": [s.to_dict(include_turns=True) for s in sessions]})
+
+
+@bp.route("/ideas/<uuid:idea_id>/chat/iterate", methods=["POST"])
+@token_required
+@limiter.limit("3 per minute", key_func=_chat_rate_key)
+def chat_iterate(user, idea_id):
+    """Apply explicit content updates as a versioned iteration (author or admin)."""
+    from app.models import can_edit_idea
+    from app.services import chat as chat_svc
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    if not can_edit_idea(user, idea):
+        return api_error("Not permitted.", status_code=403)
+    gated = _chat_gate(idea)
+    if gated is not None:
+        return gated
+    data = request.get_json(silent=True) or {}
+    content = data.get("content")
+    message = data.get("message")
+    if message is not None and (
+        not isinstance(message, str) or len(message) > chat_svc.MESSAGE_MAX
+    ):
+        return api_error("message must be a string within limits.", status_code=400)
+    try:
+        session, turn = chat_svc.iterate_idea(
+            idea,
+            user,
+            content or {},
+            message=message,
+            model_override=data.get("model_override"),
+        )
+    except chat_svc.ChatError as err:
+        return api_error(str(err), status_code=err.status_code)
+    return api_ok(
+        {
+            "session": session.to_dict(),
+            "turn": turn.to_dict(),
+            "idea": idea.to_dict(include_content=True),
+        }
+    )
+
+
+@bp.route("/ideas/<uuid:idea_id>/chat/rollback", methods=["POST"])
+@token_required
+def chat_rollback(user, idea_id):
+    """Restore an iterate turn's before-snapshot (author or admin, fully audited)."""
+    from app.models import can_edit_idea
+    from app.services import chat as chat_svc
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    if not can_edit_idea(user, idea):
+        return api_error("Not permitted.", status_code=403)
+    data = request.get_json(silent=True) or {}
+    raw_turn = data.get("turn_id")
+    try:
+        turn_id = uuid.UUID(str(raw_turn))
+    except (ValueError, TypeError, AttributeError):
+        return api_error("turn_id is required and must be a UUID.", status_code=400)
+    try:
+        turn = chat_svc.rollback_turn(idea, user, turn_id)
+    except chat_svc.ChatError as err:
+        return api_error(str(err), status_code=err.status_code)
+    return api_ok(
+        {
+            "turn": turn.to_dict(),
+            "idea": idea.to_dict(include_content=True),
+        }
+    )
+
+
+@bp.route("/comments/<uuid:comment_id>/flag", methods=["PATCH"])
+@require_permission("flag_comments")
+def flag_comment(user, comment_id):
+    """Toggle the admin-only Ignore flag (excluded from AI context).
+
+    The flag is visible to admins only and every toggle writes an
+    IdeaEdit audit row.
+    """
+    comment = Comment.query.get_or_404(comment_id)
+    denied = check_access(comment)
+    if denied is not None:
+        return denied
+    data = request.get_json(silent=True) or {}
+    if "is_ignored" not in data or not isinstance(data["is_ignored"], bool):
+        return api_error("is_ignored must be a boolean.", status_code=400)
+    if comment.is_ignored != data["is_ignored"]:
+        audit = IdeaEdit(
+            idea_id=comment.idea_id,
+            editor_id=user.id,
+            field=f"comment:{comment.id}:is_ignored",
+            old_value=str(comment.is_ignored),
+            new_value=str(data["is_ignored"]),
+        )
+        stamp(audit)
+        db.session.add(audit)
+        comment.is_ignored = data["is_ignored"]
+        db.session.commit()
+    return api_ok({"comment": comment.to_dict(include_flag=True)})
+
+
 EDITABLE_FIELDS = ("prompt_title", "raw_content", "structured_content")
 
 
 @bp.route("/ideas/<uuid:idea_id>", methods=["PATCH"])
-@admin_required
+@token_required
 def update_idea_content(user, idea_id):
-    """Edit idea content fields (Admin only). Status keeps its own endpoint."""
+    """Edit idea content fields (author or admin). Status keeps its own endpoint."""
+    from app.models import can_edit_idea
+
     idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    if not can_edit_idea(user, idea):
+        return api_error("Not permitted.", status_code=403)
     data = request.get_json() or {}
 
     updates = {f: data[f] for f in EDITABLE_FIELDS if f in data}
     if not updates:
-        return api_error("Nothing to update. Editable fields: prompt_title, raw_content, structured_content.", status_code=400)
+        return api_error(
+            "Nothing to update. Editable fields: prompt_title, raw_content, structured_content.",
+            status_code=400,
+        )
 
     if "prompt_title" in updates:
         title = (updates["prompt_title"] or "").strip()
         if not title:
             return api_error("prompt_title must not be empty.", status_code=400)
         if len(title) > 200:
-            return api_error("prompt_title must be 200 characters or fewer.", status_code=400)
+            return api_error(
+                "prompt_title must be 200 characters or fewer.", status_code=400
+            )
         updates["prompt_title"] = title
     if "raw_content" in updates:
         body = (updates["raw_content"] or "").strip()
@@ -423,7 +1180,9 @@ def update_idea_content(user, idea_id):
         }
         unknown = [k for k in sc if k not in allowed]
         if unknown:
-            return api_error(f"Unknown structured fields: {', '.join(unknown)}.", status_code=400)
+            return api_error(
+                f"Unknown structured fields: {', '.join(unknown)}.", status_code=400
+            )
         cleaned = {}
         for key, cap in allowed.items():
             if key not in sc:
@@ -432,10 +1191,15 @@ def update_idea_content(user, idea_id):
             if not isinstance(val, str) or not val.strip():
                 return api_error(f"{key} must be a non-empty string.", status_code=400)
             if len(val.strip()) > cap:
-                return api_error(f"{key} must be {cap} characters or fewer.", status_code=400)
+                return api_error(
+                    f"{key} must be {cap} characters or fewer.", status_code=400
+                )
             cleaned[key] = val.strip()
         if not cleaned:
-            return api_error("structured_content must include at least one known field.", status_code=400)
+            return api_error(
+                "structured_content must include at least one known field.",
+                status_code=400,
+            )
         updates["structured_content"] = cleaned
 
     for field, new_value in updates.items():
@@ -454,10 +1218,15 @@ def update_idea_content(user, idea_id):
             for key, val in new_value.items():
                 if updated.get(key) == val:
                     continue
-                db.session.add(IdeaEdit(
-                    idea_id=idea.id, editor_id=user.id,
+                edit = IdeaEdit(
+                    idea_id=idea.id,
+                    editor_id=user.id,
                     field=f"structured_content.{key}",
-                    old_value=updated.get(key), new_value=val))
+                    old_value=updated.get(key),
+                    new_value=val,
+                )
+                stamp(edit)
+                db.session.add(edit)
                 updated[key] = val
             idea.structured_content = updated
             # Keep the rendered display in sync with the edited fields.
@@ -467,8 +1236,14 @@ def update_idea_content(user, idea_id):
         if old_value == new_value:
             continue
         setattr(idea, field, new_value)
-        db.session.add(IdeaEdit(
-            idea_id=idea.id, editor_id=user.id,
-            field=field, old_value=old_value, new_value=new_value))
+        edit = IdeaEdit(
+            idea_id=idea.id,
+            editor_id=user.id,
+            field=field,
+            old_value=old_value,
+            new_value=new_value,
+        )
+        stamp(edit)
+        db.session.add(edit)
     db.session.commit()
     return api_ok(idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)))

@@ -32,11 +32,12 @@ Non-negotiable rules for every code change. Treat as a checklist during PR revie
 | Rule | Enforcement |
 |------|-------------|
 | **Never** send user-controlled strings directly into system prompt | Template with `{{PLACEHOLDER}}` only |
-| All Ollama calls use `"format": "json"` + schema validation on response | `pydantic` model per action type |
+| All LLM calls use JSON mode (`"format": "json"` Ollama / `response_format` hosted) + schema validation on response | `pydantic` model per action type |
 | Timeout: 30s generate, 120s chat — kill worker on exceed | Celery `task_soft_time_limit` |
 | Retry once on malformed JSON with stricter system prompt | Worker logic + dead-letter queue |
-| Log prompt *hash* only — never full prompt or response | Structured logging, `DEBUG` level only |
-| Model allowlist: only models returned by `GET /ollama/models` | Config validation on prompt create |
+| Log prompt *hash* only — never full prompt or response, never provider keys | Structured logging, `DEBUG` level only |
+| Model allowlist: local Ollama from `GET /ollama/models`; hosted from the instance allowlist | Config validation on prompt create |
+| Provider keys encrypted at rest, write-only API, never copied between instances | Fernet (`instance_ai_configs`), per-instance admin UI |
 
 ---
 
@@ -44,9 +45,9 @@ Non-negotiable rules for every code change. Treat as a checklist during PR revie
 
 | Rule | Enforcement |
 |------|-------------|
-| **No external API calls** — Ollama runs locally only | Network egress blocked in Docker/host firewall |
+| **Local by default; hosted per-instance opt-in** — entering a provider key opts that instance into egress to that provider only | `instance_ai_configs` (empty = local-only); code review |
 | SQLite/Postgres on local disk — no managed cloud DB | `DATABASE_URL` starts with `sqlite:///` or `postgresql://localhost` |
-| Votes/ideas never leave the server — no analytics, no telemetry | Code review, no `requests`/`httpx` to external hosts |
+| Votes/ideas never leave the server except to the instance's configured AI provider — no analytics, no telemetry | Code review; hosted calls carry instance/user tags, never PII beyond the task content |
 | Admin prompt configs stored encrypted at rest (Fernet) | `cryptography` + key from env |
 | Session cookies: `HttpOnly`, `Secure`, `SameSite=Strict` | Flask config |
 
@@ -157,12 +158,12 @@ Implemented via Flask-Limiter with Redis backend.
 - [ ] No raw SQL / f-string queries
 - [ ] All new endpoints have `@jwt_required()` + role check
 - [ ] Input validated via Pydantic schema
-- [ ] Ollama calls use JSON format + response validation
-- [ ] No secrets in code / logs / commit history
+- [ ] LLM calls use JSON mode + response validation
+- [ ] No secrets in code / logs / commit history (incl. provider keys)
 - [ ] Rate limiter configured for new endpoints
 - [ ] `bandit` and `safety` pass locally
 - [ ] Tests cover auth, validation, error paths
-- [ ] No external network calls introduced
+- [ ] External network calls only via the provider interface with per-instance opt-in (never raw `requests`/`httpx`/`urllib` elsewhere)
 - [ ] CSP/Talisman headers not weakened
 ```
 

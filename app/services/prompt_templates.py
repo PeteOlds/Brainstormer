@@ -47,6 +47,13 @@ def get_prompt_template(action_type: str) -> PromptTemplate:
         "FIVE_FORCES": "forces",
         "PESTEL": "pestel",
         "PRD_DOC": "prd_doc",
+        "DESIGN_DOC": "design_doc",
+        "VRIO": "vrio",
+        "THREE_CS": "three_cs",
+        "MARKET_SIZING": "market_sizing",
+        "BUSINESS_MODEL_CANVAS": "business_model_canvas",
+        "HYPOTHESIS_TEST": "hypothesis_test",
+        "GTM_STRATEGY": "gtm_strategy",
     }
     template_name = mapping.get(action_type)
     if not template_name:

@@ -1,0 +1,95 @@
+name: guardrails
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+          pip install bandit safety
+      - name: SAST and dependency audit
+        run: |
+          bandit -r app/ -f txt || true
+          safety check || true
+      - name: Guardrail scripts
+        run: |
+          python scripts/check_no_external_calls.py
+          python scripts/check_no_secrets.py
+      - name: Flutter gates
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          channel: stable
+      - run: flutter pub get
+        working-directory: flutter
+      - run: flutter analyze --no-pub
+        working-directory: flutter
+      - run: flutter test --coverage
+        working-directory: flutter
+      - name: Backend suite with coverage gate
+        env:
+          DATABASE_URL: sqlite:////tmp/ci.db
+          SECRET_KEY: ci-secret-key-min-32-chars-long-ok
+          JWT_SECRET_KEY: ci-jwt-secret-min-32-chars-long-ok
+          FERNET_KEY: c-xGdJoh9Ipwd5Fo2EF5ECcIR1QRGGPq8VPP9adzFLI=
+        run: pytest
+
+  flutter-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Start scratch backend
+        env:
+          FLASK_ENV: development
+          DATABASE_URL: sqlite:////tmp/itest.db
+          SECRET_KEY: ci-secret-key-min-32-chars-long-ok
+          JWT_SECRET_KEY: ci-jwt-secret-min-32-chars-long-ok
+          FERNET_KEY: c-xGdJoh9Ipwd5Fo2EF5ECcIR1QRGGPq8VPP9adzFLI=
+          APP_BASE_URL: http://127.0.0.1:8123
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -c "from app import create_app; from app.extensions import db; app = create_app('development'); app.app_context().push(); db.create_all()"
+          nohup python -c "
+          import asyncio
+          from hypercorn.asyncio import serve
+          from hypercorn.config import Config
+          from app import create_app
+          config = Config()
+          config.bind = ['127.0.0.1:8123']
+          asyncio.run(serve(create_app('development'), config))
+          " > /tmp/itest-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8123/api/health && break || sleep 4
+          done
+      - name: Flutter integration on Chrome
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: flutter
+      - name: Flutter integration smoke (headless)
+        # integration_test/ needs a device build (Chrome unavailable for
+        # it on runners); run the identical file through the headless
+        # test VM against the scratch backend started above.
+        working-directory: flutter
+        run: |
+          cp integration_test/app_test.dart test/zz_it_smoke_test.dart
+          flutter test test/zz_it_smoke_test.dart --dart-define=API_BASE_URL=http://127.0.0.1:8123
+          rm test/zz_it_smoke_test.dart

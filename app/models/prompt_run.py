@@ -19,22 +19,39 @@ class PromptRun(db.Model):
     __tablename__ = "prompt_runs"
 
     id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    instance_id = db.Column(
+        GUID(), db.ForeignKey("instances.id"), nullable=True, index=True
+    )
     # Null for follow-up AI actions, which belong to an idea, not a prompt.
-    prompt_config_id = db.Column(GUID(), db.ForeignKey("prompt_configs.id"), nullable=True, index=True)
+    prompt_config_id = db.Column(
+        GUID(), db.ForeignKey("prompt_configs.id"), nullable=True, index=True
+    )
     # Set for follow-up actions (REFINE, COMPETITORS, ...); null for generations.
     action_type = db.Column(db.String(30), nullable=True)
     triggered_by = db.Column(db.String(20), default="manual", nullable=False)
     job_id = db.Column(db.String(100), nullable=True)
     idea_id = db.Column(GUID(), db.ForeignKey("ideas.id"), nullable=True)
-    status = db.Column(db.Enum(PromptRunStatus), default=PromptRunStatus.PENDING, nullable=False, index=True)
+    status = db.Column(
+        db.Enum(PromptRunStatus),
+        default=PromptRunStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
     error = db.Column(db.Text, nullable=True)
     started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
     duration_seconds = db.Column(db.Float, nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     # Relationships
-    prompt_config = db.relationship("PromptConfig", backref=db.backref("runs", lazy="dynamic", cascade="all, delete-orphan"))
+    prompt_config = db.relationship(
+        "PromptConfig",
+        backref=db.backref("runs", lazy="dynamic", cascade="all, delete-orphan"),
+    )
 
     def mark_running(self):
         self.status = PromptRunStatus.RUNNING
@@ -47,7 +64,9 @@ class PromptRun(db.Model):
         if idea_id is not None:
             self.idea_id = idea_id
         if self.started_at:
-            self.duration_seconds = (now - ensure_aware(self.started_at)).total_seconds()
+            self.duration_seconds = (
+                now - ensure_aware(self.started_at)
+            ).total_seconds()
 
     def mark_failed(self, error):
         now = datetime.now(timezone.utc)
@@ -55,7 +74,9 @@ class PromptRun(db.Model):
         self.finished_at = now
         self.error = str(error)[:2000] if error else "Unknown error"
         if self.started_at:
-            self.duration_seconds = (now - ensure_aware(self.started_at)).total_seconds()
+            self.duration_seconds = (
+                now - ensure_aware(self.started_at)
+            ).total_seconds()
 
     @property
     def display_title(self):
@@ -72,7 +93,9 @@ class PromptRun(db.Model):
     def to_dict(self):
         return {
             "id": str(self.id),
-            "prompt_config_id": str(self.prompt_config_id) if self.prompt_config_id else None,
+            "prompt_config_id": (
+                str(self.prompt_config_id) if self.prompt_config_id else None
+            ),
             "action_type": self.action_type,
             "triggered_by": self.triggered_by,
             "job_id": self.job_id,

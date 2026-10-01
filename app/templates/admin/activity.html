@@ -18,7 +18,7 @@
         </div>
         <div class="mt-4 sm:mt-0 flex items-center space-x-3">
             <span class="text-xs text-slate-500 dark:text-slate-400" x-show="lastUpdated">Updated <span x-text="lastUpdated"></span></span>
-            <a href="/api/v1/admin" class="px-4 py-2 min-h-[44px] inline-flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Admin Dashboard</a>
+            <a href="/admin" class="px-4 py-2 min-h-[44px] inline-flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Admin Dashboard</a>
         </div>
     </div>
 
@@ -28,11 +28,11 @@
         <button @click="load()" class="shrink-0 px-3 py-1.5 font-medium text-red-700 dark:text-red-200 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30">Retry</button>
     </div>
     <div x-show="!modelFilter" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <a href="/api/v1/admin/activity" aria-label="Show all runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
+        <a href="/admin/activity" aria-label="Show all runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
             <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Total runs</p>
             <p class="mt-1 text-3xl font-bold tabular-nums text-slate-900 dark:text-white" x-text="perf.total_runs ?? '–'"></p>
         </a>
-        <a href="/api/v1/admin/activity?run_status=SUCCESS" aria-label="Show successful runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
+        <a href="/admin/activity?run_status=SUCCESS" aria-label="Show successful runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
             <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Success rate</p>
             <p class="mt-1 text-3xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400" x-text="perf.success_rate === null || perf.success_rate === undefined ? '–' : Math.round(perf.success_rate * 100) + '%'"></p>
         </a>
@@ -40,12 +40,12 @@
             <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Avg generation</p>
             <p class="mt-1 text-3xl font-bold tabular-nums text-slate-900 dark:text-white" x-text="fmtDuration(perf.avg_seconds)"></p>
         </div>
-        <a href="/api/v1/admin/activity?run_status=PENDING" aria-label="Show pending runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
+        <a href="/admin/activity?run_status=PENDING" aria-label="Show pending runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
             <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Pending runs</p>
             <p class="mt-1 text-3xl font-bold tabular-nums" :class="pendingCount() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'" x-text="pendingCount()"></p>
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">live right now</p>
         </a>
-        <a href="/api/v1/admin/activity?run_status=FAILED" aria-label="Show failed runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
+        <a href="/admin/activity?run_status=FAILED" aria-label="Show failed runs" class="block bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition cursor-pointer">
             <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Failed runs</p>
             <p class="mt-1 text-3xl font-bold tabular-nums" :class="(perf.by_status && perf.by_status.FAILED) ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'" x-text="(perf.by_status && perf.by_status.FAILED) || 0"></p>
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400 truncate" x-show="perf.last_error" :title="perf.last_error">Last: <span x-text="perf.last_error"></span></p>
@@ -79,7 +79,7 @@
                 <div x-show="loading" class="py-4 text-center text-sm text-slate-500">Loading…</div>
                 <div x-show="!loading" class="space-y-3">
                     <template x-for="p in popularity.prompts" :key="p.title">
-                        <a :href="'/ideas?prompt=' + encodeURIComponent(p.id)" class="block rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                        <a :href="'/ideas?prompt=' + encodeURIComponent(p.id) + '&status=ALL'" class="block rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
                             <div class="flex items-baseline justify-between text-sm gap-2">
                                 <span class="font-medium text-slate-900 dark:text-white truncate" x-text="p.title"></span>
                                 <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400" x-text="p.ideas + ' ideas · ' + p.net_votes + ' votes'"></span>
@@ -87,6 +87,17 @@
                             <div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
                                 <div class="h-full rounded-full bg-emerald-500" :style="'width: ' + barWidthCount(p.ideas)"></div>
                             </div>
+                            <p class="mt-0.5 text-right text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">ideas vs largest prompt</p>
+                            <div class="mt-1 flex items-center gap-2 text-xs">
+                                <span class="font-medium tabular-nums text-emerald-600 dark:text-emerald-400" x-text="'✓ ' + (p.runs_success || 0)"></span>
+                                <span class="font-medium tabular-nums text-red-600 dark:text-red-400" x-text="'✗ ' + (p.runs_failed || 0)"></span>
+                                <span class="text-slate-400 dark:text-slate-500">runs</span>
+                            </div>
+                            <div x-show="(p.runs_success || 0) + (p.runs_failed || 0) > 0" class="mt-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden flex">
+                                <div class="h-full bg-emerald-500" :style="'width: ' + (100 * (p.runs_success || 0) / ((p.runs_success || 0) + (p.runs_failed || 0))) + '%'"></div>
+                                <div class="h-full bg-red-500" :style="'width: ' + (100 * (p.runs_failed || 0) / ((p.runs_success || 0) + (p.runs_failed || 0))) + '%'"></div>
+                            </div>
+                            <p x-show="(p.runs_success || 0) + (p.runs_failed || 0) > 0" class="mt-0.5 text-right text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">run outcomes for this prompt</p>
                         </a>
                     </template>
                     <p x-show="!loading && (!popularity.prompts || !popularity.prompts.length)" class="text-sm text-slate-500">No prompts yet.</p>
@@ -96,7 +107,7 @@
             <p class="text-xs text-slate-500 dark:text-slate-400 mb-4 -mt-3">Click a row to filter the Ideas page</p>
             <div class="space-y-3">
 <template x-for="m in ideasByModel" :key="m.model">
-                        <a :href="'/ideas?model=' + encodeURIComponent(m.model)" class="block rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                        <a :href="'/ideas?model=' + encodeURIComponent(m.model) + '&status=ALL'" class="block rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
                             <div class="flex items-baseline justify-between text-sm">
                                 <span class="font-mono font-medium text-slate-900 dark:text-white truncate" x-text="m.model"></span>
                                 <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400" x-text="m.count + ' ideas' + (m.avg_seconds != null ? ' · ' + fmtDuration(m.avg_seconds) : '')"></span>
@@ -115,7 +126,7 @@
     <div x-show="!modelFilter" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas by Status</h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">New, under consideration or discarded — click a row to filter the Ideas page</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Idea lifecycle stages — click a row to filter the Ideas page</p>
         <div class="space-y-3">
             <template x-for="s in ideaStatuses" :key="s.status">
                 <a :href="'/ideas?status=' + s.status" class="block cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 transition-colors">
@@ -138,7 +149,7 @@
         <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Queued, running, finished or failed — click a row to filter recent runs</p>
         <div class="space-y-3">
             <template x-for="s in runStatuses" :key="s.status">
-                <a :href="'/api/v1/admin/activity?run_status=' + s.status" class="block cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 transition-colors">
+                <a :href="'/admin/activity?run_status=' + s.status" class="block cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 transition-colors">
                     <div class="flex items-baseline justify-between text-sm gap-2">
                         <span class="flex items-center gap-2 font-medium text-slate-900 dark:text-white">
                             <span class="w-2.5 h-2.5 rounded-full" :class="dotClass(s.status)"></span>
@@ -163,7 +174,7 @@
                 <div x-show="loading" class="py-4 text-center text-sm text-slate-500">Loading…</div>
                 <div x-show="!loading" class="space-y-3">
                     <template x-for="m in perf.per_model" :key="m.model">
-                        <a :href="'/api/v1/admin/activity?model=' + encodeURIComponent(m.model)" class="block rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                        <a :href="'/admin/activity?model=' + encodeURIComponent(m.model)" class="block rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
                             <div class="flex items-baseline justify-between text-sm">
                                 <span class="font-mono font-medium text-slate-900 dark:text-white truncate" x-text="m.model"></span>
                                 <span class="ml-2 shrink-0 tabular-nums text-slate-500 dark:text-slate-400" x-text="(m.avg_seconds != null ? fmtDuration(m.avg_seconds) : '–') + ' · ' + m.runs + ' run' + (m.runs === 1 ? '' : 's')"></span>
@@ -240,7 +251,12 @@
                     <li class="relative pl-7">
                         <span class="absolute left-0 top-1.5 h-3 w-3 rounded-full border-2 border-white dark:border-slate-800" :class="dotClass(run.status)"></span>
                         <div class="flex items-baseline justify-between gap-2">
-                            <p class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="run.prompt_title"></p>
+                            <template x-if="runUrl(run)">
+                                <a :href="runUrl(run)" class="text-sm font-medium text-slate-900 dark:text-white truncate hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline" x-text="run.prompt_title"></a>
+                            </template>
+                            <template x-if="!runUrl(run)">
+                                <p class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="run.prompt_title"></p>
+                            </template>
                             <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400" x-text="timeAgo(run.created_at)"></span>
                         </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -253,6 +269,13 @@
                 </template>
                 <li x-show="!loading && filteredRuns.length === 0" class="pl-7 text-sm text-slate-500" x-text="(statusFilter || modelFilter) ? 'No runs match this filter.' : 'No runs yet — press Run Now on a prompt.'"></li>
             </ol>
+            <div x-show="!loading && runPages > 1" class="mt-4 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-4">
+                <p class="text-xs text-slate-500 dark:text-slate-400">Page <span x-text="runPage"></span> of <span x-text="runPages"></span> · <span x-text="runTotal"></span> runs</p>
+                <div class="flex space-x-2">
+                    <button @click="prevRunsPage()" :disabled="runPage === 1" class="px-3 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                    <button @click="nextRunsPage()" :disabled="runPage === runPages" class="px-3 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+                </div>
+            </div>
         </div>
 
         <!-- Live now: pending runs -->
@@ -302,6 +325,10 @@ function activityApp() {
         loadError: false,
         statusFilter: '',
         modelFilter: '',
+        runPage: 1,
+        runPages: 1,
+        runTotal: 0,
+        runPageSize: 20,
         lastUpdated: '',
 
         async init() {
@@ -309,6 +336,7 @@ function activityApp() {
             const params = new URLSearchParams(window.location.search);
             this.statusFilter = (params.get('run_status') || '').toUpperCase();
             this.modelFilter = params.get('model') || '';
+            this.runPage = Math.max(parseInt(params.get('page') || '1', 10) || 1, 1);
             await this.load();
             setInterval(() => {
                 if (document.visibilityState === 'visible' && !this.loading) this.load();
@@ -324,6 +352,8 @@ function activityApp() {
                 const params = new URLSearchParams();
                 if (this.statusFilter) params.append('run_status', this.statusFilter);
                 if (this.modelFilter) params.append('model', this.modelFilter);
+                params.append('page', this.runPage);
+                params.append('limit', this.runPageSize);
                 const qs = params.toString();
                 const res = await authFetch('/api/v1/admin/activity/stats' + (qs ? '?' + qs : ''));
                 if (res.status === 403) { window.location.href = '/ideas'; return; }
@@ -331,6 +361,10 @@ function activityApp() {
                 const data = await res.json();
                 const payload = data.data || data;
                 this.runs = payload.recent_runs || [];
+                const pg = payload.recent_runs_pagination || {};
+                this.runPage = pg.page || 1;
+                this.runPages = Math.max(pg.pages || 1, 1);
+                this.runTotal = pg.total || this.runs.length;
                 this.pendingRuns = payload.pending_runs || [];
                 this.queues = payload.queues || { ollama: null, default: null };
                 this.workersAlive = (payload.workers_alive !== undefined) ? payload.workers_alive : null;
@@ -352,7 +386,7 @@ function activityApp() {
         },
 
         get ideaStatuses() {
-            const order = ['NEW', 'CONSIDERATION', 'DISCARDED'];
+            const order = ['SPARK', 'SCOPE', 'MAP', 'SHIP', 'SCALE', 'DROP', 'FREEZE', 'ARCHIVE'];
             return order.map((s) => ({ status: s, count: (this.ideasByStatus || {})[s] || 0 }));
         },
 
@@ -374,8 +408,31 @@ function activityApp() {
         clearFilters() {
             this.statusFilter = '';
             this.modelFilter = '';
-            window.history.replaceState(null, '', '/api/v1/admin/activity');
+            this.runPage = 1;
+            window.history.replaceState(null, '', '/admin/activity');
             this.load();
+        },
+
+        async prevRunsPage() {
+            if (this.runPage > 1) {
+                this.runPage--;
+                await this.load();
+            }
+        },
+
+        async nextRunsPage() {
+            if (this.runPage < this.runPages) {
+                this.runPage++;
+                await this.load();
+            }
+        },
+
+        runUrl(run) {
+            // Deep-link: idea detail modal when the run belongs to an idea,
+            // otherwise the prompt's filtered ideas list.
+            if (run && run.idea_id) return '/ideas?idea=' + run.idea_id + '&status=ALL';
+            if (run && run.prompt_config_id) return '/ideas?prompt=' + run.prompt_config_id + '&status=ALL';
+            return null;
         },
 
         dotClass(status) {
@@ -384,9 +441,14 @@ function activityApp() {
                 'RUNNING': 'bg-blue-500 animate-pulse',
                 'SUCCESS': 'bg-emerald-500',
                 'FAILED': 'bg-red-500',
-                'NEW': 'bg-sky-500',
-                'CONSIDERATION': 'bg-violet-500',
-                'DISCARDED': 'bg-slate-400',
+                'SPARK': 'bg-sky-500',
+                'SCOPE': 'bg-violet-500',
+                'MAP': 'bg-cyan-500',
+                'SHIP': 'bg-indigo-500',
+                'SCALE': 'bg-emerald-500',
+                'DROP': 'bg-slate-400',
+                'FREEZE': 'bg-purple-500',
+                'ARCHIVE': 'bg-amber-500',
             }[status] || 'bg-slate-400';
         },
 

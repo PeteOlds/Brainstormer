@@ -55,6 +55,55 @@ ACTION_REGISTRY = [
         "template": "prd_doc",
         "done_label": "Documented",
     },
+    {
+        "key": "DESIGN_DOC",
+        "label": "Generate Design",
+        "description": "Build-ready design document from the PRD: architecture, screens and components, data model, API contracts, build notes. Requires an existing PRD and Design stage.",
+        "template": "design_doc",
+        "done_label": "Designed",
+    },
+    {
+        "key": "VRIO",
+        "label": "VRIO Framework",
+        "description": "VRIO Capability Assessment: Value, Rarity, Imitability, Organization — classify competitive implication and prioritize recommendations.",
+        "template": "vrio",
+        "done_label": "Assessed",
+    },
+    {
+        "key": "THREE_CS",
+        "label": "3Cs Analysis",
+        "description": "3Cs Strategic Analysis: Customer, Competitor, Company — find strategic sweet spot and prioritized recommendations.",
+        "template": "three_cs",
+        "done_label": "Analyzed",
+    },
+    {
+        "key": "MARKET_SIZING",
+        "label": "Market Sizing",
+        "description": "TAM/SAM/SOM with top-down and bottom-up formulas, filtering criteria, and key risk assumptions.",
+        "template": "market_sizing",
+        "done_label": "Sized",
+    },
+    {
+        "key": "BUSINESS_MODEL_CANVAS",
+        "label": "Business Model Canvas",
+        "description": "Complete 9-block BMC: value props, segments, channels, relationships, revenue, resources, activities, partnerships, costs — plus vulnerabilities and validation experiments.",
+        "template": "business_model_canvas",
+        "done_label": "Mapped",
+    },
+    {
+        "key": "HYPOTHESIS_TEST",
+        "label": "Hypothesis Test",
+        "description": "Lean Startup experiment roadmap: risk-ranked assumptions, formal hypotheses, low-cost experiments, phased roadmap with pivot/persevere gates.",
+        "template": "hypothesis_test",
+        "done_label": "Designed",
+    },
+    {
+        "key": "GTM_STRATEGY",
+        "label": "GTM Strategy",
+        "description": "Go-To-Market execution: segmentation, positioning, pricing, channels, launch plan, AARRR metrics — phased roadmap with owners and timelines.",
+        "template": "gtm_strategy",
+        "done_label": "Planned",
+    },
 ]
 
 _ACTION_INDEX = {entry["key"]: entry for entry in ACTION_REGISTRY}

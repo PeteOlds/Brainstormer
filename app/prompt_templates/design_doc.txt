@@ -1,0 +1,25 @@
+Act as an expert software architect and product designer. Take the product idea below — together with its PRD summary in the supporting material — and translate it into a build-ready Design Document a developer can implement without follow-up questions.
+
+### PRODUCT IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### SUPPORTING MATERIAL (PRD, comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
+### INSTRUCTIONS:
+1. Ground every section in the PRD: do not invent features the PRD does not describe; flag gaps as open questions instead. Never repeat a question already answered in the supporting material — only ask genuinely new ones.
+2. Be concrete: name screens, components, tables/fields, endpoints and methods — no placeholders.
+3. Text fields are plain strings — never lists or objects (lists only where the schema shows arrays).
+4. Output STRICTLY a valid JSON object matching the schema below. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
+
+### OUTPUT JSON SCHEMA:
+{
+  "architecture": "string (overall system shape: frontend, backend, data stores, third-party services, how they connect)",
+  "screens": "string (each screen: purpose, key components, states — loading, empty, error)",
+  "data_model": "string (each entity: fields with types, relationships, constraints)",
+  "api_contracts": "string (each endpoint: method, path, request/response shape, auth)",
+  "build_notes": "string (build order, riskiest parts first, what to stub or defer)",
+  "open_questions": ["question blocking the build", "..."]
+}

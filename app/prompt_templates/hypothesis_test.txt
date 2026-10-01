@@ -1,0 +1,21 @@
+### BUSINESS IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
+### INSTRUCTIONS:
+1. You are an expert product strategist and Lean Startup advisor.
+2. Design a rigorous, phase-gated Experiment & Hypothesis Testing Roadmap.
+3. Translate core assumptions into testable hypotheses and structured experiments.
+4. Output STRICTLY valid JSON matching the schema below.
+
+### OUTPUT JSON SCHEMA:
+{
+  "assumptions_matrix": "string (Risk-Ranked Assumption Mapping: Identify/categorize key assumptions into Desirability, Viability, Feasibility, Usability. Map onto 2x2 matrix: high impact vs low certainty to isolate top critical risks.)",
+  "hypotheses": ["string (Top 3-5 riskiest assumptions as formal measurable hypotheses: 'We believe that [Target Segment] will [Expected Action/Behavior] because [Core Reason]. We will know this is true when [Quantitative Metric/Threshold] is met within [Timeframe].')"],
+  "experiments": ["string (For each hypothesis: specific low-cost experiment — concierge MVP, Smoke test/landing page, Wizard of Oz, fake door test, paper prototype. Specify: Target Sample Size, Primary Metric & Success Criteria, Required Assets & Tools.)"],
+  "roadmap_phases": ["string (Phased Execution Roadmap: Phase 1: Problem/Market Fit → Phase 2: Solution/Product Fit → Phase 3: Commercial Viability. Pivot or Persevere decision gates at end of each phase.)"]
+}

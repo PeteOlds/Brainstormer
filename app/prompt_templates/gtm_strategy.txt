@@ -1,0 +1,23 @@
+### BUSINESS IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### SUPPORTING MATERIAL (comments, prior analyses, structured fields, votes):
+${SUPPORTING_MATERIAL}
+
+---
+### INSTRUCTIONS:
+1. You are an expert Go-To-Market strategist and growth advisor.
+2. Draft a complete, highly actionable GTM Strategy structured into six execution-focused pillars.
+3. Output STRICTLY valid JSON matching the schema below.
+
+### OUTPUT JSON SCHEMA:
+{
+  "market_segmentation": "string (Ideal Customer Profile (ICP) and high-value user personas. Primary jobs-to-be-done, core pain points, trigger events driving purchase intent, key buying criteria.)",
+  "value_proposition": "string (Core positioning statement: For [Target Audience], who [Need/Pain Point], [Product Name] is a [Category] that [Primary Benefit], unlike [Primary Competitor]. Key messaging pillars, differentiation factors, objection-handling tactics.)",
+  "pricing_packaging": "string (Monetization model: freemium, usage-based, tiered SaaS, seat-based. Value metrics. Recommended price points, tier structures, introductory offer strategies.)",
+  "acquisition_channels": "string (Primary inbound/outbound acquisition channels: organic search, content marketing, paid ads, product-led growth loops, direct outbound, channel partnerships. Unit economics targets: CAC payback, conversion benchmarks.)",
+  "marketing_launch_plan": "string (Phased launch timeline: Pre-launch (waitlists, beta testing, founder-led sales), Launch Day/Week (PR, community launches, webinars, event pushes), Post-launch (nurture campaigns, retention loops). Key collateral: landing pages, sales decks, battlecards, demo videos.)",
+  "success_metrics": "string (North Star metrics and performance indicators across AARRR funnel: Acquisition, Activation, Retention, Revenue, Referral. Internal enablement requirements for sales, marketing, support.)",
+  "launch_roadmap": ["string (Executive summary launch roadmap table: actions, owners, timelines across Pre-Launch, Launch, Post-Launch phases.)"]
+}
