@@ -1,8 +1,8 @@
 # Brainstormer — Roadmap: completed vs outstanding
 
 **Single source of truth for build status. Update on every build.**
-**Version:** 0.47.0 · **Date:** 2026-10-01 · **Branch:** `feat/phase-0-backup` (unpushed)
-**Health:** backend 311+ passed / 80% coverage · Flutter 24 passed, analyze clean ·
+**Version:** 0.47.0 · **Date:** 2026-10-01 · **Branch:** `feat/phase-0-backup` (pushed, PR #1 open)
+**Health:** backend 324 passed / 81% coverage · Flutter 24 passed, analyze clean ·
 bandit 0 high/medium · safety 0 vulns · prod healthy, migrated to head.
 
 Spec baselines: `PRD_V2.md` (V2 scope), `docs/Design.md` (system design),
@@ -99,63 +99,79 @@ RTO recorded in `docs/install-config.md`. Also surfaced: fresh
 - Coverage 35% → **80%**; fixed real `cosine_similarity` crash.
 - User guide rewritten for V2.
 
+### A.14 Phase 9 — Users, roles, enforcement (v0.43.0)
+Idea authorship (`created_by_id`) with edit-own content and chat
+iterate (strangers 403, generated ideas stay admin-only);
+Developer/BA/Deployment roles with a permission matrix enforced via
+`require_permission` (actions, discovery, docs, flags, status);
+expired/suspended instances refuse writes (`INSTANCE_INACTIVE`,
+reads pass) with scheduler skip; author edit affordance in Flutter.
+Tightened mid-build: membership powers require instance context
+(unscoped tokens carry legacy ADMIN/site grants only).
+
+### A.15 Phase 10 — AI platform hardening (v0.44.0)
+DLP masking (emails, phones, key shapes, JWTs) on every hosted prompt
+with count-only logging; explicit `queue` (1h Celery retry, visible)
+and `degrade` (local fallback model, logged) budget cutoffs;
+proxy-routed embeddings; finance-owned pricing overrides with hot
+reload; one-shot proxy DB init in compose.
+
+### A.16 Phase 11 — Flutter completion (v0.45.0)
+Freezed value semantics on all domain models (codegen, custom parsing
+preserved); offline mutation outbox (network failures queue, flush on
+reconnect, order-preserving); FCM provisioning runbook; Chrome
+device-CI job for the staging smoke test.
+
+### A.17 Phase 12 — Stripe billing (v0.46.0)
+Hand-rolled HMAC webhook verification (5-min tolerance), idempotent
+event log (replays dropped pre-mutation), plan metadata maps 1:1 to
+entitlement keys (checkout grants + clears Free, cancellation revokes
+to baseline, payment failure alerts without auto-suspend), customer
+portal link endpoint, runbook docs.
+
+### A.18 Phase 13 — Cutover and ops (v0.47.0)
+Reserved site numbers verified refused-by-guard (no shells created);
+RLS overhead measured nil on production data; backup volume and
+goldens reviewed (both healthy); fresh-database migration chain fixed
+and verified end to end (36 revisions); production migrated to head
+and healthy. **Single PR #1 opened** (mergeable, Guardrail checklist
+in body) — review + merge outstanding.
+
 ---
 
 ## B. Outstanding (sorted by suggested phase)
 
-### Phase 9 — Users, roles, enforcement
-1. **Iterate for normal users** (matrix grants edit-own; content edit
-   and chat-iterate are admin-only today).
-2. **Developer/Deployment/BA role matrix** (schema ready: string roles,
-   no migration needed).
-3. **Start/End/Free enforcement semantics** (block vs read-only vs
-   scheduler pause). Dates recorded, unenforced.
+Closed since the last revision: Phase 9 all items (edit-own, role
+matrix, date enforcement), Phase 10 all items (DLP, proxy DB,
+proxy embeddings, pricing sync, queue/degrade), Phase 11 items 10–12
+(device CI job written, freezed, offline outbox), Phase 12 provider
+choice plus webhook mapping, Phase 13 items 15 and 17–20. What is
+left:
 
-### Phase 10 — AI platform hardening
-4. **DLP/PII masking layer** before hosted providers.
-5. **Proxy DB persistence** beyond the documented setup step.
-6. **Embeddings via proxy** (direct-library path only today).
-7. **Pricing auto-sync** (static fallback tables today).
-8. **Queue/degrade budget cutoffs** (refuse only today).
+### Next: merge and cut over
+1. **Review + merge PR #1** (`feat/phase-0-backup` → `main`;
+   open and mergeable), then deploy main to production and re-verify
+   `/api/health` + migration head.
+2. **`LEGACY_WEB_ENABLED=False` flip** after two clean weeks of
+   Flutter production use (per C10), then delete the templates a
+   release later.
 
-### Phase 11 — Flutter completion
-9. **Remote push (FCM)**: needs Firebase credentials + backend
-   device-token endpoint (local notifications ship meanwhile).
-10. **`integration_test` on devices** in CI (needs Chrome/device farm).
-11. **Freezed codegen** for models (hand-written today).
-12. **Push/offline hardening** beyond the v0.40.0 baseline.
-
-### Phase 12 — Billing
-13. **Payment provider + pricing** (entitlements are site-admin managed
-    until then; framework + Free baselines already enforce `hosted_ai`).
-
-### Phase 13 — Cutover and ops
-14. **`LEGACY_WEB_ENABLED=False` flip** once Flutter ships to users.
-15. **Sites 2–19: reservation is enforced by refusal, not shells.**
-    Verified 2026-10-01: `create-instance` for every number 2–19
-    (except 5) is rejected with "reserved for future testing". No
-    empty rows were created — the guard is the implementation. Create
-    real shells only when a testing programme needs them.
-16. **Branch PR and merge** (`feat/phase-0-backup`, 20+ commits, unpushed).
-17. **RLS performance: measured, negligible.** 2026-10-01 on
-    production data (400 ideas): 0.86ms/query without RLS context vs
-    0.49ms with `SET LOCAL` (noise floor). Keep policies as-is;
-    re-measure only past 100k rows.
-18. **Golden git-lfs threshold: decided.** `flutter/test/goldens/`
-    is 8KB — stays in git; move to LFS only past 1MB.
-19. **Backup volume: healthy.** Backups 16MB, Postgres 71MB, disk 15%
-    used. Monitor; no action.
-20. **Fresh-DB migrate: FIXED 2026-10-01.** The historical BUILD
-    migration now ensures enum labels (`IF NOT EXISTS`) and commits
-    before using them — a from-zero `flask db upgrade` runs all 36
-    revisions to head (verified on a scratch database, since dropped).
+### Needs external inputs (blocked, not forgotten)
+3. **Remote push (FCM)**: Firebase project + APNs credentials, then
+   backend device-token endpoint per the runbook in `flutter/README.md`.
+4. **Live Stripe loop**: configure real plans in the Stripe dashboard
+   mapping onto entitlement keys, then run the test-mode money loop
+   (grant → gate → revoke) against staging.
+5. **Device CI maiden run**: the Chrome job exists in
+   `guardrails.yml` but has never gone green — watch its first run.
 
 ### Housekeeping (no phase; do anytime)
-21. Uncommitted tree dirt: own/stash-or-commit AGENTS.md, PRD.md,
-    docs/erd.md edits; confirm `guidelines/.gitkeep` deletion;
-    add/ignore TODOS.md, APPLICATION_DOCUMENTATION.md, status image.
-22. `TODOS.md` itself is stale (V1-era session notes) — archive or refresh.
-23. Coverage 80% → 85%+ on the next feature build (don't let it slip).
+6. Untracked files: decide on TODOS.md (stale V1 notes — archive or
+   refresh), `docs/APPLICATION_DOCUMENTATION.md`, the pasted status
+   image, and the two new `Guides/Guide_FullStack*.md`.
+   (AGENTS.md, PRD.md, `docs/erd.md` edits owned; `guidelines/.gitkeep`
+   restored.)
+7. Coverage ratchet: 81% today — hold the line on every build, aim 85%+.
 
 ---
 
@@ -210,9 +226,9 @@ ad-hoc psql). Permissive-when-unset keeps CLI/workers/migrations
 working.
 Rejected: RLS-only (SQLite path uncovered, ORM bypass risks) and no
 RLS (one missed filter leaks a whole tenant).
-Recommendation: **keep**. Measure RLS overhead under seed load before
-declaring victory (open item B.17); if measurable, keep policies but
-simplify them — never remove the layer.
+Recommendation: **keep**. RLS overhead measured nil on production
+data (0.49ms vs 0.86ms noise floor, 2026-10-01) — keep policies but
+re-measure only past 100k rows. Never remove the layer.
 
 ### C6. Archive is terminal; skip-level moves allowed; no gates
 Why: the business moves ideas non-linearly (Spark straight to Map
@@ -240,8 +256,10 @@ scattered raw-http class of bugs; restructuring Flask to feature
 folders would churn a working backend for aesthetics.
 Rejected: Bloc (heavier ceremony than the app needs), GetX (service
 locator anti-patterns), restructuring Flask.
-Recommendation: **keep**. Adopt freezed codegen once models stabilise
-(open item B.11) — hand-written `fromJson` is tech debt with a number.
+Recommendation: **keep**. Freezed is now adopted (v0.45.0) with
+custom null-tolerant parsing preserved alongside codegen — the tech
+debt is paid. Revisit the codegen setup only if model churn makes
+`build_runner` a bottleneck.
 
 ### C9. Backup before every upgrade, proven by restore; no retention policy
 Why: the only backup that counts is a restored one; the zero-diff
@@ -269,9 +287,11 @@ produce the wrong abstraction. The framework (keys, baselines, gates,
 402s) is real and already enforcing `hosted_ai`; wiring a provider
 later is a CRUD-plus-webhook job, not a redesign.
 Rejected: building Stripe/Paddle integration on guesses.
-Recommendation: **keep**. When choosing a provider, require: webhook
-idempotency story, test-mode end-to-end (grant → gate → revoke), and
-proration semantics — then map plans onto entitlement keys 1:1.
+Recommendation: **provider chosen (Stripe, v0.46.0)** with HMAC
+webhooks, idempotent plan→entitlement mapping, and a portal endpoint.
+What remains is operational, not architectural: configure real plans
+in the Stripe dashboard and run the test-mode money loop
+(outstanding item B.4). Proration disputes stay human-handled.
 
 ### C12. No data loss, ever; expand-and-contract; roll forward in production
 Why: soft states instead of deletes, audit trails on status/content/
@@ -292,11 +312,12 @@ tables are offline, deterministic, and auditable per call.
 Rejected: queue/degrade cutoffs (degrade silently changes answer
 quality — a correctness issue disguised as a billing feature) and
 live pricing sync (network dependency inside the money path).
-Recommendation: **keep refuse as the default forever**. Add queue
-only as an explicit per-instance choice with visible UX ("queued for
-budget release"), never silently. Revisit pricing sync if a provider
-changes prices mid-contract and finance complains — with a cached
-table + TTL, never a live call.
+Recommendation: **refuse stays the default; queue and degrade now
+exist as explicit per-instance choices** (v0.44.0) with visible UX
+(retry countdowns, degrade logging) — exactly the shape this record
+asked for. Revisit pricing sync if a provider changes prices
+mid-contract and finance complains — with a cached table + TTL,
+never a live call.
 
 ### C14. Social linking: verified email + explicit confirm; JIT least-privilege
 Why: silent account merging is a takeover vector; unverified emails
