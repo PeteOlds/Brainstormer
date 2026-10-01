@@ -28,6 +28,14 @@ from .instance import (
 from .prompt_config import PromptConfig
 from .prompt_run import PromptRun, PromptRunStatus
 from .refresh_token import RefreshToken
+from .roles import (
+    ASSIGNABLE_ROLES,
+    ROLE_PERMISSIONS,
+    USER_PERMS,
+    can_edit_idea,
+    has_permission,
+    role_permissions,
+)
 from .secondary_action import ActionType, SecondaryActionResult
 from .slack import SlackEvent, SlackPost
 from .stage_config import STAGES, StageAIConfig, resolve_stage
@@ -83,4 +91,10 @@ __all__ = [
     "StageAIConfig",
     "STAGES",
     "resolve_stage",
+    "ASSIGNABLE_ROLES",
+    "ROLE_PERMISSIONS",
+    "USER_PERMS",
+    "can_edit_idea",
+    "has_permission",
+    "role_permissions",
 ]

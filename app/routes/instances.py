@@ -337,16 +337,21 @@ def _last_admin_guard(instance_id, target_user_id):
 @bp.route("/instances/<uuid:instance_id>/members/<uuid:member_id>", methods=["PATCH"])
 @token_required
 def update_member(user, instance_id, member_id):
-    """Change a member's role (INSTANCE_ADMIN/USER)."""
-    from app.models import ROLE_INSTANCE_ADMIN, ROLE_USER, Membership as MembershipModel
+    """Change a member's role (any assignable role; SITE_ADMIN is global-only)."""
+    from app.models import (
+        ASSIGNABLE_ROLES,
+        ROLE_INSTANCE_ADMIN,
+        ROLE_USER,
+        Membership as MembershipModel,
+    )
 
     instance, err = _require_instance_admin(user, instance_id)
     if err:
         return err
     data = request.get_json(silent=True) or {}
-    if data.get("role") not in (ROLE_INSTANCE_ADMIN, ROLE_USER):
+    if data.get("role") not in ASSIGNABLE_ROLES:
         return api_error(
-            f"role must be {ROLE_INSTANCE_ADMIN} or {ROLE_USER}.", status_code=400
+            f"role must be one of {', '.join(ASSIGNABLE_ROLES)}.", status_code=400
         )
     membership = MembershipModel.query.filter_by(
         user_id=member_id, instance_id=instance.id

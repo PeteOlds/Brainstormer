@@ -14,6 +14,18 @@ from typing import Any
 
 from flask import g
 
+# Write paths that stay open on expired instances (auth flows, own
+# settings, social login). Everything else mutating is gated.
+EXPIRY_WRITE_ALLOWLIST = (
+    "/api/v1/register",
+    "/api/v1/login",
+    "/api/v1/refresh",
+    "/api/v1/logout",
+    "/api/v1/me",
+    "/api/v1/me/settings",
+    "/api/v1/oauth/",
+)
+
 
 def parse_instance_claim(value: Any) -> uuid.UUID | None:
     try:
@@ -73,6 +85,60 @@ def is_site_admin(user: Any) -> bool:
     from app.models import Membership
 
     return Membership.is_site_admin(user.id)
+
+
+def instance_expired(instance_id: Any) -> bool:
+    """True when writes must stop: suspended status or outside [start, end].
+
+    Dates are recorded-but-unenforced everywhere except here: an
+    end_date in the past (or a not-yet-started instance) blocks writes
+    while reads keep working.
+    """
+    if instance_id is None:
+        return False
+    from datetime import datetime, timezone
+
+    from app.models import Instance
+    from app.models.types import ensure_aware
+
+    instance = Instance.query.get(instance_id)
+    if instance is None:
+        return False
+    if (instance.status or "active") != "active":
+        return True
+    now = datetime.now(timezone.utc)
+    if instance.start_date and ensure_aware(instance.start_date) > now:
+        return True
+    return bool(instance.end_date and ensure_aware(instance.end_date) < now)
+
+
+def expiry_gate_rejection():
+    """403 when this write targets an expired instance; else None.
+
+    Runs after JWT verification inside the auth decorators, so the claim
+    is already trusted. Auth flows and own-settings stay open.
+    """
+    from flask import jsonify, request
+
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return None
+    instance_id = getattr(g, "instance_id", None)
+    if instance_id is None:
+        return None
+    if any(request.path.startswith(p) for p in EXPIRY_WRITE_ALLOWLIST):
+        return None
+    if instance_expired(instance_id):
+        return (
+            jsonify(
+                {
+                    "error": "Forbidden",
+                    "message": "This instance is expired or suspended; writes are disabled.",
+                    "error_code": "INSTANCE_INACTIVE",
+                }
+            ),
+            403,
+        )
+    return None
 
 
 def resolve_membership(user: Any) -> tuple:

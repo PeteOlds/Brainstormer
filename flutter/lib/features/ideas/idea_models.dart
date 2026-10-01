@@ -7,6 +7,7 @@ class IdeaSummary {
     this.summary,
     required this.status,
     this.promptConfigId,
+    this.createdById,
     this.commentCount = 0,
     this.upvotes = 0,
     this.downvotes = 0,
@@ -22,6 +23,7 @@ class IdeaSummary {
   final String? summary;
   final String status;
   final String? promptConfigId;
+  final String? createdById;
   final int commentCount;
   final int upvotes;
   final int downvotes;
@@ -39,6 +41,7 @@ class IdeaSummary {
             _pickSummary(json['structured_content']),
         status: (json['status'] ?? 'SPARK').toString(),
         promptConfigId: json['prompt_config_id']?.toString(),
+        createdById: json['created_by_id']?.toString(),
         commentCount: (json['comments_count'] as num?)?.toInt() ?? 0,
         upvotes: (json['upvotes_count'] as num?)?.toInt() ?? 0,
         downvotes: (json['downvotes_count'] as num?)?.toInt() ?? 0,

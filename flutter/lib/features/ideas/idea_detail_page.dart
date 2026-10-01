@@ -88,6 +88,9 @@ class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage>
   Widget _overviewTab(
       BuildContext context, IdeaDetail detail, bool isAdmin) {
     final idea = detail.idea;
+    final user = ref.watch(currentUserProvider);
+    final canEdit = isAdmin || (idea.createdById != null &&
+        idea.createdById == (user?['id']?.toString()));
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
@@ -105,6 +108,16 @@ class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage>
         const SizedBox(height: AppSpacing.sm),
         Text(idea.summary ?? '(no summary)',
             style: Theme.of(context).textTheme.bodyLarge),
+        if (canEdit)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('idea_edit_title'),
+              icon: const Icon(Icons.edit, size: 18),
+              label: const Text('Edit title'),
+              onPressed: () => _editTitle(idea),
+            ),
+          ),
         const SizedBox(height: AppSpacing.md),
         Row(
           children: [
@@ -311,6 +324,45 @@ class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage>
   Future<void> _vote(String id, int direction) async {
     await ref.read(ideasControllerProvider.notifier).vote(id, direction);
     ref.invalidate(_detailProvider(widget.ideaId));
+  }
+
+  Future<void> _editTitle(IdeaSummary idea) async {
+    final controller =
+        TextEditingController(text: idea.promptTitle);
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit title'),
+        content: TextField(
+          controller: controller,
+          maxLength: 200,
+          decoration: const InputDecoration(labelText: 'Title'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    final title = controller.text.trim();
+    controller.dispose();
+    if (save != true || !mounted) return;
+    try {
+      await ref
+          .read(ideasRepositoryProvider)
+          .updateContent(idea.id, {'prompt_title': title});
+      ref.invalidate(_detailProvider(widget.ideaId));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Edit failed: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _changeStatus(String id, String status) async {

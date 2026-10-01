@@ -940,6 +940,11 @@ def check_due_prompts():
 
     enqueued = 0
     for prompt in due_prompts:
+        # Expired/suspended instances stop generating (reads stay open).
+        from app.utils.tenancy import instance_expired
+
+        if prompt.instance_id is not None and instance_expired(prompt.instance_id):
+            continue
         # Skip prompts that already have a live run: without this, every
         # 60s tick re-enqueues them and the queue grows without bound.
         live = PromptRun.query.filter(

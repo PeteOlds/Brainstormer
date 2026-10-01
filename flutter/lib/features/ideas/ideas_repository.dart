@@ -62,8 +62,18 @@ class IdeasRepository {
     return IdeaSummary.fromJson(data);
   }
 
-  Future<IdeaSummary> changeStatus(String id, String status) async {
-    final data = await api.patch('/api/v1/ideas/$id/status',
+  Future<IdeaSummary> updateContent(
+      String id, Map<String, dynamic> fields) async {
+    final data = await api.patch('/api/v1/ideas/$id',
+        body: fields, invalidatePrefix: '/api/v1/ideas');
+    final map = data as Map<String, dynamic>;
+    final ideaJson = map.containsKey('idea')
+        ? map['idea'] as Map<String, dynamic>
+        : map;
+    return IdeaSummary.fromJson(ideaJson);
+  }
+
+  Future<IdeaSummary> changeStatus(String id, String status) async {    final data = await api.patch('/api/v1/ideas/$id/status',
         body: {'status': status}, invalidatePrefix: '/api/v1/ideas');
     // Status endpoint returns the bare idea (with user_vote); wrap leniently.
     final map = data as Map<String, dynamic>;

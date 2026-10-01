@@ -150,7 +150,10 @@ def test_maintenance_tasks(app, admin_user, admin_prompt):
         assert tasks.cleanup_old_discarded(days=90)["status"] == "not_implemented"
         assert tasks.recalculate_vote_counts()["updated"] >= 0
         assert tasks.update_next_run_times()["updated"] >= 0
-        assert tasks.beat_heartbeat() is not None
+        # NOTE: beat_heartbeat is covered by test_beat_heartbeat_without_redis
+        # below. Never call the live path here: it writes a REAL heartbeat
+        # key to the shared redis DB, which later poisons
+        # test_health_ok (stale key reads as scheduler-degraded).
 
 
 def test_crypto_round_trip(app):

@@ -229,6 +229,19 @@ later). Free instances baseline to `core`; paid to everything.
 Suspended instances (`status != active`) are refused everywhere.
 Start/End dates are recorded and surfaced, enforcement TBD.
 
+## Roles and instance lifecycle enforcement (Phase 9)
+
+Membership roles: `USER`, `DEVELOPER` (+ run actions, discovery),
+`BA` (+ doc edits, comment flags), `DEPLOYMENT` (+ actions, status
+changes, doc edits), `INSTANCE_ADMIN` (everything in-instance),
+`SITE_ADMIN` (global grant). Legacy `ADMIN` users bypass the matrix.
+
+Authors edit their own ideas (content + chat iterate); generated
+ideas (`created_by_id` NULL) stay admin-edited. Expired or suspended
+instances (`status`, `start_date`/`end_date`) reject all writes with
+`INSTANCE_INACTIVE` while reads keep working; the scheduler skips
+their prompts automatically.
+
 ## Per-stage AI config (item 18)
 
 Each active stage (Spark/Scope/Map/Ship/Scale) may override provider,

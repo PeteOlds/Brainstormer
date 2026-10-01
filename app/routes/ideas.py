@@ -17,7 +17,11 @@ from app.models import (
     Vote,
 )
 from app.models.enums import IdeaStatus
-from app.utils.decorators import admin_required, token_required
+from app.utils.decorators import (
+    admin_required,
+    require_permission,
+    token_required,
+)
 from app.utils.responses import api_created, api_error, api_ok
 from app.utils.tenancy import apply_scope, check_access, current_instance_role, stamp
 from flask_limiter.util import get_remote_address
@@ -177,6 +181,7 @@ def create_idea(user):
         structured_content=structured_content,
         status="SPARK",
         prompt_config_id=None,  # Manual ideas have no associated prompt config
+        created_by_id=user.id,  # Authorship drives edit-own permissions.
     )
     stamp(idea)
 
@@ -267,7 +272,7 @@ def get_idea(user, idea_id):
 
 
 @bp.route("/ideas/<uuid:idea_id>/status", methods=["PATCH"])
-@admin_required
+@require_permission("change_status")
 def update_idea_status(user, idea_id):
     """Update idea status (Admin only)."""
     idea = Idea.query.get_or_404(idea_id)
@@ -319,7 +324,7 @@ def update_idea_status(user, idea_id):
 
 
 @bp.route("/ideas/bulk-status", methods=["PATCH"])
-@admin_required
+@require_permission("change_status")
 def bulk_update_idea_status(user):
     """Update status for multiple ideas at once (Admin only)."""
     data = request.get_json() or {}
@@ -430,7 +435,7 @@ def list_actions(user):
 
 
 @bp.route("/discovery", methods=["GET"])
-@admin_required
+@require_permission("view_discovery")
 def discovery(user):
     """Discoverable opencode skills + guideline docs for run customization."""
     from app.services.discovery import list_guidelines, list_skills
@@ -444,7 +449,7 @@ def discovery(user):
 
 
 @bp.route("/ideas/<uuid:idea_id>/actions", methods=["POST"])
-@admin_required
+@require_permission("run_actions")
 def run_action(user, idea_id):
     """Run a secondary action on an idea (Admin only)."""
     from app.models import Comment
@@ -609,10 +614,15 @@ def get_actions(user, idea_id):
 
 
 def _can_see_flags(user) -> bool:
-    """Ignore-flag visibility: legacy admins and instance admins only."""
+    """Ignore-flag visibility: admins and flag_comments holders (BA)."""
+    from app.models import has_permission
+    from flask import g
+
     if user.role.value == "ADMIN":
         return True
-    return current_instance_role() in ("INSTANCE_ADMIN", "SITE_ADMIN")
+    if current_instance_role() in ("INSTANCE_ADMIN", "SITE_ADMIN"):
+        return True
+    return has_permission(user, "flag_comments", getattr(g, "instance_id", None))
 
 
 def _doc_comment_tree(result, include_flag=False):
@@ -707,7 +717,7 @@ def create_doc_comment(user, result_id):
 
 
 @bp.route("/actions/<uuid:result_id>", methods=["PATCH"])
-@admin_required
+@require_permission("edit_docs")
 def edit_action_result(user, result_id):
     """Manually edit a PRD/Design document (Admin only).
 
@@ -863,11 +873,18 @@ def create_comment(user, idea_id):
 
 
 def _comment_or_403(user, comment_id):
+    from app.models import has_permission
+    from flask import g
+
     comment = Comment.query.get_or_404(comment_id)
     denied = check_access(comment)
     if denied is not None:
         return None, denied
-    if comment.user_id != user.id and user.role.value != "ADMIN":
+    if (
+        comment.user_id != user.id
+        and user.role.value != "ADMIN"
+        and not has_permission(user, "flag_comments", getattr(g, "instance_id", None))
+    ):
         return None, api_error("Not permitted.", status_code=403)
     return comment, None
 
@@ -1005,16 +1022,19 @@ def list_chat_sessions(user, idea_id):
 
 
 @bp.route("/ideas/<uuid:idea_id>/chat/iterate", methods=["POST"])
-@admin_required
+@token_required
 @limiter.limit("3 per minute", key_func=_chat_rate_key)
 def chat_iterate(user, idea_id):
-    """Apply explicit content updates as a versioned iteration (admin)."""
+    """Apply explicit content updates as a versioned iteration (author or admin)."""
+    from app.models import can_edit_idea
     from app.services import chat as chat_svc
 
     idea = Idea.query.get_or_404(idea_id)
     denied = check_access(idea)
     if denied is not None:
         return denied
+    if not can_edit_idea(user, idea):
+        return api_error("Not permitted.", status_code=403)
     gated = _chat_gate(idea)
     if gated is not None:
         return gated
@@ -1045,15 +1065,18 @@ def chat_iterate(user, idea_id):
 
 
 @bp.route("/ideas/<uuid:idea_id>/chat/rollback", methods=["POST"])
-@admin_required
+@token_required
 def chat_rollback(user, idea_id):
-    """Restore an iterate turn's before-snapshot (admin, fully audited)."""
+    """Restore an iterate turn's before-snapshot (author or admin, fully audited)."""
+    from app.models import can_edit_idea
     from app.services import chat as chat_svc
 
     idea = Idea.query.get_or_404(idea_id)
     denied = check_access(idea)
     if denied is not None:
         return denied
+    if not can_edit_idea(user, idea):
+        return api_error("Not permitted.", status_code=403)
     data = request.get_json(silent=True) or {}
     raw_turn = data.get("turn_id")
     try:
@@ -1073,7 +1096,7 @@ def chat_rollback(user, idea_id):
 
 
 @bp.route("/comments/<uuid:comment_id>/flag", methods=["PATCH"])
-@admin_required
+@require_permission("flag_comments")
 def flag_comment(user, comment_id):
     """Toggle the admin-only Ignore flag (excluded from AI context).
 
@@ -1106,13 +1129,17 @@ EDITABLE_FIELDS = ("prompt_title", "raw_content", "structured_content")
 
 
 @bp.route("/ideas/<uuid:idea_id>", methods=["PATCH"])
-@admin_required
+@token_required
 def update_idea_content(user, idea_id):
-    """Edit idea content fields (Admin only). Status keeps its own endpoint."""
+    """Edit idea content fields (author or admin). Status keeps its own endpoint."""
+    from app.models import can_edit_idea
+
     idea = Idea.query.get_or_404(idea_id)
     denied = check_access(idea)
     if denied is not None:
         return denied
+    if not can_edit_idea(user, idea):
+        return api_error("Not permitted.", status_code=403)
     data = request.get_json() or {}
 
     updates = {f: data[f] for f in EDITABLE_FIELDS if f in data}
