@@ -961,7 +961,12 @@ def _chat_provider_error(err):
     if isinstance(err, EntitlementError):
         return api_error(str(err), status_code=402, error_code="ENTITLEMENT_REQUIRED")
     if isinstance(err, BudgetExhausted):
-        return api_error(str(err), status_code=429, error_code="BUDGET_EXHAUSTED")
+        details = None
+        if getattr(err, "retry_after", None):
+            details = {"retry_after_seconds": err.retry_after}
+        return api_error(
+            str(err), status_code=429, errors=details, error_code="BUDGET_EXHAUSTED"
+        )
     if isinstance(err, OllamaError):
         return api_error(f"Chat generation failed: {err}", status_code=502)
     if isinstance(err, ProviderError):

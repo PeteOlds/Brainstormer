@@ -281,7 +281,7 @@ def test_instance_member_and_oauth_errors(app, client, admin_client):
         json={"provider": "openai", "cutoff_behaviour": "queue"},
         headers=headers,
     )
-    assert res.status_code == 400
+    assert res.status_code == 200
     res = client.post("/api/v1/instances", json={"number": 96}, headers=headers)
     assert res.status_code in (400, 403)
 

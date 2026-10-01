@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import structlog
+from celery.exceptions import Retry
 from pydantic import ValidationError
 
 from app.extensions import db
@@ -302,6 +303,16 @@ def generate_idea(
                     timeout=600.0,
                 )
             except BudgetExhausted as e:
+                # Queue cutoff: explicit per-instance choice to retry later
+                # (visible countdown) instead of failing the run.
+                retry_after = getattr(e, "retry_after", None)
+                if retry_after and not _final_attempt():
+                    logger.info(
+                        "ai_budget_queued",
+                        prompt_id=prompt_config_id,
+                        retry_after=retry_after,
+                    )
+                    raise self.retry(exc=e, countdown=retry_after)
                 logger.error("ai_budget_exhausted", prompt_id=prompt_config_id)
                 run = _get_run()
                 if run is not None:
@@ -454,6 +465,9 @@ def generate_idea(
         raise
     except OllamaError:
         # Re-raise OllamaError so autoretry can handle it; _record_failure will include body on final attempt
+        raise
+    except Retry:
+        # Budget-queue self.retry(): not a failure, hand back to Celery.
         raise
     except Exception as e:
         logger.error("ollama_error", prompt_id=prompt_config_id, error=str(e))
@@ -649,6 +663,15 @@ def run_secondary_action(
                     timeout=600.0,
                 )
             except BudgetExhausted as e:
+                retry_after = getattr(e, "retry_after", None)
+                if retry_after and _retries_so_far() == 0:
+                    logger.info(
+                        "ai_budget_queued",
+                        idea_id=idea_id,
+                        action_type=action_type,
+                        retry_after=retry_after,
+                    )
+                    raise self.retry(exc=e, countdown=retry_after)
                 run = _get_run()
                 if run is not None:
                     run.mark_failed(str(e))
@@ -880,6 +903,9 @@ def run_secondary_action(
         raise
     except OllamaError:
         # Re-raise OllamaError so autoretry can handle it; _record_failure will include body on final attempt
+        raise
+    except Retry:
+        # Budget-queue self.retry(): not a failure, hand back to Celery.
         raise
     except _AbortAction:
         # Budget/config failures already recorded on the run; just stop.

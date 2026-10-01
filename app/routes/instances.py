@@ -171,10 +171,20 @@ def upsert_ai_config(user, instance_id):
     if "cutoff_behaviour" in data:
         if data["cutoff_behaviour"] not in CUTOFF_BEHAVIOURS:
             return api_error(
-                f"cutoff_behaviour must be one of {', '.join(CUTOFF_BEHAVIOURS)} (Phase 3).",
+                f"cutoff_behaviour must be one of {', '.join(CUTOFF_BEHAVIOURS)}.",
                 status_code=400,
             )
         config.cutoff_behaviour = data["cutoff_behaviour"]
+    if "degrade_model" in data:
+        degrade_model = data["degrade_model"]
+        if degrade_model is not None and (
+            not isinstance(degrade_model, str) or len(degrade_model) > 100
+        ):
+            return api_error(
+                "degrade_model must be a string up to 100 chars or null.",
+                status_code=400,
+            )
+        config.degrade_model = degrade_model or None
     if "chat_enabled" in data:
         if not isinstance(data["chat_enabled"], bool):
             return api_error("chat_enabled must be a boolean.", status_code=400)

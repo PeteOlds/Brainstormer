@@ -37,8 +37,11 @@ class ProviderError(Exception):
 class BudgetExhausted(ProviderError):
     """Instance budget spent. Never raised to Celery: tasks fail the run."""
 
-    def __init__(self, message: str):
+    def __init__(self, message: str, retry_after: int | None = None):
         super().__init__(message, retryable=False)
+        # Set when the instance chose the queue cutoff: tasks retry
+        # after this many seconds instead of failing.
+        self.retry_after = retry_after
 
 
 @dataclass(frozen=True)
@@ -86,9 +89,13 @@ def check_budget(config: Any) -> None:
         return
     spent = instance_spend_cents(config.instance_id)
     if spent >= config.budget_cents:
+        # Queue cutoff retries the Celery task later (fixed 1h delay;
+        # the run error states this visibly). Refuse (default) fails fast.
+        retry_after = 3600 if (config.cutoff_behaviour or "refuse") == "queue" else None
         raise BudgetExhausted(
             f"Instance AI budget exhausted ({spent}/{config.budget_cents}c, "
-            f"{SPEND_WINDOW_DAYS}d window)."
+            f"{SPEND_WINDOW_DAYS}d window).",
+            retry_after=retry_after,
         )
     if spent >= config.budget_cents * BUDGET_ALERT_RATIO:
         logger.warning(
@@ -205,16 +212,63 @@ def _proxy_generate(
     )
 
 
-def _proxy_cost_cents(model: str, prompt_tokens: int, completion_tokens: int) -> int:
-    """Cost from LiteLLM's bundled price table (offline, no provider call)."""
-    try:
-        import litellm
+_pricing_override: dict = {}
+_pricing_override_mtime: float | None = None
 
-        info = litellm.model_cost.get(model, {})
-        total = prompt_tokens * float(
-            info.get("input_cost_per_token", 0)
-        ) + completion_tokens * float(info.get("output_cost_per_token", 0))
-        return max(0, round(total * 100))
+
+def refresh_pricing_cache() -> dict:
+    """Reload finance-owned price overrides (never a live provider call).
+
+    PRICING_OVERRIDE_PATH points at JSON:
+    {"openai/gpt-4o-mini": {"input_cost_per_token": ..., "output_cost_per_token": ...}}.
+    Overrides win over the bundled LiteLLM table; missing file means
+    bundled prices. Returns the active override map.
+    """
+    import json as _json
+    import os
+
+    global _pricing_override, _pricing_override_mtime
+    path = os.getenv("PRICING_OVERRIDE_PATH", "")
+    if not path:
+        _pricing_override, _pricing_override_mtime = {}, None
+        return {}
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return dict(_pricing_override)
+    if _pricing_override_mtime == mtime:
+        return dict(_pricing_override)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            _pricing_override = dict(_json.load(fh))
+        _pricing_override_mtime = mtime
+    except (OSError, ValueError):
+        pass
+    return dict(_pricing_override)
+
+
+def _model_price(model: str) -> tuple:
+    overrides = refresh_pricing_cache()
+    if model in overrides:
+        info = overrides[model]
+        return float(info.get("input_cost_per_token", 0)), float(
+            info.get("output_cost_per_token", 0)
+        )
+    import litellm
+
+    info = litellm.model_cost.get(model, {})
+    return float(info.get("input_cost_per_token", 0)), float(
+        info.get("output_cost_per_token", 0)
+    )
+
+
+def _proxy_cost_cents(model: str, prompt_tokens: int, completion_tokens: int) -> int:
+    """Cost from override table, else bundled LiteLLM prices (offline)."""
+    try:
+        per_in, per_out = _model_price(model)
+        return int(
+            max(0, round((prompt_tokens * per_in + completion_tokens * per_out) * 100))
+        )
     except Exception:
         return 0
 
@@ -367,7 +421,51 @@ def generate_for_prompt(
         require_entitlement(prompt.instance_id, "hosted_ai")
     except EntitlementError as exc:
         raise ProviderError(str(exc), retryable=False) from exc
-    check_budget(config)
+    try:
+        check_budget(config)
+    except BudgetExhausted as exc:
+        # Degrade is explicit per-instance choice: answer quality changes
+        # are logged loudly, never silently.
+        if (config.cutoff_behaviour or "refuse") == "degrade" and config.degrade_model:
+            from app.services.ollama_client import OllamaClient as _OllamaClient
+
+            logger.warning(
+                "ai_budget_degrade",
+                instance_id=str(prompt.instance_id),
+                provider=provider,
+                fallback_model=config.degrade_model,
+            )
+            local = _OllamaClient(timeout=timeout)
+            try:
+                response = local.generate_sync(
+                    model=config.degrade_model,
+                    prompt=prompt_text,
+                    system=system,
+                    format="json" if json_mode else None,
+                    options=options,
+                    keep_alive=keep_alive,
+                )
+                return GenerationResult(
+                    text=response["response"], model=config.degrade_model
+                )
+            finally:
+                pass
+        raise
+    # DLP: mask PII before anything leaves for a hosted provider
+    # (local Ollama path above is untouched). Counts only in logs.
+    from app.services.dlp import mask_text
+
+    prompt_text, masked = mask_text(prompt_text)
+    if system:
+        system, sys_masked = mask_text(system)
+        masked.update(sys_masked)
+    if masked:
+        logger.info(
+            "dlp_masked",
+            instance_id=str(prompt.instance_id),
+            provider=provider,
+            counts=masked,
+        )
     if config.use_proxy and config.virtual_key:
         result = _proxy_generate(
             model,
@@ -415,6 +513,8 @@ def embed_for_instance(text: str, instance_id: Any = None) -> list[float] | None
     rows = InstanceAIConfig.query.filter_by(instance_id=instance_id).all()
     for row in rows:
         if row.provider != "ollama" and row.embedding_model and row.api_key:
+            if row.use_proxy and row.virtual_key:
+                return _proxy_embed(text, instance_id, row)
             import litellm
 
             try:
@@ -437,3 +537,33 @@ def embed_for_instance(text: str, instance_id: Any = None) -> list[float] | None
             except Exception as exc:
                 raise ProviderError(f"Embedding failed: {exc}", retryable=True) from exc
     return None
+
+
+def _proxy_embed(text: str, instance_id: Any, row: Any) -> list[float]:
+    """Embeddings through the proxy (virtual key, spend-logged)."""
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(
+                f"{_proxy_url()}/embeddings",
+                json={"model": row.embedding_model, "input": [text]},
+                headers={"Authorization": f"Bearer {row.virtual_key}"},
+            )
+            response.raise_for_status()
+            body = response.json()
+    except Exception as exc:
+        raise ProviderError(f"Proxy embedding failed: {exc}", retryable=True) from exc
+    try:
+        embedding = body["data"][0]["embedding"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ProviderError("Proxy returned no embedding.", retryable=True) from exc
+    usage = body.get("usage") or {}
+    record_spend(
+        instance_id,
+        None,
+        row.provider,
+        row.embedding_model,
+        int(usage.get("prompt_tokens") or 0),
+        0,
+        _proxy_cost_cents(row.embedding_model, int(usage.get("prompt_tokens") or 0), 0),
+    )
+    return list(embedding)

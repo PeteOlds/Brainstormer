@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.44.0] - 2026-10-01
+### Added
+- Phase 10 AI hardening: DLP masking (emails, phones, key shapes, JWTs) on every hosted prompt with count-only logging, explicit `queue` (1h Celery retry, visible) and `degrade` (local fallback model, logged) budget cutoffs, proxy-routed embeddings, finance-owned pricing overrides with hot reload, one-shot proxy DB init in compose
+
 ## [0.43.0] - 2026-10-01
 ### Added
 - Phase 9 users/roles/enforcement: idea authorship (`created_by_id`) with edit-own content and chat iterate (strangers 403, generated ideas stay admin-only), Developer/BA/Deployment roles with a permission matrix enforced via `require_permission` (actions, discovery, docs, flags, status), assignable-role validation, expired/suspended instances refuse writes (`INSTANCE_INACTIVE`, reads pass) plus scheduler skip, author edit affordance in Flutter

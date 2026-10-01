@@ -159,6 +159,14 @@ Budgets cover a rolling 30-day window: 70% logs an alert, 100% fails
 runs fast (`refuse`; queue/degrade arrive later). Spend rows are
 append-only in `ai_spend_ledger` and included in site backups.
 
+Phase 10 additions: DLP masking (emails, phones, API-key shapes, JWTs)
+runs on every hosted prompt before send (counts logged, values never);
+`queue` cutoff retries the Celery task in 1h instead of failing;
+`degrade` falls back to the configured local model (logged loudly);
+embeddings route through the proxy when the config uses one; pricing
+reads `PRICING_OVERRIDE_PATH` JSON first (finance-owned, hot-reloaded
+on change), else the bundled LiteLLM table.
+
 ## Chat-to-AI (Phase 4)
 
 ```bash
