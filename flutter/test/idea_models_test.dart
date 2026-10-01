@@ -32,8 +32,22 @@ void main() {
     });
   });
 
-  group('allowedTransitions (client mirror)', () {
-    test('matches the server matrix for key moves', () {
+  group('freezed value semantics', () {
+    test('equal payloads compare equal, copyWith diverges', () {
+      final payload = {
+        'id': 'x',
+        'reference_code': 'IDEA-1',
+        'prompt_title': 'P',
+        'status': 'SPARK',
+      };
+      final a = IdeaSummary.fromJson(payload);
+      final b = IdeaSummary.fromJson(Map<String, dynamic>.from(payload));
+      expect(a, equals(b));
+      expect(a.copyWith(status: 'MAP'), isNot(equals(a)));
+    });
+  });
+
+  group('allowedTransitions (client mirror)', () {    test('matches the server matrix for key moves', () {
       expect(allowedTransitions['SPARK'], contains('SCOPE'));
       expect(allowedTransitions['SPARK'], isNot(contains('SHIP')));
       expect(allowedTransitions['SHIP'], contains('SCALE'));

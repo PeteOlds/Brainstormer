@@ -64,3 +64,21 @@ flutter build web --release
   1. `flutterfire configure`, 2. backend device-token table +
   `POST /api/v1/devices`, 3. route `NotificationService` through FCM
   (call sites already centralised).
+
+## Remote push provisioning (FCM, when credentials exist)
+
+1. Create the Firebase project; add Android + iOS + Web apps.
+2. Run `flutterfire configure` (writes `firebase_options.dart`,
+   `google-services.json`, `GoogleService-Info.plist`).
+3. Backend: add `device_tokens(user_id, platform, token, created_at)`
+   table + `POST /api/v1/devices` (authenticated, upsert by token) +
+   `DELETE /api/v1/devices/<token>`; send via FCM HTTP v1 with a
+   service-account key from env (never repo).
+4. App: initialise `FirebaseMessaging` in `NotificationService.init()`,
+   upload the token on login/refresh (`onTokenRefresh` too), route
+   foreground messages to the existing local-notifications channel
+   (identical UX on all platforms), deep-link `data.idea_id` to
+   `/ideas/detail`.
+5. APNs: upload the APNs auth key in Firebase console for iOS.
+6. Verify: extend the device CI job with a staging push asserting tray
+   receipt before release.

@@ -394,14 +394,21 @@ class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage>
   }
 
   Future<void> _postComment() async {
-    final repo = ref.read(ideasRepositoryProvider);
     final text = _commentDraft.text.trim();
     if (text.isEmpty) return;
     try {
-      await repo.postComment(widget.ideaId, text);
+      final applied = await ref
+          .read(ideasControllerProvider.notifier)
+          .postComment(widget.ideaId, text);
       _commentDraft.clear();
       ref.invalidate(
           _commentsProvider((id: widget.ideaId, phase: _phaseFilter)));
+      if (!applied && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Offline — comment queued, will retry.')),
+        );
+      }
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

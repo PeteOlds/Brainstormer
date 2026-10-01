@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/network/outbox.dart';
 import '../../core/providers.dart';
 import 'idea_models.dart';
 import 'ideas_repository.dart';
@@ -91,6 +92,8 @@ class IdeasController extends StateNotifier<IdeasState> {
         pages: result['pages'] as int,
         page: page ?? state.page,
       );
+      // Flush queued offline mutations once we know we're online.
+      await flushOutbox();
       if (!firstLoad && total > previousTotal) {
         // Digest: new ideas arrived since the last load.
         try {
@@ -112,13 +115,58 @@ class IdeasController extends StateNotifier<IdeasState> {
   }
 
   Future<void> vote(String id, int direction) async {
+    await _mutate(
+      method: 'POST',
+      path: '/api/v1/ideas/$id/vote',
+      body: {'direction': direction},
+      apply: () => _repo.vote(id, direction),
+    );
+  }
+
+  /// Runs a mutation, queueing it offline on transport failure.
+  /// Returns true when the server applied it now.
+  Future<bool> _mutate({
+    required String method,
+    required String path,
+    Map<String, dynamic>? body,
+    required Future<void> Function() apply,
+  }) async {
     try {
-      await _repo.vote(id, direction);
+      await apply();
       await load();
+      return true;
     } on ApiException catch (e) {
+      if (isNetworkFailure(e)) {
+        _ref.read(outboxProvider.notifier).enqueue(method, path, body);
+        state = state.copyWith(
+            error: 'Offline — change queued and will retry.');
+        return false;
+      }
       state = state.copyWith(error: e.message);
+      return false;
     }
   }
+
+  Future<bool> postComment(String id, String body,
+      {String? parentId}) async {
+    return _mutate(
+      method: 'POST',
+      path: '/api/v1/ideas/$id/comments',
+      body: {
+        'body': body,
+        if (parentId != null) 'parent_id': parentId,
+      },
+      apply: () async {
+        await _repo.postComment(id, body, parentId: parentId);
+      },
+    );
+  }
+
+  Future<int> flushOutbox() =>
+      _ref.read(outboxProvider.notifier).flush().then((n) async {
+        if (n > 0) await load();
+        return n;
+      });
 
   Future<bool> changeStatus(String id, String status) async {
     try {

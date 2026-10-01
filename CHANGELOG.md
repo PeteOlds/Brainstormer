@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.45.0] - 2026-10-01
+### Added
+- Phase 11 Flutter completion: freezed value semantics on all domain models (codegen, custom parsing preserved), offline mutation outbox (network failures queue, flush on reconnect, order-preserving), FCM provisioning runbook, Chrome device-CI job for the staging smoke test
+
 ## [0.44.0] - 2026-10-01
 ### Added
 - Phase 10 AI hardening: DLP masking (emails, phones, key shapes, JWTs) on every hosted prompt with count-only logging, explicit `queue` (1h Celery retry, visible) and `degrade` (local fallback model, logged) budget cutoffs, proxy-routed embeddings, finance-owned pricing overrides with hot reload, one-shot proxy DB init in compose

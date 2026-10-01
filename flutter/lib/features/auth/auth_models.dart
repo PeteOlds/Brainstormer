@@ -1,19 +1,21 @@
+import 'package:freezed_annotation/freezed_annotation.dart';
+
+part 'auth_models.freezed.dart';
+part 'auth_models.g.dart';
+
 /// Strict domain models for the auth boundary. Validated before any
 /// UI is built on them (backend contract first).
-class AuthUser {
-  AuthUser({
-    required this.id,
-    required this.email,
-    this.name,
-    required this.role,
-    this.canCreateIdeas = true,
-  });
+@freezed
+class AuthUser with _$AuthUser {
+  const AuthUser._();
 
-  final String id;
-  final String email;
-  final String? name;
-  final String role;
-  final bool canCreateIdeas;
+  const factory AuthUser({
+    required String id,
+    required String email,
+    String? name,
+    required String role,
+    @Default(true) bool canCreateIdeas,
+  }) = _AuthUser;
 
   bool get isAdmin => role == 'ADMIN';
 
@@ -34,16 +36,13 @@ class AuthUser {
       };
 }
 
-class AuthSession {
-  AuthSession({
-    required this.user,
-    required this.accessToken,
-    required this.refreshToken,
-  });
-
-  final AuthUser user;
-  final String accessToken;
-  final String refreshToken;
+@freezed
+class AuthSession with _$AuthSession {
+  const factory AuthSession({
+    required AuthUser user,
+    required String accessToken,
+    required String refreshToken,
+  }) = _AuthSession;
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     final userJson = json['user'];
@@ -58,16 +57,13 @@ class AuthSession {
   }
 }
 
-class InstanceSummary {
-  InstanceSummary({
-    required this.id,
-    required this.number,
-    required this.name,
-  });
-
-  final String id;
-  final int number;
-  final String name;
+@freezed
+class InstanceSummary with _$InstanceSummary {
+  const factory InstanceSummary({
+    required String id,
+    required int number,
+    required String name,
+  }) = _InstanceSummary;
 
   factory InstanceSummary.fromJson(Map<String, dynamic> json) =>
       InstanceSummary(

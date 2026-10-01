@@ -1,15 +1,16 @@
-class ChatTurnModel {
-  ChatTurnModel({
-    required this.id,
-    required this.role,
-    required this.kind,
-    required this.content,
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final String id;
-  final String role;
-  final String kind;
-  final String content;
+part 'chat_models.freezed.dart';
+part 'chat_models.g.dart';
+
+@freezed
+class ChatTurnModel with _$ChatTurnModel {
+  const factory ChatTurnModel({
+    required String id,
+    required String role,
+    required String kind,
+    required String content,
+  }) = _ChatTurnModel;
 
   factory ChatTurnModel.fromJson(Map<String, dynamic> json) => ChatTurnModel(
         id: json['id'].toString(),
@@ -19,11 +20,12 @@ class ChatTurnModel {
       );
 }
 
-class ChatSessionModel {
-  ChatSessionModel({required this.id, this.turns = const []});
-
-  final String id;
-  final List<ChatTurnModel> turns;
+@freezed
+class ChatSessionModel with _$ChatSessionModel {
+  const factory ChatSessionModel({
+    required String id,
+    @Default([]) List<ChatTurnModel> turns,
+  }) = _ChatSessionModel;
 
   factory ChatSessionModel.fromJson(Map<String, dynamic> json) =>
       ChatSessionModel(

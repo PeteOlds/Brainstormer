@@ -1,36 +1,29 @@
-/// Strict domain models for ideas, comments and action results.
-class IdeaSummary {
-  IdeaSummary({
-    required this.id,
-    required this.referenceCode,
-    required this.promptTitle,
-    this.summary,
-    required this.status,
-    this.promptConfigId,
-    this.createdById,
-    this.commentCount = 0,
-    this.upvotes = 0,
-    this.downvotes = 0,
-    this.netScore = 0,
-    this.userVote,
-    this.createdAt,
-    this.actionsRun = const [],
-  });
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-  final String id;
-  final String referenceCode;
-  final String promptTitle;
-  final String? summary;
-  final String status;
-  final String? promptConfigId;
-  final String? createdById;
-  final int commentCount;
-  final int upvotes;
-  final int downvotes;
-  final int netScore;
-  final int? userVote;
-  final String? createdAt;
-  final List<String> actionsRun;
+part 'idea_models.freezed.dart';
+part 'idea_models.g.dart';
+
+/// Strict domain models for ideas, comments and action results.
+/// @freezed supplies value equality/copyWith; parsing stays hand-written
+/// (null-tolerant backend contract) rather than generated.
+@freezed
+class IdeaSummary with _$IdeaSummary {
+  const factory IdeaSummary({
+    required String id,
+    required String referenceCode,
+    required String promptTitle,
+    String? summary,
+    required String status,
+    String? promptConfigId,
+    String? createdById,
+    @Default(0) int commentCount,
+    @Default(0) int upvotes,
+    @Default(0) int downvotes,
+    @Default(0) int netScore,
+    int? userVote,
+    String? createdAt,
+    @Default([]) List<String> actionsRun,
+  }) = _IdeaSummary;
 
   factory IdeaSummary.fromJson(Map<String, dynamic> json) => IdeaSummary(
         id: json['id'].toString(),
@@ -64,12 +57,13 @@ class IdeaSummary {
   }
 }
 
-class IdeaDetail {
-  IdeaDetail({required this.idea, this.actions = const [], this.editHistory = const []});
-
-  final IdeaSummary idea;
-  final List<ActionResult> actions;
-  final List<Map<String, dynamic>> editHistory;
+@freezed
+class IdeaDetail with _$IdeaDetail {
+  const factory IdeaDetail({
+    required IdeaSummary idea,
+    @Default([]) List<ActionResult> actions,
+    @Default([]) List<Map<String, dynamic>> editHistory,
+  }) = _IdeaDetail;
 
   factory IdeaDetail.fromJson(Map<String, dynamic> json) {
     final ideaJson = json['idea'];
@@ -88,20 +82,15 @@ class IdeaDetail {
   }
 }
 
-class ActionResult {
-  ActionResult({
-    required this.id,
-    required this.actionType,
-    this.version = 1,
-    this.isCurrent = true,
-    this.output,
-  });
-
-  final String id;
-  final String actionType;
-  final int version;
-  final bool isCurrent;
-  final Map<String, dynamic>? output;
+@freezed
+class ActionResult with _$ActionResult {
+  const factory ActionResult({
+    required String id,
+    required String actionType,
+    @Default(1) int version,
+    @Default(true) bool isCurrent,
+    Map<String, dynamic>? output,
+  }) = _ActionResult;
 
   factory ActionResult.fromJson(Map<String, dynamic> json) => ActionResult(
         id: json['id'].toString(),
@@ -112,26 +101,18 @@ class ActionResult {
       );
 }
 
-class IdeaComment {
-  IdeaComment({
-    required this.id,
-    required this.body,
-    this.author,
-    this.parentId,
-    this.phase,
-    this.isIgnored,
-    this.createdAt,
-    this.replies = const [],
-  });
-
-  final String id;
-  final String body;
-  final String? author;
-  final String? parentId;
-  final String? phase;
-  final bool? isIgnored;
-  final String? createdAt;
-  final List<IdeaComment> replies;
+@freezed
+class IdeaComment with _$IdeaComment {
+  const factory IdeaComment({
+    required String id,
+    required String body,
+    String? author,
+    String? parentId,
+    String? phase,
+    bool? isIgnored,
+    String? createdAt,
+    @Default([]) List<IdeaComment> replies,
+  }) = _IdeaComment;
 
   factory IdeaComment.fromJson(Map<String, dynamic> json) => IdeaComment(
         id: json['id'].toString(),

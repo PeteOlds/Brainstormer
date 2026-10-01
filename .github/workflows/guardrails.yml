@@ -37,3 +37,47 @@ jobs:
         working-directory: flutter
       - name: Backend suite with coverage gate
         run: pytest
+
+  flutter-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Start scratch backend
+        env:
+          FLASK_ENV: development
+          DATABASE_URL: sqlite:////tmp/itest.db
+          SECRET_KEY: ci-secret-key-min-32-chars-long-ok
+          JWT_SECRET_KEY: ci-jwt-secret-min-32-chars-long-ok
+          FERNET_KEY: c-xGdJoh9Ipwd5Fo2EF5ECcIR1QRGGPq8VPP9adzFLI=
+          APP_BASE_URL: http://127.0.0.1:8123
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -c "from app import create_app; from app.extensions import db; app = create_app('development'); app.app_context().push(); db.create_all()"
+          nohup python -c "
+          import asyncio
+          from hypercorn.asyncio import serve
+          from hypercorn.config import Config
+          from app import create_app
+          config = Config()
+          config.bind = ['127.0.0.1:8123']
+          asyncio.run(serve(create_app('development'), config))
+          " > /tmp/itest-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8123/api/health && break || sleep 4
+          done
+      - name: Flutter integration on Chrome
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: flutter
+      - run: >
+          flutter test integration_test/app_test.dart -d chrome
+          --dart-define=API_BASE_URL=http://127.0.0.1:8123
+        working-directory: flutter
