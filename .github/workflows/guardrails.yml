@@ -37,6 +37,7 @@ jobs:
         working-directory: flutter
       - name: Backend suite with coverage gate
         env:
+          DATABASE_URL: sqlite:////tmp/ci.db
           SECRET_KEY: ci-secret-key-min-32-chars-long-ok
           JWT_SECRET_KEY: ci-jwt-secret-min-32-chars-long-ok
           FERNET_KEY: c-xGdJoh9Ipwd5Fo2EF5ECcIR1QRGGPq8VPP9adzFLI=

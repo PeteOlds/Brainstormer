@@ -19,6 +19,7 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
       - name: Backup round-trip tests
         env:
+          DATABASE_URL: sqlite:////tmp/ci.db
           SECRET_KEY: drill-secret-key-min-32-chars-long
           JWT_SECRET_KEY: drill-jwt-secret-min-32-chars-long
           FERNET_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
