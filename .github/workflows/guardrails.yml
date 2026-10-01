@@ -31,6 +31,8 @@ jobs:
         with:
           flutter-version: "3.41.4"
           channel: stable
+      - run: flutter pub get
+        working-directory: flutter
       - run: flutter analyze --no-pub
         working-directory: flutter
       - run: flutter test --coverage
