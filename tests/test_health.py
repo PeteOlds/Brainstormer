@@ -11,6 +11,8 @@ def test_health_ok(client):
         res = client.get("/api/health")
     assert res.status_code == 200
     assert res.get_json()["data"]["status"] == "healthy"
+    # Golden rule: the build number is always available.
+    assert res.get_json()["data"]["version"]
 
 
 def test_health_degraded_without_redis(client):

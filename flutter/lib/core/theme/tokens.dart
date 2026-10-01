@@ -57,7 +57,7 @@ abstract final class AppText {
 /// Build version. Mirrors the backend VERSION file — bump together
 /// (golden rule: the build number is always available, shown in the
 /// footer of every screen).
-const String kAppVersion = '0.45.0';
+const String kAppVersion = '0.47.0';
 
 ThemeData buildTheme({required bool dark}) {
   final scheme = ColorScheme.fromSeed(

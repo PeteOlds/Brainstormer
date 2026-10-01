@@ -52,7 +52,7 @@ def check_database() -> bool:
 
 @bp.route("/api/health", methods=["GET"])
 def health():
-    """Liveness check - basic app health."""
+    """Liveness check - basic app health (includes build version)."""
     checks = {
         "database": check_database(),
         "redis": check_redis(),
@@ -61,7 +61,14 @@ def health():
     # Ollama check is async, do it separately for ready endpoint
     status = "healthy" if all(checks.values()) else "degraded"
     code = 200 if status == "healthy" else 503
-    return api_ok({"status": status, "checks": checks}, status_code=code)
+    return api_ok(
+        {
+            "status": status,
+            "checks": checks,
+            "version": current_app.config.get("VERSION", "dev"),
+        },
+        status_code=code,
+    )
 
 
 @bp.route("/api/ready", methods=["GET"])
