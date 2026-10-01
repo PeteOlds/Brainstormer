@@ -1898,6 +1898,7 @@ class TestHealthEndpoints:
         with (
             patch("app.routes.health.check_database", return_value=True),
             patch("app.routes.health.check_redis", return_value=True),
+            patch("app.routes.health.check_scheduler", return_value=True),
         ):
             resp = client.get("/api/health")
             assert resp.status_code == 200

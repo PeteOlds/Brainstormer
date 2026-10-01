@@ -88,8 +88,8 @@ jobs:
         # integration_test/ needs a device build (Chrome unavailable for
         # it on runners); run the identical file through the headless
         # test VM against the scratch backend started above.
-        run: |
-          cp flutter/integration_test/app_test.dart flutter/test/zz_it_smoke_test.dart
-          flutter test test/zz_it_smoke_test.dart --dart-define=API_BASE_URL=http://127.0.0.1:8123
-          rm flutter/test/zz_it_smoke_test.dart
         working-directory: flutter
+        run: |
+          cp integration_test/app_test.dart test/zz_it_smoke_test.dart
+          flutter test test/zz_it_smoke_test.dart --dart-define=API_BASE_URL=http://127.0.0.1:8123
+          rm test/zz_it_smoke_test.dart
