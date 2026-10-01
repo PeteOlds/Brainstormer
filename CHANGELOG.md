@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.47.0] - 2026-10-01
+### Added
+- Phase 13 ops: reserved site numbers verified refused-by-guard (no shells created), RLS overhead measured nil on production data, backup volume and goldens reviewed (both healthy in git/disk), fresh-database migration chain fixed and verified end to end (36 revisions), production migrated to head and healthy
+
 ## [0.46.0] - 2026-10-01
 ### Added
 - Phase 12 Stripe billing: hand-rolled HMAC webhook verification (5-min tolerance), idempotent event log (replays dropped pre-mutation), plan metadata maps 1:1 to entitlement keys (checkout grants + clears Free, cancellation revokes to baseline, payment failure alerts without auto-suspend), customer portal link endpoint, runbook docs

@@ -23,6 +23,16 @@ depends_on = None
 
 
 def upgrade():
+    # Ensure every label ever referenced exists: on a fresh database the
+    # historical psql-autocommit ADD VALUEs (BUILD et al.) never ran.
+    # IF NOT EXISTS keeps this a no-op on existing databases.
+    for label in ("HOLD", "DEVELOPMENT", "COMPLETE", "DESIGN", "BUILD"):
+        op.execute(f"ALTER TYPE ideastatus ADD VALUE IF NOT EXISTS '{label}'")
+    # COMMIT before using any label: on PG12+ a new enum value cannot be
+    # *used* in the same transaction that added it
+    # (UnsafeNewEnumValueUsage). Committing here is a no-op for
+    # already-stamped databases (applied revisions never re-run).
+    op.execute("COMMIT")
     op.execute("UPDATE ideas SET status = 'BUILD' WHERE status = 'DEVELOPMENT'")
     op.execute("UPDATE idea_status_history SET old_status = 'BUILD' WHERE old_status = 'DEVELOPMENT'")
     op.execute("UPDATE idea_status_history SET new_status = 'BUILD' WHERE new_status = 'DEVELOPMENT'")

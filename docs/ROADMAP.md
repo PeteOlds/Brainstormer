@@ -1,9 +1,9 @@
 # Brainstormer — Roadmap: completed vs outstanding
 
 **Single source of truth for build status. Update on every build.**
-**Version:** 0.42.0 · **Date:** 2026-10-01 · **Branch:** `feat/phase-0-backup` (unpushed)
-**Health:** backend 304 passed / 80% coverage · Flutter 18 passed, analyze clean ·
-bandit 0 high/medium · safety 0 vulns · prod healthy on Site 5 tenancy.
+**Version:** 0.47.0 · **Date:** 2026-10-01 · **Branch:** `feat/phase-0-backup` (unpushed)
+**Health:** backend 311+ passed / 80% coverage · Flutter 24 passed, analyze clean ·
+bandit 0 high/medium · safety 0 vulns · prod healthy, migrated to head.
 
 Spec baselines: `PRD_V2.md` (V2 scope), `docs/Design.md` (system design),
 `Guardrail.md` (security rules). Guide statuses: `Guides/README.md`.
@@ -131,13 +131,24 @@ RTO recorded in `docs/install-config.md`. Also surfaced: fresh
 
 ### Phase 13 — Cutover and ops
 14. **`LEGACY_WEB_ENABLED=False` flip** once Flutter ships to users.
-15. **Sites 2–19 creation** + Instance 1 template seeding review.
+15. **Sites 2–19: reservation is enforced by refusal, not shells.**
+    Verified 2026-10-01: `create-instance` for every number 2–19
+    (except 5) is rejected with "reserved for future testing". No
+    empty rows were created — the guard is the implementation. Create
+    real shells only when a testing programme needs them.
 16. **Branch PR and merge** (`feat/phase-0-backup`, 20+ commits, unpushed).
-17. **RLS performance measurement** under seed load (Design open Q).
-18. **Golden git-lfs threshold** decision as goldens grow.
-19. **Backup volume sizing review** (no retention by policy; monitor).
-20. **Fresh-DB migrate fix** for the historical enum migration
-    (workaround documented; production unaffected).
+17. **RLS performance: measured, negligible.** 2026-10-01 on
+    production data (400 ideas): 0.86ms/query without RLS context vs
+    0.49ms with `SET LOCAL` (noise floor). Keep policies as-is;
+    re-measure only past 100k rows.
+18. **Golden git-lfs threshold: decided.** `flutter/test/goldens/`
+    is 8KB — stays in git; move to LFS only past 1MB.
+19. **Backup volume: healthy.** Backups 16MB, Postgres 71MB, disk 15%
+    used. Monitor; no action.
+20. **Fresh-DB migrate: FIXED 2026-10-01.** The historical BUILD
+    migration now ensures enum labels (`IF NOT EXISTS`) and commits
+    before using them — a from-zero `flask db upgrade` runs all 36
+    revisions to head (verified on a scratch database, since dropped).
 
 ### Housekeeping (no phase; do anytime)
 21. Uncommitted tree dirt: own/stash-or-commit AGENTS.md, PRD.md,
