@@ -1302,6 +1302,68 @@ Add a Secondary Action to create a build a Goto To Market Strategy for an Idea, 
 
 ### Add Ideas manually
 
-Add the ability to add ideas manually
-The format should be the same as existing ideas
-The functionality should be available to all users by default - but there should be an option on each user to disable that functionality just for them
+✅ **Implemented in v0.21.0** — Users can create ideas manually via the dashboard.
+The format matches existing ideas (reference code, prompt_title, raw_content, structured_content optional, status=NEW).
+Available to all users by default, with a per-user toggle in account settings to disable.
+API: `POST /api/v1/ideas` — requires `can_create_ideas=true` user preference.
+UI: Dashboard "Create Idea" button opens a modal with title, content, and optional structured fields (elevator_pitch, target_audience, core_value_proposition, monetization_strategy).
+On success, the new idea appears in the list and opens in the detail modal.
+
+
+
+----------
+
+##### System Settings
+
+✅ **Resolved in v0.22.0** — was the same blueprint-prefix 404 as
+below; `/admin/settings` renders since the split.
+
+
+
+
+
+
+#### Up Next
+
+
+#### Secondary Actions
+#### Refine Ideas
+✅ **Implemented in v0.22.0** — Refine with no comments and <3 prior
+actions returns 409 `CONFIRMATION_REQUIRED`; the UI shows a reusable
+Yes/No modal.
+
+#### PRD
+✅ **Implemented in v0.22.0** — same confirmation flow as Refine.
+
+
+### System Options
+
+
+
+
+
+#### Admin Dashboard
+#### Ideas by Status
+✅ **Implemented** — dashboard breakdown rows deep-link to filtered
+views (`/ideas?status&prompt&model`, `?run_status&model` on activity);
+status panels show all records of that status.
+
+
+#### General Options
+
+##### Pagination
+✅ **Implemented** — list views paginate at 20 items with standard
+page controls (ideas, activity runs).
+
+
+##### Clean up
+✅ **Resolved 2026-10-01** — no duplicate directories exist; the only
+project root is `brainstormer/`. Documentation status is tracked in
+`docs/ROADMAP.md`.
+
+
+## Bugs
+✅ **Resolved in v0.22.0** — the admin 404s below were the blueprint
+prefix bug fixed by the `admin_pages_bp` / `admin_api_bp` split.
+(`GET /admin/settings`, `/admin/users`, `/admin/prompts`,
+`/admin/activity` all render; APIs live under `/api/v1/...`.)
