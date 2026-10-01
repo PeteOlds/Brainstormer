@@ -59,7 +59,7 @@ void main() {
       final service = NotificationService(
           delegate: (t, b) async => seen.add([t, b]));
       await service.init();
-      await service.showChatReply('${'x' * 200}');
+      await service.showChatReply('x' * 200);
       expect(seen.single[1].endsWith('…'), isTrue);
     });
   });

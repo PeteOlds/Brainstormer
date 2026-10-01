@@ -18,17 +18,19 @@ class IdeasRepository {
     String? model,
   }) async {
     final trimmedSearch = (search ?? '').trim();
+    final query = <String, String>{
+      'page': '$page',
+      'limit': '$limit',
+      'status': status,
+      'sort_by': sortBy,
+    };
+    if (trimmedSearch.isNotEmpty) query['search'] = trimmedSearch;
+    final prompt = promptConfigId;
+    if (prompt != null) query['prompt_config_id'] = prompt;
+    final modelName = model;
+    if (modelName != null) query['model'] = modelName;
     final data = await api.get('/api/v1/ideas',
-        query: {
-          'page': '$page',
-          'limit': '$limit',
-          'status': status,
-          'sort_by': sortBy,
-          if (trimmedSearch.isNotEmpty) 'search': trimmedSearch,
-          if (promptConfigId case final p?) 'prompt_config_id': p,
-          if (model case final m?) 'model': m,
-        },
-        cacheFor: const Duration(seconds: 60));
+        query: query, cacheFor: const Duration(seconds: 60));
     final map = data as Map<String, dynamic>;
     return {
       'ideas': [
@@ -95,10 +97,11 @@ class IdeasRepository {
 
   Future<IdeaComment> postComment(String id, String body,
       {String? parentId}) async {
-    final data = await api.post('/api/v1/ideas/$id/comments', body: {
-      'body': body,
-      if (parentId case final p?) 'parent_id': p,
-    });
+    final payload = <String, dynamic>{'body': body};
+    final parent = parentId;
+    if (parent != null) payload['parent_id'] = parent;
+    final data =
+        await api.post('/api/v1/ideas/$id/comments', body: payload);
     final map = data as Map<String, dynamic>;
     final commentJson = (map['comment'] as Map?) ?? map;
     return IdeaComment.fromJson(

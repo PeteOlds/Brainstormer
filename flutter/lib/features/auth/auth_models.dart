@@ -27,6 +27,7 @@ class AuthUser with _$AuthUser {
         canCreateIdeas: json['can_create_ideas'] as bool? ?? true,
       );
 
+  @override
   Map<String, dynamic> toJson() => {
         'id': id,
         'email': email,

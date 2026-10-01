@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:brainstormer/core/network/api_client.dart';
-import 'package:brainstormer/core/network/auth_store.dart';
 import 'package:brainstormer/core/network/outbox.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

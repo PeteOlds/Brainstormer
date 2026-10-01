@@ -84,7 +84,12 @@ jobs:
           cache: true
       - run: flutter pub get
         working-directory: flutter
-      - run: >
-          flutter test integration_test/app_test.dart -d chrome
-          --dart-define=API_BASE_URL=http://127.0.0.1:8123
+      - name: Flutter integration smoke (headless)
+        # integration_test/ needs a device build (Chrome unavailable for
+        # it on runners); run the identical file through the headless
+        # test VM against the scratch backend started above.
+        run: |
+          cp flutter/integration_test/app_test.dart flutter/test/zz_it_smoke_test.dart
+          flutter test test/zz_it_smoke_test.dart --dart-define=API_BASE_URL=http://127.0.0.1:8123
+          rm flutter/test/zz_it_smoke_test.dart
         working-directory: flutter

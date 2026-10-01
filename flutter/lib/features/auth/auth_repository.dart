@@ -22,12 +22,14 @@ class AuthRepository {
 
   Future<AuthSession> login(String email, String password,
       {bool remember = false, String? instanceId}) async {
-    final data = await api.post('/api/v1/login', body: {
+    final payload = <String, dynamic>{
       'email': email,
       'password': password,
       'remember': remember,
-      if (instanceId case final i?) 'instance_id': i,
-    }) as Map<String, dynamic>;
+    };
+    if (instanceId != null) payload['instance_id'] = instanceId;
+    final data =
+        await api.post('/api/v1/login', body: payload) as Map<String, dynamic>;
     return _save(data, instanceId);
   }
 

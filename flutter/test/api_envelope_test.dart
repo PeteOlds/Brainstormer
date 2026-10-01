@@ -52,17 +52,19 @@ http.Response _ok(Map<String, dynamic> data) => http.Response(
       headers: {'content-type': 'application/json'},
     );
 
-http.Response _fail(String message, int status, {String? code}) =>
-    http.Response(
-      jsonEncode({
-        'success': false,
-        'error': true,
-        'message': message,
-        if (code != null) 'error_code': code,
-      }),
-      status,
-      headers: {'content-type': 'application/json'},
-    );
+http.Response _fail(String message, int status, {String? code}) {
+  final body = <String, dynamic>{
+    'success': false,
+    'error': true,
+    'message': message,
+  };
+  if (code != null) body['error_code'] = code;
+  return http.Response(
+    jsonEncode(body),
+    status,
+    headers: {'content-type': 'application/json'},
+  );
+}
 
 void main() {
   group('ApiClient envelope', () {

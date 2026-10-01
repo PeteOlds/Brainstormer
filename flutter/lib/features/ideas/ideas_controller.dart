@@ -149,13 +149,13 @@ class IdeasController extends StateNotifier<IdeasState> {
 
   Future<bool> postComment(String id, String body,
       {String? parentId}) async {
+    final payload = <String, dynamic>{'body': body};
+    final parent = parentId;
+    if (parent != null) payload['parent_id'] = parent;
     return _mutate(
       method: 'POST',
       path: '/api/v1/ideas/$id/comments',
-      body: {
-        'body': body,
-        if (parentId != null) 'parent_id': parentId,
-      },
+      body: payload,
       apply: () async {
         await _repo.postComment(id, body, parentId: parentId);
       },
