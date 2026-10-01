@@ -19,6 +19,7 @@ APPROVED = {
     "app/services/embedding_service.py",  # httpx only to local Ollama
     "app/routes/health.py",  # httpx only to local Ollama readiness probe
     "app/routes/prompts.py",  # httpx only to local Ollama test-stream
+    "app/routes/billing.py",  # httpx only to api.stripe.com (portal link)
 }
 
 PATTERN = re.compile(

@@ -36,6 +36,7 @@ from app.models import (
     SlackEvent,
     SlackPost,
     StageAIConfig,
+    StripeEvent,
     SystemSettings,
     TenantOAuthConfig,
     User,
@@ -73,6 +74,7 @@ EXPORT_TABLES: list[Any] = [
     ChatSession,
     ChatTurn,
     AISpendLedger,
+    StripeEvent,
 ]
 
 

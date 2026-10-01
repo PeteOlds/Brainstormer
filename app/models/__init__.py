@@ -39,6 +39,7 @@ from .roles import (
 from .secondary_action import ActionType, SecondaryActionResult
 from .slack import SlackEvent, SlackPost
 from .stage_config import STAGES, StageAIConfig, resolve_stage
+from .stripe_event import StripeEvent, mark_stripe_event_seen
 from .status_history import IdeaStatusHistory
 from .system_settings import SystemSettings
 from .types import GUID
@@ -97,4 +98,6 @@ __all__ = [
     "can_edit_idea",
     "has_permission",
     "role_permissions",
+    "StripeEvent",
+    "mark_stripe_event_seen",
 ]

@@ -96,6 +96,12 @@ class Config:
     LITELLM_PROXY_URL = get_env("LITELLM_PROXY_URL", "http://litellm:4000")
     LITELLM_MASTER_KEY = get_env("LITELLM_MASTER_KEY", "")
 
+    # Stripe billing (Phase 12): webhook signing secret authenticates
+    # ingress; empty disables the endpoint with a clear error. The API
+    # secret key is only needed for the customer portal link.
+    STRIPE_WEBHOOK_SECRET = get_env("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_SECRET_KEY = get_env("STRIPE_SECRET_KEY", "")
+
     # Legacy Jinja web UI (Phase 7): True keeps serving it; False makes
     # the pages blueprint answer 410 pointing at the Flutter client.
     LEGACY_WEB_ENABLED = get_env("LEGACY_WEB_ENABLED", "True") == "True"

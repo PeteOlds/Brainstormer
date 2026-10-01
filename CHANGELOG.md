@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.46.0] - 2026-10-01
+### Added
+- Phase 12 Stripe billing: hand-rolled HMAC webhook verification (5-min tolerance), idempotent event log (replays dropped pre-mutation), plan metadata maps 1:1 to entitlement keys (checkout grants + clears Free, cancellation revokes to baseline, payment failure alerts without auto-suspend), customer portal link endpoint, runbook docs
+
 ## [0.45.0] - 2026-10-01
 ### Added
 - Phase 11 Flutter completion: freezed value semantics on all domain models (codegen, custom parsing preserved), offline mutation outbox (network failures queue, flush on reconnect, order-preserving), FCM provisioning runbook, Chrome device-CI job for the staging smoke test

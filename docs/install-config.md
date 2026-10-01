@@ -237,6 +237,22 @@ later). Free instances baseline to `core`; paid to everything.
 Suspended instances (`status != active`) are refused everywhere.
 Start/End dates are recorded and surfaced, enforcement TBD.
 
+## Billing on Stripe (Phase 12)
+
+Plans map 1:1 onto entitlement keys via checkout metadata
+(`instance_id`, comma-separated `entitlements`). Test mode first.
+
+```bash
+# STRIPE_WEBHOOK_SECRET=whsec_... STRIPE_SECRET_KEY=sk_... (env only)
+# Register this URL in the Stripe dashboard (test mode):
+#   POST https://<host>/api/v1/billing/webhook
+# checkout.session.completed -> grants keys, clears Free
+# customer.subscription.deleted -> revokes to Free baseline
+# invoice.payment_failed -> alert log only (no auto-suspend, human decides)
+# Replay safety: provider event IDs dedupe before any mutation.
+# Portal: POST /api/v1/billing/portal {"customer": "cus_..."} (needs secret key)
+```
+
 ## Roles and instance lifecycle enforcement (Phase 9)
 
 Membership roles: `USER`, `DEVELOPER` (+ run actions, discovery),
