@@ -137,12 +137,19 @@ class EmbeddingService:
             return False
 
     def cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
-        """Compute cosine similarity between two vectors."""
-        from pgvector import Vector
+        """Compute cosine similarity between two vectors (pure Python).
 
-        v1 = Vector(vec1)
-        v2 = Vector(vec2)
-        return float(v1.cosine_similarity(v2))
+        (Previously via pgvector's Vector, whose API no longer exposes
+        cosine_similarity — this path crashed on every comparison.)
+        """
+        import math
+
+        dot = sum(a * b for a, b in zip(vec1, vec2))
+        norm1 = math.sqrt(sum(a * a for a in vec1))
+        norm2 = math.sqrt(sum(b * b for b in vec2))
+        if not norm1 or not norm2:
+            return 0.0
+        return dot / (norm1 * norm2)
 
     def find_similar_to_embedding(
         self,
