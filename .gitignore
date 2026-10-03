@@ -42,6 +42,9 @@ Brainstormer/
 # Never publish upstream docs
 BEST_PRACTICE_UPDATES.md
 
+# Manual test plan — contains test credentials, never commit
+MANUAL_TEST_PLAN.md
+
 # Obsidian vault state
 .obsidian/
 backups/

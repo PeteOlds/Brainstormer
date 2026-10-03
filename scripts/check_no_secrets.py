@@ -8,13 +8,26 @@ import subprocess
 import sys
 
 PATTERNS = {
-    "fernet_key": re.compile(r"FERNET_KEY\s*=\s*['\"]?[A-Za-z0-9_-]{32,}"),
-    "jwt_secret": re.compile(r"JWT_SECRET_KEY\s*=\s*['\"]?[A-Za-z0-9_.-]{24,}"),
+    # Separator matches both `.env` (`KEY=value`) and YAML (`KEY: value`).
+    # The old regexes only matched `=`, so a key hardcoded in a workflow
+    # (e.g. `FERNET_KEY: <key>`) slipped through — the GitGuardian finding.
+    "fernet_key": re.compile(r"FERNET_KEY\s*[:=]\s*['\"]?[A-Za-z0-9_+/=-]{40,}"),
+    "jwt_secret": re.compile(
+        r"JWT_SECRET_KEY\s*[:=]\s*['\"]?[A-Za-z0-9_.+/-]{24,}"
+    ),
+    "secret_key": re.compile(
+        r"(?<!JWT_)(?<!FERNET_)SECRET_KEY\s*[:=]\s*['\"]?[A-Za-z0-9_.+/-]{24,}"
+    ),
     "openai_key": re.compile(
         r"sk-(live|test|proj)-[A-Za-z0-9]{10,}|sk-[A-Za-z0-9]{20,}"
     ),
     "private_key": re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     "slack_token": re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"),
+    "slack_app_token": re.compile(r"xapp-[A-Za-z0-9-]{10,}"),
+    "github_token": re.compile(
+        r"gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}"
+    ),
+    "aws_access_key": re.compile(r"AKIA[0-9A-Z]{16}"),
 }
 
 SKIP_DIRS = ("venv/", ".git/", "__pycache__/", ".mypy_cache/", ".pytest_cache/")
@@ -49,6 +62,10 @@ for path in tracked_files():
                     "xxx",
                     "test-secret",
                     "sk-test",
+                    "change-in-production",
+                    "dev-secret",
+                    "dev-jwt",
+                    "dev-fernet",
                 )
             ):
                 continue

@@ -1,0 +1,21 @@
+# Local secret scanning before every commit.
+# Enable once per clone:  pip install pre-commit && pre-commit install
+#
+# The GitGuardian incident (a Fernet key hardcoded in a workflow) was not
+# caught because the repo scanner only matched `KEY=value`, not YAML
+# `KEY: value`. check_no_secrets.py now handles both; gitleaks adds
+# entropy-based detection as a second layer.
+repos:
+  - repo: local
+    hooks:
+      - id: check-no-secrets
+        name: check for committed secrets
+        entry: python scripts/check_no_secrets.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks

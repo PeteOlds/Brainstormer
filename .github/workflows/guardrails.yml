@@ -37,12 +37,16 @@ jobs:
         working-directory: flutter
       - run: flutter test --coverage
         working-directory: flutter
+      - name: Generate ephemeral test secrets
+        run: |
+          {
+            echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+            echo "JWT_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+            echo "FERNET_KEY=$(python -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+          } >> "$GITHUB_ENV"
       - name: Backend suite with coverage gate
         env:
           DATABASE_URL: sqlite:////tmp/ci.db
-          SECRET_KEY: ci-secret-key-min-32-chars-long-ok
-          JWT_SECRET_KEY: ci-jwt-secret-min-32-chars-long-ok
-          FERNET_KEY: c-xGdJoh9Ipwd5Fo2EF5ECcIR1QRGGPq8VPP9adzFLI=
         run: pytest
 
   flutter-integration:
@@ -52,13 +56,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
+      - name: Generate ephemeral test secrets
+        run: |
+          {
+            echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+            echo "JWT_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+            echo "FERNET_KEY=$(python -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+          } >> "$GITHUB_ENV"
       - name: Start scratch backend
         env:
           FLASK_ENV: development
           DATABASE_URL: sqlite:////tmp/itest.db
-          SECRET_KEY: ci-secret-key-min-32-chars-long-ok
-          JWT_SECRET_KEY: ci-jwt-secret-min-32-chars-long-ok
-          FERNET_KEY: c-xGdJoh9Ipwd5Fo2EF5ECcIR1QRGGPq8VPP9adzFLI=
           APP_BASE_URL: http://127.0.0.1:8123
         run: |
           python -m pip install --upgrade pip

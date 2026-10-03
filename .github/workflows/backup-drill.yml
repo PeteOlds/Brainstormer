@@ -17,21 +17,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
+      - name: Generate ephemeral test secrets
+        run: |
+          {
+            echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+            echo "JWT_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+            echo "FERNET_KEY=$(python -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+          } >> "$GITHUB_ENV"
       - name: Backup round-trip tests
         env:
           DATABASE_URL: sqlite:////tmp/ci.db
-          SECRET_KEY: drill-secret-key-min-32-chars-long
-          JWT_SECRET_KEY: drill-jwt-secret-min-32-chars-long
-          FERNET_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         run: pytest tests/integration/test_backup.py -q
       - name: CLI drill on a scratch SQLite database
         env:
           FLASK_APP: wsgi.py
           FLASK_ENV: development
           DATABASE_URL: sqlite:////tmp/drill.db
-          SECRET_KEY: drill-secret-key-min-32-chars-long
-          JWT_SECRET_KEY: drill-jwt-secret-min-32-chars-long
-          FERNET_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
         run: |
           rm -f /tmp/drill.db /tmp/site-a.json /tmp/site-b.json
           python -c "from wsgi import app; from app.extensions import db; app.app_context().push(); db.create_all()"
