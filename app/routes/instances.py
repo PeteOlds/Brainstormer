@@ -107,7 +107,12 @@ def list_ai_configs(user, instance_id):
 @token_required
 def upsert_ai_config(user, instance_id):
     """Create or update one provider config. `key` is write-only."""
-    from app.models import CUTOFF_BEHAVIOURS, PROVIDERS, InstanceAIConfig
+    from app.models import (
+        CUTOFF_BEHAVIOURS,
+        OPENCODE_WORKSPACES,
+        PROVIDERS,
+        InstanceAIConfig,
+    )
 
     instance, err = _require_instance_admin(user, instance_id)
     if err:
@@ -189,6 +194,20 @@ def upsert_ai_config(user, instance_id):
         if not isinstance(data["chat_enabled"], bool):
             return api_error("chat_enabled must be a boolean.", status_code=400)
         config.chat_enabled = data["chat_enabled"]
+    if "opencode_workspace" in data:
+        # Repo mode grants filesystem access, so only a Site Admin may
+        # change it. Instance admins can read it (to_dict) but not write.
+        if not is_site_admin(user):
+            return api_error(
+                "opencode_workspace can only be changed by a Site Admin.",
+                status_code=403,
+            )
+        if data["opencode_workspace"] not in OPENCODE_WORKSPACES:
+            return api_error(
+                f"opencode_workspace must be one of {', '.join(OPENCODE_WORKSPACES)}.",
+                status_code=400,
+            )
+        config.opencode_workspace = data["opencode_workspace"]
     if "use_proxy" in data:
         if not isinstance(data["use_proxy"], bool):
             return api_error("use_proxy must be a boolean.", status_code=400)

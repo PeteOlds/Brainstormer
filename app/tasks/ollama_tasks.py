@@ -12,7 +12,7 @@ from app.models import Idea, IdeaStatus, PromptConfig, SecondaryActionResult
 from app.schemas.ollama_schemas import validate_ollama_output
 from app.services.ollama_client import OllamaClient, OllamaError
 from app.services.prompt_templates import get_base_prompt, get_prompt_template
-from app.tasks import BaseTask, celery
+from app.tasks import BaseTask, celery, enqueue_generation
 from app.utils.crypto import decrypt
 
 logger = structlog.get_logger()
@@ -986,10 +986,14 @@ def check_due_prompts():
         )
         db.session.add(run)
         db.session.commit()
-        job = generate_idea.delay(
-            str(prompt.id),
-            run_id=str(run.id),
-            instance_id=str(prompt.instance_id) if prompt.instance_id else None,
+        job = enqueue_generation(
+            generate_idea,
+            [str(prompt.id)],
+            {
+                "run_id": str(run.id),
+                "instance_id": str(prompt.instance_id) if prompt.instance_id else None,
+            },
+            prompt.provider,
         )
         run.job_id = job.id
         db.session.commit()

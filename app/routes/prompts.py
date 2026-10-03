@@ -549,6 +549,7 @@ def run_prompt_now(user, prompt_id):
         return api_error("Invalid count: must be between 1 and 5", status_code=400)
 
     # Record the runs first so the UI can show them as pending immediately.
+    from app.tasks import enqueue_generation
     from app.tasks.ollama_tasks import generate_idea
 
     runs = []
@@ -558,10 +559,14 @@ def run_prompt_now(user, prompt_id):
         stamp(run)
         db.session.add(run)
         db.session.commit()
-        job = generate_idea.delay(
-            str(prompt.id),
-            run_id=str(run.id),
-            instance_id=str(instance_id) if instance_id else None,
+        job = enqueue_generation(
+            generate_idea,
+            [str(prompt.id)],
+            {
+                "run_id": str(run.id),
+                "instance_id": str(instance_id) if instance_id else None,
+            },
+            prompt.provider,
         )
         run.job_id = job.id
         db.session.commit()

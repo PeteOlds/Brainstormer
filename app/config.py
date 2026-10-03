@@ -36,6 +36,19 @@ class Config:
     OLLAMA_BASE_URL = get_env("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_TIMEOUT = int(get_env("OLLAMA_TIMEOUT", "120"))
 
+    # OpenCode provider (shared server identity; no per-instance key).
+    # OPENCODE_BIN is the CLI binary; OPENCODE_WORKSPACE_DIR is the repo
+    # used only in the Site-Admin "repo" workspace mode. Agentic runs get
+    # a longer ceiling than Ollama generation.
+    OPENCODE_BIN = get_env("OPENCODE_BIN", "opencode")
+    OPENCODE_WORKSPACE_DIR = get_env("OPENCODE_WORKSPACE_DIR", "")
+    OPENCODE_TIMEOUT = int(get_env("OPENCODE_TIMEOUT", "1500"))
+    OPENCODE_SOFT_TIME_LIMIT = int(get_env("OPENCODE_SOFT_TIME_LIMIT", "1560"))
+    OPENCODE_TIME_LIMIT = int(get_env("OPENCODE_TIME_LIMIT", "1620"))
+    # Read-only agent for sandbox runs. Empty string disables `--agent`
+    # (required for OpenCode's free-tier models, which reject it).
+    OPENCODE_SANDBOX_AGENT = get_env("OPENCODE_SANDBOX_AGENT", "brainstormer-sandbox")
+
     # App / Slack
     APP_BASE_URL = get_env("APP_BASE_URL", "http://localhost:8000")
     SLACK_BOT_TOKEN = get_env("SLACK_BOT_TOKEN", "")

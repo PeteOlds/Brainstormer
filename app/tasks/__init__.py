@@ -32,6 +32,28 @@ class BaseTask(Task):
         logger.warning("task_retry", task_id=task_id, task_name=self.name, attempt=self.request.retries, exc_info=exc)
 
 
+def enqueue_generation(task, args, kwargs, provider):
+    """Enqueue a generation task on the right queue.
+
+    Ollama prompts keep the legacy ``.delay()`` path (static task route
+    -> ``ollama`` queue), so existing mocks stay valid. OpenCode runs go
+    to a dedicated serial ``opencode`` queue with longer time limits.
+    """
+    if (provider or "").lower() != "opencode":
+        return task.delay(*args, **kwargs)
+    from flask import current_app
+
+    options = {"queue": "opencode", "args": args, "kwargs": kwargs}
+    try:
+        options["soft_time_limit"] = current_app.config.get(
+            "OPENCODE_SOFT_TIME_LIMIT", 1560
+        )
+        options["time_limit"] = current_app.config.get("OPENCODE_TIME_LIMIT", 1620)
+    except RuntimeError:
+        pass
+    return task.apply_async(**options)
+
+
 def init_celery(app):
     """Initialize Celery with the Flask app."""
     # Stashed for BaseTask.__call__ so workers run tasks inside app context.

@@ -106,6 +106,32 @@ services:
     networks:
       - brainstormer-network
 
+  worker-opencode:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    command: celery -A app.tasks worker -Q opencode -c 1 --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://app:${DB_PASSWORD:-devpassword}@postgres:5432/brainstormer
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-jwt-secret-key-change-in-production}
+      - FERNET_KEY=${FERNET_KEY:-dev-fernet-key-change-in-production==}
+      - FLASK_ENV=development
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - OPENCODE_BIN=${OPENCODE_BIN:-opencode}
+      - OPENCODE_WORKSPACE_DIR=${OPENCODE_WORKSPACE_DIR:-}
+      - OPENCODE_SANDBOX_AGENT=${OPENCODE_SANDBOX_AGENT:-brainstormer-sandbox}
+    volumes:
+      - .:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - brainstormer-network
+
   worker-default:
     build:
       context: .

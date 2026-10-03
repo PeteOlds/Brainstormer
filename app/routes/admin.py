@@ -43,7 +43,7 @@ admin_api_bp = Blueprint("admin_api", __name__)
 
 def _queue_depths():
     """Redis list lengths for the celery queues (instant, no worker needed)."""
-    depths = {"ollama": None, "default": None}
+    depths = {"ollama": None, "opencode": None, "default": None}
     try:
         redis_client = current_app.extensions.get("redis_client")
         if redis_client is not None:

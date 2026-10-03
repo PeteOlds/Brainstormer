@@ -410,7 +410,11 @@ def generate_for_prompt(
         finally:
             pass
     config = get_provider_config(prompt.instance_id, provider)
-    if config is None or not config.api_key:
+    if provider == "opencode":
+        # Shared server identity: no per-instance key. Config is optional
+        # (workspace mode + budget); entitlement and DLP still apply.
+        pass
+    elif config is None or not config.api_key:
         raise ProviderError(
             f"No API key configured for provider '{provider}' on this instance.",
             retryable=False,
@@ -426,7 +430,11 @@ def generate_for_prompt(
     except BudgetExhausted as exc:
         # Degrade is explicit per-instance choice: answer quality changes
         # are logged loudly, never silently.
-        if (config.cutoff_behaviour or "refuse") == "degrade" and config.degrade_model:
+        if (
+            config is not None
+            and (config.cutoff_behaviour or "refuse") == "degrade"
+            and config.degrade_model
+        ):
             from app.services.ollama_client import OllamaClient as _OllamaClient
 
             logger.warning(
@@ -475,6 +483,20 @@ def generate_for_prompt(
             virtual_key=config.virtual_key,
             timeout=timeout,
             json_mode=json_mode,
+        )
+    elif provider == "opencode":
+        # Agentic runs get their own (longer) ceiling from config; the
+        # task-level timeout passed in is sized for local Ollama.
+        from app.services.opencode_backend import opencode_generate
+
+        result = opencode_generate(
+            model,
+            prompt_text,
+            system=system,
+            options=options,
+            timeout=None,
+            json_mode=json_mode,
+            workspace=(config.opencode_workspace if config else "sandbox") or "sandbox",
         )
     else:
         result = _litellm_generate(

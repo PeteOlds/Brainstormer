@@ -93,41 +93,50 @@ def ready():
     
     # Get queue depths from Celery
     queue_depth_ollama = 0
+    queue_depth_opencode = 0
     queue_depth_default = 0
     workers_ollama = 0
+    workers_opencode = 0
     workers_default = 0
-    
+
     try:
         from app.tasks import celery
         inspect = celery.control.inspect()
         active = inspect.active() or {}
         reserved = inspect.reserved() or {}
-        
+
         for worker, tasks in active.items():
-            if "ollama" in worker:
+            if "opencode" in worker:
+                workers_opencode += 1
+                queue_depth_opencode += len(tasks)
+            elif "ollama" in worker:
                 workers_ollama += 1
                 queue_depth_ollama += len(tasks)
             else:
                 workers_default += 1
                 queue_depth_default += len(tasks)
-        
+
         for worker, tasks in reserved.items():
-            if "ollama" in worker:
+            if "opencode" in worker:
+                queue_depth_opencode += len(tasks)
+            elif "ollama" in worker:
                 queue_depth_ollama += len(tasks)
             else:
                 workers_default += 1
                 queue_depth_default += len(tasks)
     except Exception:
         pass
-    
+
     status = "ready" if all(checks.values()) else "not ready"
     code = 200 if status == "ready" else 503
-    
+
     return api_ok({
         "status": status,
         "checks": checks,
         "queue_depth_ollama": queue_depth_ollama,
+        "queue_depth_opencode": queue_depth_opencode,
         "queue_depth_default": queue_depth_default,
         "workers_ollama": workers_ollama,
+        "workers_opencode": workers_opencode,
         "workers_default": workers_default,
     }, status_code=code)

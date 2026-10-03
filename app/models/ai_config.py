@@ -12,12 +12,17 @@ from app.extensions import db
 from app.models.types import GUID
 from app.utils.crypto import decrypt, encrypt
 
-PROVIDERS = ("ollama", "openai", "anthropic", "gemini")
+PROVIDERS = ("ollama", "openai", "anthropic", "gemini", "opencode")
 
 # Refuse fails fast. Queue retries the Celery task later (explicit
 # per-instance choice, visible in the run). Degrade falls back to a
 # local model (explicit choice; quality changes are logged, never silent).
 CUTOFF_BEHAVIOURS = ("refuse", "queue", "degrade")
+
+# OpenCode runs use a shared server identity (no per-instance key).
+# Sandbox (default) runs in a throwaway empty dir with a restricted
+# agent; repo mode grants workspace access and is Site-Admin only.
+OPENCODE_WORKSPACES = ("sandbox", "repo")
 
 
 class InstanceAIConfig(db.Model):
@@ -41,6 +46,9 @@ class InstanceAIConfig(db.Model):
     cutoff_behaviour = db.Column(db.String(20), default="refuse", nullable=False)
     degrade_model = db.Column(db.String(100), nullable=True)
     chat_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    # OpenCode only: "sandbox" (empty scratch dir, restricted agent) or
+    # "repo" (workspace access). Site-Admin write-only.
+    opencode_workspace = db.Column(db.String(20), default="sandbox", nullable=False)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -92,6 +100,7 @@ class InstanceAIConfig(db.Model):
             "cutoff_behaviour": self.cutoff_behaviour,
             "degrade_model": self.degrade_model,
             "chat_enabled": self.chat_enabled,
+            "opencode_workspace": self.opencode_workspace or "sandbox",
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -567,6 +567,7 @@ def run_action(user, idea_id):
     db.session.commit()
 
     # Enqueue action task
+    from app.tasks import enqueue_generation
     from app.tasks.ollama_tasks import run_secondary_action
 
     extra = {}
@@ -576,12 +577,12 @@ def run_action(user, idea_id):
         extra["skills"] = skills
     if guidelines:
         extra["guidelines"] = guidelines
-    job = run_secondary_action.delay(
-        str(idea_id),
-        action_type,
-        model_override,
-        run_id=str(run.id),
-        extra_context=extra or None,
+    _provider = idea.prompt_config.provider if idea.prompt_config else None
+    job = enqueue_generation(
+        run_secondary_action,
+        [str(idea_id), action_type, model_override],
+        {"run_id": str(run.id), "extra_context": extra or None},
+        _provider,
     )
     run.job_id = job.id
     db.session.commit()

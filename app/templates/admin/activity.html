@@ -66,6 +66,7 @@
             <strong class="tabular-nums text-slate-900 dark:text-white" x-text="workersAlive == null ? 'unknown' : workersAlive"></strong>
         </span>
         <span class="text-slate-600 dark:text-slate-400">Queue <span class="font-mono">ollama</span>:&nbsp;<strong class="tabular-nums text-slate-900 dark:text-white" x-text="queueDepth('ollama')"></strong></span>
+        <span class="text-slate-600 dark:text-slate-400">Queue <span class="font-mono">opencode</span>:&nbsp;<strong class="tabular-nums text-slate-900 dark:text-white" x-text="queueDepth('opencode')"></strong></span>
         <span class="text-slate-600 dark:text-slate-400">Queue <span class="font-mono">default</span>:&nbsp;<strong class="tabular-nums text-slate-900 dark:text-white" x-text="queueDepth('default')"></strong></span>
         <span class="text-xs text-slate-400 dark:text-slate-500">More workers won't speed up Ollama — one CPU-bound generation runs at a time</span>
     </div>
@@ -312,7 +313,7 @@ function activityApp() {
     return {
         runs: [],
         pendingRuns: [],
-        queues: { ollama: null, default: null },
+        queues: { ollama: null, opencode: null, default: null },
         workersAlive: null,
         perf: { total_runs: null, pending_count: 0, by_status: {}, success_rate: null, avg_seconds: null, per_model: [], last_error: null },
         ideasByStatus: {},
@@ -366,7 +367,7 @@ function activityApp() {
                 this.runPages = Math.max(pg.pages || 1, 1);
                 this.runTotal = pg.total || this.runs.length;
                 this.pendingRuns = payload.pending_runs || [];
-                this.queues = payload.queues || { ollama: null, default: null };
+                this.queues = payload.queues || { ollama: null, opencode: null, default: null };
                 this.workersAlive = (payload.workers_alive !== undefined) ? payload.workers_alive : null;
                 this.perf = payload.performance || this.perf;
                 this.popularity = payload.popularity || this.popularity;

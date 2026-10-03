@@ -1,6 +1,7 @@
 from .ai_config import (
     AISpendLedger,
     CUTOFF_BEHAVIOURS,
+    OPENCODE_WORKSPACES,
     PROVIDERS,
     InstanceAIConfig,
 )
@@ -74,6 +75,7 @@ __all__ = [
     "AISpendLedger",
     "PROVIDERS",
     "CUTOFF_BEHAVIOURS",
+    "OPENCODE_WORKSPACES",
     "ChatSession",
     "ChatTurn",
     "CHAT_ROLES",
