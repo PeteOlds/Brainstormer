@@ -119,12 +119,16 @@ class Config:
     # the pages blueprint answer 410 pointing at the Flutter client.
     LEGACY_WEB_ENABLED = get_env("LEGACY_WEB_ENABLED", "True") == "True"
 
-    # Rate Limiting
-    RATE_LIMIT_STORAGE_URL = get_env(
-        "RATE_LIMIT_STORAGE_URL", "redis://localhost:6379/2"
-    )
-    RATE_LIMIT_DEFAULT = "100 per minute"
-    RATE_LIMIT_HEADERS_ENABLED = True
+    # Rate Limiting — Flask-Limiter reads RATELIMIT_* (not RATE_LIMIT_*).
+    # Wrong keys are silently ignored and the limiter falls back to
+    # in-memory storage, so limits aren't shared across web workers.
+    # Default to the app's own REDIS_URL so the host always resolves; the
+    # dedicated env var (if set) wins. In-memory fallback keeps requests
+    # serving if Redis is briefly unreachable instead of 500ing.
+    RATELIMIT_STORAGE_URI = get_env("RATE_LIMIT_STORAGE_URL", REDIS_URL)
+    RATELIMIT_DEFAULT = "100 per minute"
+    RATELIMIT_HEADERS_ENABLED = True
+    RATELIMIT_IN_MEMORY_FALLBACK_ENABLED = True
 
     # Security
     SESSION_COOKIE_SECURE = FLASK_ENV == "production"
@@ -165,6 +169,7 @@ class TestingConfig(Config):
     JWT_COOKIE_SECURE = False
     SQLALCHEMY_ENGINE_OPTIONS = {}
     RATELIMIT_ENABLED = False
+    RATELIMIT_STORAGE_URI = "memory://"
     JWT_HEADER_NAME = "Authorization"
     JWT_HEADER_TYPE = "Bearer"
     JWT_TOKEN_LOCATION = ["headers"]
