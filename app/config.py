@@ -48,6 +48,17 @@ class Config:
     # Read-only agent for sandbox runs. Empty string disables `--agent`
     # (required for OpenCode's free-tier models, which reject it).
     OPENCODE_SANDBOX_AGENT = get_env("OPENCODE_SANDBOX_AGENT", "brainstormer-sandbox")
+    # Remote opencode server (worker-wide fallback when the instance config
+    # has no endpoint): `opencode run --attach <url>`. Server basic-auth, if
+    # any, comes from OPENCODE_SERVER_USERNAME/OPENCODE_SERVER_PASSWORD.
+    OPENCODE_SERVER_URL = get_env("OPENCODE_SERVER_URL", "")
+    # Attached sandbox runs: per-run dirs are created under
+    # OPENCODE_SANDBOX_ROOT (worker-visible; defaults to
+    # `<repo>/.opencode-sandbox`) and passed to the server as
+    # `<OPENCODE_SERVER_SANDBOX_ROOT>/<uuid> --dir`. The two roots must be
+    # the same shared directory seen from each side.
+    OPENCODE_SANDBOX_ROOT = get_env("OPENCODE_SANDBOX_ROOT", "")
+    OPENCODE_SERVER_SANDBOX_ROOT = get_env("OPENCODE_SERVER_SANDBOX_ROOT", "")
 
     # App / Slack
     APP_BASE_URL = get_env("APP_BASE_URL", "http://localhost:8000")

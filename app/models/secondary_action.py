@@ -53,6 +53,12 @@ class SecondaryActionResult(db.Model):
     # Human answers to the previous version's open questions (PRD flow).
     # Stored verbatim so they survive regeneration; NULL when none given.
     answers = db.Column(db.JSON, nullable=True)
+    # Run context for Recreate defaults and audit: which skills/guidelines
+    # were injected into the prompt that produced this version.
+    skills_used = db.Column(db.JSON, nullable=True)
+    guidelines_used = db.Column(db.JSON, nullable=True)
+    # Provider that served this version (Recreate pre-selects it).
+    provider_used = db.Column(db.String(20), nullable=True)
 
     def to_dict(self):
         return {
@@ -65,6 +71,9 @@ class SecondaryActionResult(db.Model):
             "is_current": self.is_current,
             "edited_by_id": str(self.edited_by_id) if self.edited_by_id else None,
             "answers": self.answers or [],
+            "skills_used": self.skills_used or [],
+            "guidelines_used": self.guidelines_used or [],
+            "provider_used": self.provider_used or None,
             "executed_at": self.executed_at.isoformat() if self.executed_at else None,
         }
 

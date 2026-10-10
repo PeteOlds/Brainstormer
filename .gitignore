@@ -48,3 +48,6 @@ MANUAL_TEST_PLAN.md
 # Obsidian vault state
 .obsidian/
 backups/
+
+# OpenCode per-run sandbox dirs (created under the repo by attached runs)
+.opencode-sandbox/

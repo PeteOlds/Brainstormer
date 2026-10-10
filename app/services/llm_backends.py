@@ -497,6 +497,7 @@ def generate_for_prompt(
             timeout=None,
             json_mode=json_mode,
             workspace=(config.opencode_workspace if config else "sandbox") or "sandbox",
+            endpoint=(config.endpoint if config else None),
         )
     else:
         result = _litellm_generate(
