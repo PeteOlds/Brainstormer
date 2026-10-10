@@ -73,6 +73,63 @@ def test_opencode_provider_accepted_in_prompt(admin_client):
     assert res.get_json()["data"]["provider"] == "opencode"
 
 
+def test_opencode_prompt_create_rejects_non_allowlisted_model(app, client):
+    """Prompt create with an opencode model outside the allowlist → 400."""
+    from app.models import ROLE_INSTANCE_ADMIN
+
+    with app.app_context():
+        inst = make_instance(74, "OC-AL")
+        admin = make_user("oc-al-reject@t.test")
+        grant(admin, inst, ROLE_INSTANCE_ADMIN)
+        db.session.add(
+            InstanceAIConfig(
+                instance_id=inst.id,
+                provider="opencode",
+                model_allowlist=["opencode/big-pickle"],
+            )
+        )
+        db.session.commit()
+        db.session.expunge_all()
+    with app.app_context():
+        iid = str(Instance.query.filter_by(number=74).first().id)
+    headers = login(client, "oc-al-reject@t.test", iid)
+
+    res = client.post(
+        "/api/v1/prompts",
+        json={
+            "title": "OC",
+            "prompt_body": "b",
+            "interval_minutes": 60,
+            "model_name": "opencode/some-unlisted-model",
+            "provider": "opencode",
+        },
+        headers=headers,
+    )
+    assert res.status_code == 400, res.get_json()
+
+    res = client.post(
+        "/api/v1/prompts",
+        json={
+            "title": "OC",
+            "prompt_body": "b",
+            "interval_minutes": 60,
+            "model_name": "opencode/big-pickle",
+            "provider": "opencode",
+        },
+        headers=headers,
+    )
+    assert res.status_code == 201, res.get_json()
+    pid = res.get_json()["data"]["id"]
+
+    # PATCH provider to an unknown value is rejected.
+    res = client.patch(
+        f"/api/v1/prompts/{pid}",
+        json={"provider": "bogus"},
+        headers=headers,
+    )
+    assert res.status_code == 400, res.get_json()
+
+
 def test_opencode_allowlist_enforced_when_scoped(app, client):
     from app.models import ROLE_INSTANCE_ADMIN
 
@@ -153,6 +210,23 @@ def test_opencode_workspace_flag_site_admin_only(app, client):
         headers=h_site,
     )
     assert res.status_code == 400
+
+    # Re-stating the current value is a no-op anyone may do (edit forms
+    # always submit the field; otherwise instance admins could never save
+    # an opencode config at all).
+    res = client.put(
+        f"/api/v1/instances/{iid}/ai-configs",
+        json={
+            "provider": "opencode",
+            "opencode_workspace": "repo",
+            "model_allowlist": ["opencode/big-pickle"],
+        },
+        headers=h_admin,
+    )
+    assert res.status_code == 200, res.get_json()
+    assert res.get_json()["data"]["config"]["model_allowlist"] == [
+        "opencode/big-pickle"
+    ]
 
 
 def test_run_now_routes_opencode_to_dedicated_queue(admin_client, app, admin_user):
@@ -280,3 +354,190 @@ def test_opencode_generation_records_spend(celery_app):
             rows[0].completion_tokens,
             rows[0].cost_cents,
         ) == (11, 22, 3)
+
+
+def _seed_ollama_idea(db, email="oc-override-seed@t.test"):
+    from app.models import Idea, PromptConfig, User, UserRole
+
+    admin = User(email=email, role=UserRole.ADMIN)
+    admin.set_password("password123")
+    db.session.add(admin)
+    db.session.flush()
+    prompt = PromptConfig(
+        title="O",
+        prompt_body="b",
+        interval_minutes=60,
+        model_name="llama3:8b",
+        provider="ollama",
+        is_active=True,
+        created_by_id=admin.id,
+    )
+    db.session.add(prompt)
+    db.session.flush()
+    idea = Idea(
+        reference_code="IDEA-OC1",
+        prompt_title="T",
+        raw_content="content",
+        status="SPARK",
+        prompt_config_id=prompt.id,
+    )
+    db.session.add(idea)
+    db.session.commit()
+    return idea
+
+
+def test_action_provider_override_routes_opencode(app, client):
+    from app.models import ROLE_INSTANCE_ADMIN
+
+    with app.app_context():
+        inst = make_instance(75, "OC-OR")
+        admin = make_user("oc-override@t.test")
+        grant(admin, inst, ROLE_INSTANCE_ADMIN)
+        db.session.add(
+            InstanceAIConfig(
+                instance_id=inst.id,
+                provider="opencode",
+                model_allowlist=["opencode/big-pickle"],
+            )
+        )
+        idea = _seed_ollama_idea(db)
+        iid, idea_id = inst.id, idea.id
+        db.session.expunge_all()
+    headers = login(client, "oc-override@t.test", str(iid))
+
+    with patch("app.tasks.enqueue_generation") as mock_enq:
+        mock_enq.return_value.id = "job-override"
+        res = client.post(
+            f"/api/v1/ideas/{idea_id}/actions",
+            json={
+                "action_type": "REFINE",
+                "confirm": True,
+                "model_override": "opencode/big-pickle",
+                "provider_override": "opencode",
+            },
+            headers=headers,
+        )
+    assert res.status_code == 202, res.get_json()
+    args, _ = mock_enq.call_args
+    assert args[3] == "opencode"
+    assert args[2]["provider_override"] == "opencode"
+
+
+def test_action_provider_override_validation(app, client):
+    with app.app_context():
+        idea = _seed_ollama_idea(db, email="oc-ov2@t.test")
+        idea_id = idea.id
+        db.session.expunge_all()
+
+    # Unknown provider rejected.
+    with patch("app.tasks.enqueue_generation"):
+        res = client.post(
+            f"/api/v1/ideas/{idea_id}/actions",
+            json={
+                "action_type": "REFINE",
+                "confirm": True,
+                "provider_override": "bogus",
+            },
+            headers=login(client, "oc-ov2@t.test"),
+        )
+    assert res.status_code == 400
+
+    # Provider without a model for that engine rejected.
+    with patch("app.tasks.enqueue_generation"):
+        res = client.post(
+            f"/api/v1/ideas/{idea_id}/actions",
+            json={
+                "action_type": "REFINE",
+                "confirm": True,
+                "provider_override": "opencode",
+            },
+            headers=login(client, "oc-ov2@t.test"),
+        )
+    assert res.status_code == 400
+
+
+def test_models_endpoint_unrestricted_flag(app, client):
+    from app.models import ROLE_INSTANCE_ADMIN
+
+    with app.app_context():
+        inst = make_instance(76, "OC-UN")
+        admin = make_user("oc-un@t.test")
+        grant(admin, inst, ROLE_INSTANCE_ADMIN)
+        db.session.commit()
+        iid = inst.id
+        db.session.expunge_all()
+    headers = login(client, "oc-un@t.test", str(iid))
+
+    # No config at all: empty list, unrestricted.
+    res = client.get("/api/v1/ollama/models?provider=opencode", headers=headers)
+    assert res.status_code == 200
+    body = res.get_json()["data"]
+    assert body["models"] == []
+    assert body["unrestricted"] is True
+
+    with app.app_context():
+        db.session.add(
+            InstanceAIConfig(
+                instance_id=iid,
+                provider="opencode",
+                model_allowlist=["opencode/big-pickle"],
+            )
+        )
+        db.session.commit()
+    res = client.get("/api/v1/ollama/models?provider=opencode", headers=headers)
+    body = res.get_json()["data"]
+    assert body["models"] == ["opencode/big-pickle"]
+    assert body["unrestricted"] is False
+
+
+def test_models_endpoint_serves_server_catalog_when_unrestricted(app, client):
+    from app.models import ROLE_INSTANCE_ADMIN
+
+    with app.app_context():
+        inst = make_instance(77, "OC-CAT")
+        admin = make_user("oc-cat@t.test")
+        grant(admin, inst, ROLE_INSTANCE_ADMIN)
+        db.session.commit()
+        iid = inst.id
+        db.session.expunge_all()
+    headers = login(client, "oc-cat@t.test", str(iid))
+
+    with patch(
+        "app.services.opencode_backend.list_server_models",
+        return_value=["opencode/aaa-model", "opencode/big-pickle"],
+    ) as mock_list:
+        res = client.get("/api/v1/ollama/models?provider=opencode", headers=headers)
+    assert res.status_code == 200
+    body = res.get_json()["data"]
+    assert body["models"] == ["opencode/aaa-model", "opencode/big-pickle"]
+    assert body["unrestricted"] is True
+    mock_list.assert_called_once()
+
+
+def test_models_endpoint_allowlist_wins_over_catalog(app, client):
+    from app.models import ROLE_INSTANCE_ADMIN
+
+    with app.app_context():
+        inst = make_instance(78, "OC-CAT2")
+        admin = make_user("oc-cat2@t.test")
+        grant(admin, inst, ROLE_INSTANCE_ADMIN)
+        db.session.add(
+            InstanceAIConfig(
+                instance_id=inst.id,
+                provider="opencode",
+                model_allowlist=["opencode/big-pickle"],
+            )
+        )
+        db.session.commit()
+        iid = inst.id
+        db.session.expunge_all()
+    headers = login(client, "oc-cat2@t.test", str(iid))
+
+    with patch(
+        "app.services.opencode_backend.list_server_models",
+        side_effect=AssertionError("allowlist must win; no server call"),
+    ):
+        res = client.get("/api/v1/ollama/models?provider=opencode", headers=headers)
+    body = res.get_json()["data"]
+    assert body["models"] == ["opencode/big-pickle"]
+    assert body["unrestricted"] is False

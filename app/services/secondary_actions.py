@@ -50,14 +50,14 @@ ACTION_REGISTRY = [
     },
     {
         "key": "PRD_DOC",
-        "label": "Generate PRD",
+        "label": "PRD",
         "description": "Full Product Requirements Document: vision, personas, scope, user stories, NFRs, UX, risks — plus open questions you can answer and rerun.",
         "template": "prd_doc",
         "done_label": "Documented",
     },
     {
         "key": "DESIGN_DOC",
-        "label": "Generate Design",
+        "label": "Design",
         "description": "Build-ready design document from the PRD: architecture, screens and components, data model, API contracts, build notes. Requires an existing PRD and Design stage.",
         "template": "design_doc",
         "done_label": "Designed",

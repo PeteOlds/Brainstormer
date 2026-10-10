@@ -537,6 +537,45 @@ def _drop_answered_questions(validated, idea_id, action_type):
     return validated
 
 
+def _answer_question(entry: str) -> str:
+    """Normalized question text from a stored "Q: ...\\nA: ..." answer."""
+    first = str(entry).splitlines()[0] if str(entry).strip() else ""
+    q = first[2:].strip() if first.startswith("Q:") else first.strip()
+    return " ".join(q.lower().split())
+
+
+def _accumulate_answers(idea_id, action_type, new_answers):
+    """Union of prior versions' answers with the new ones (PRD/DESIGN_DOC).
+
+    Answers used to be stored per-version, so each rerun displayed only its
+    own submission and earlier answers "disappeared" from the current
+    version. The new version now carries everything answered so far, so the
+    current document always shows the full Q&A history. Repeats (same
+    question) keep the newest text.
+    """
+    from app.models import SecondaryActionResult
+
+    keyed: dict = {}
+    unkeyed: list = []
+    prior = SecondaryActionResult.query.filter_by(
+        idea_id=idea_id, action_type=action_type
+    ).all()
+    for row in prior:
+        for entry in row.answers or []:
+            key = _answer_question(entry)
+            if key:
+                keyed.setdefault(key, entry)
+            elif str(entry).strip():
+                unkeyed.append(entry)
+    for entry in new_answers or []:
+        key = _answer_question(entry)
+        if key:
+            keyed[key] = entry
+        elif str(entry).strip():
+            unkeyed.append(entry)
+    return list(keyed.values()) + unkeyed
+
+
 @celery.task(
     bind=True,
     base=BaseTask,
@@ -552,6 +591,7 @@ def run_secondary_action(
     model_override: str = None,
     run_id: str | None = None,
     extra_context: dict | None = None,
+    provider_override: str | None = None,
 ):
     """Run a secondary action on an existing idea."""
     from app.models import PromptRun
@@ -599,6 +639,9 @@ def run_secondary_action(
         model = stage_cfg["model_name"]
     if stage_cfg.get("provider"):
         provider = stage_cfg["provider"].lower()
+    if provider_override:
+        # Explicit run choice wins over stage and prompt config.
+        provider = provider_override.lower()
     hosted = provider != "ollama"
     # A model override on a hosted idea is a litellm model id; on a
     # prompt-less idea the override alone cannot imply a provider.
@@ -862,10 +905,17 @@ def run_secondary_action(
             idea_id=idea.id,
             action_type=action_type,
             model_used=model,
+            provider_used=provider,
             result_data=validated.model_dump(),
             version=next_version,
             is_current=True,
-            answers=answers or None,
+            answers=(
+                _accumulate_answers(idea.id, action_type, answers) or None
+                if action_type in ("PRD_DOC", "DESIGN_DOC")
+                else answers or None
+            ),
+            skills_used=list(dict.fromkeys(skill_names)) or None,
+            guidelines_used=list(dict.fromkeys(guideline_names)) or None,
             instance_id=idea.instance_id,
         )
         db.session.add(result)

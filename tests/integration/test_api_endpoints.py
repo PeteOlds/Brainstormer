@@ -2280,3 +2280,16 @@ class TestIdeaEditEndpoints:
         assert resp.status_code == 200
         refs = [i["reference_code"] for i in resp.get_json()["data"]["ideas"]]
         assert "IDEA-ALL1" in refs
+
+
+def test_admin_ai_settings_page_renders_for_admin(admin_client):
+    res = admin_client.get("/admin/ai")
+    assert res.status_code == 200
+    html = res.get_data(as_text=True)
+    assert "AI Settings" in html
+    assert "aiSettingsApp()" in html
+
+
+def test_admin_ai_settings_page_rejects_anonymous(client):
+    res = client.get("/admin/ai")
+    assert res.status_code in (401, 302)

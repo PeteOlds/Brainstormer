@@ -38,6 +38,7 @@ Non-negotiable rules for every code change. Treat as a checklist during PR revie
 | Log prompt *hash* only — never full prompt or response, never provider keys | Structured logging, `DEBUG` level only |
 | Model allowlist: local Ollama from `GET /ollama/models`; hosted from the instance allowlist | Config validation on prompt create |
 | Provider keys encrypted at rest, write-only API, never copied between instances | Fernet (`instance_ai_configs`), per-instance admin UI |
+| OpenCode runs: argv-only subprocess, curated env (no app secrets), throwaway sandbox cwd, process-group kill on timeout, shared server identity (no key stored) | `app/services/opencode_backend.py`; `repo` workspace is Site-Admin only |
 
 ---
 
@@ -94,6 +95,17 @@ Implemented via Flask-Limiter with Redis backend.
 - `.env` in `.gitignore` — **never committed**
 - `.env.example` with dummy values committed
 - CI fails if `.env` detected in repo (git-secrets hook)
+- **Never hardcode a secret in a workflow or any tracked file** — CI generates
+  ephemeral test secrets at runtime (`$GITHUB_ENV`), never literals. A Fernet
+  key hardcoded in `.github/workflows/` was flagged by GitGuardian; it was a
+  throwaway CI key, but the lesson holds for real keys.
+- `scripts/check_no_secrets.py` scans tracked files for both `.env` (`KEY=`)
+  and YAML (`KEY:`) forms; it runs in CI and (via `.pre-commit-config.yaml`,
+  with gitleaks) locally. Run it before committing: `python scripts/check_no_secrets.py`.
+- If a secret is ever exposed: **rotate it** (replace the value and re-encrypt
+  any data it protected), remove it from the latest commit, and purge history
+  (`git filter-repo`) or mark it revoked in GitGuardian. A leaked `FERNET_KEY`
+  that encrypted data needs re-encryption, not just a new value.
 
 ---
 
@@ -164,6 +176,7 @@ Implemented via Flask-Limiter with Redis backend.
 - [ ] `bandit` and `safety` pass locally
 - [ ] Tests cover auth, validation, error paths
 - [ ] External network calls only via the provider interface with per-instance opt-in (never raw `requests`/`httpx`/`urllib` elsewhere)
+- [ ] Subprocess calls (OpenCode CLI) use argv lists (never `shell=True`), a curated environment (no app secrets), a sandboxed cwd, and process-group kill on timeout
 - [ ] CSP/Talisman headers not weakened
 ```
 

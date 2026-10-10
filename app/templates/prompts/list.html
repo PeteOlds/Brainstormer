@@ -62,6 +62,7 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap hidden lg:table-cell">
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200" x-text="prompt.model_name"></span>
+                                <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300" x-show="prompt.provider && prompt.provider !== 'ollama'" x-text="prompt.provider"></span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <button @click="toggleActive(prompt)" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors" :class="prompt.is_active ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200'">
@@ -198,15 +199,31 @@
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
+                            <label for="provider" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">AI Engine</label>
+                            <select id="provider" x-model="form.provider" @change="loadModels(true)" class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+                                <template x-for="p in providers" :key="p">
+                                    <option :value="p" x-text="p"></option>
+                                </template>
+                            </select>
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="form.provider && form.provider !== 'ollama' && !providerUnrestricted">Hosted engine — model comes from this instance's allowlist.</p>
+                        </div>
+                        <div>
                             <label for="model_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Model <span class="text-red-500">*</span></label>
 <select id="model_name" x-model="form.model_name" :disabled="loadingModels" class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
                                 <option value="" disabled x-show="loadingModels">Loading models...</option>
                                 <option value="" disabled x-show="!loadingModels">Select Model</option>
                                 <template x-for="model in models" :key="modelNameOf(model)">
-                                    <option :value="modelNameOf(model)" x-text="modelNameOf(model) + ' ' + modelBadge(model)"></option>
+                                    <option :value="modelNameOf(model)" x-text="modelBadge(model) ? modelNameOf(model) + ' ' + modelBadge(model) : modelNameOf(model)"></option>
                                 </template>
                             </select>
+                            <template x-if="form.provider && form.provider !== 'ollama' && providerUnrestricted">
+                                <div class="mt-2">
+                                    <input type="text" x-model="form.model_name" placeholder="Type any model id for this engine" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">No allowlist configured — any model id is accepted (opencode ids come from <span class="font-mono">opencode models</span> on the server host).</p>
+                                </div>
+                            </template>
                             <p class="mt-1 text-xs text-red-600 dark:text-red-400" x-show="!loadingModels && models.length === 0" x-text="modelsError || 'No models available — check Ollama'"></p>
+                            <p class="mt-1 text-xs" x-show="form.provider && form.provider !== 'ollama'"><a href="/admin/ai" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Open instance AI settings</a> <span class="text-slate-500 dark:text-slate-400">to manage keys and the model allowlist.</span></p>
                         </div>
                         <div>
                             <label for="temperature" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Temperature</label>
@@ -264,7 +281,7 @@
 
                     <div class="flex justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <button type="button" @click="closeModal()" :disabled="saving || testing" class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">Cancel</button>
-                        <button type="button" @click="testRun()" :disabled="testing || saving || !form.model_name" class="px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        <button type="button" @click="testRun()" :disabled="testing || saving || !form.model_name || (form.provider && form.provider !== 'ollama')" :title="(form.provider && form.provider !== 'ollama') ? 'Prompt test runs on local Ollama only' : ''" class="px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             <span x-show="!testing">Test Prompt</span>
                             <span x-show="testing" class="flex items-center">
                                 <svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
@@ -306,7 +323,9 @@ function initPromptsPage() {
         total: 0,
         totalPages: 1,
         filters: { status: '', search: '' },
-        form: { title: '', prompt_body: '', interval_minutes: 1440, cron_expression: '', model_name: '', temperature: 0.7, top_p: 0.9, repeat_penalty: 1.1, num_predict: 1000, seed: null, keep_alive: '2h', slack_channel: '', is_active: true },
+        form: { title: '', prompt_body: '', interval_minutes: 1440, cron_expression: '', provider: 'ollama', model_name: '', temperature: 0.7, top_p: 0.9, repeat_penalty: 1.1, num_predict: 1000, seed: null, keep_alive: '2h', slack_channel: '', is_active: true },
+        providers: ['ollama', 'openai', 'anthropic', 'gemini', 'opencode'],
+        providerUnrestricted: false,
         
         async loadPrompts() {
             this.loading = true;
@@ -328,9 +347,10 @@ function initPromptsPage() {
             if (typeof m === 'string') return m;
             return m.name || m.model || m.id || JSON.stringify(m);
         },
-        // Return speed badge based on model size (in bytes)
+        // Return speed badge based on model size (in bytes).
+        // Plain strings (hosted allowlists) carry no size: no badge.
         modelBadge(m) {
-            if (typeof m === 'string') return ' 🐢';
+            if (typeof m === 'string') return '';
             const size = m.size || 0; const GB = 1000 * 1000 * 1000;
             if (size < 3000000000) return ' 🚀';      // < 3GB: rocket (fast)
             if (size < 7000000000) return ' 🐇';      // 3-7GB: rabbit (medium)
@@ -356,22 +376,34 @@ function initPromptsPage() {
             }
         },
 
-        async loadModels() {
+        async loadModels(resetModel) {
             this.loadingModels = true;
             this.modelsError = '';
+            const provider = this.form.provider || 'ollama';
             try {
-                const response = await authFetch('/api/v1/ollama/models');
+                const url = provider === 'ollama'
+                    ? '/api/v1/ollama/models'
+                    : `/api/v1/ollama/models?provider=${encodeURIComponent(provider)}`;
+                const response = await authFetch(url);
                 const data = await response.json();
-                const raw = data.models ?? data.data?.models ?? [];
+                const payload = data.data || data;
+                const raw = payload.models || [];
                 this.models = Array.isArray(raw) ? raw : [];
+                this.providerUnrestricted = provider !== 'ollama' && !!payload.unrestricted;
+                const names = this.models.map((m) => this.modelNameOf(m));
                 if (this.models.length === 0) {
-                    this.modelsError = 'No models available — check Ollama';
-                } else if (!this.form.model_name) {
-                    this.form.model_name = this.defaultModel();
+                    this.modelsError = provider === 'ollama'
+                        ? 'No models available — check Ollama'
+                        : `No models allowlisted for ${provider} — configure in instance AI settings`;
+                    this.form.model_name = '';
+                } else if (resetModel && !names.includes(this.form.model_name)) {
+                    // Switching engines drops a model the new engine lacks;
+                    // on initial load the saved value is always kept.
+                    this.form.model_name = provider === 'ollama' ? this.defaultModel() : (names[0] || '');
                 }
             } catch (error) {
                 console.error('Failed to load models:', error);
-                this.modelsError = 'Failed to load models — check Ollama';
+                this.modelsError = provider === 'ollama' ? 'Failed to load models — check Ollama' : `Failed to load ${provider} allowlist`;
             } finally {
                 this.loadingModels = false;
             }
@@ -411,7 +443,7 @@ function initPromptsPage() {
         },
         
         resetForm() {
-            this.form = { title: '', prompt_body: '', interval_minutes: 1440, cron_expression: '', model_name: '', temperature: 0.7, top_p: 0.9, repeat_penalty: 1.1, num_predict: 1000, seed: null, keep_alive: '2h', slack_channel: '', is_active: true };
+            this.form = { title: '', prompt_body: '', interval_minutes: 1440, cron_expression: '', provider: 'ollama', model_name: '', temperature: 0.7, top_p: 0.9, repeat_penalty: 1.1, num_predict: 1000, seed: null, keep_alive: '2h', slack_channel: '', is_active: true };
             this.testResult = '';
             this.testError = '';
         },
@@ -448,7 +480,7 @@ function initPromptsPage() {
             this.editingPrompt = null;
             this.resetForm();
             this.modalOpen = true;
-            this.loadModels();
+            this.loadModels(true);
         },
 
         editPrompt(prompt) {
@@ -458,7 +490,7 @@ function initPromptsPage() {
             this.testResult = '';
             this.testError = '';
             this.modalOpen = true;
-            this.loadModels();
+            this.loadModels(false);
         },
         
         closeModal() {

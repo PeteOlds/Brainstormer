@@ -532,6 +532,36 @@ def run_action(user, idea_id):
         )
 
     model_override = data.get("model_override")
+    provider_override = data.get("provider_override")
+    if provider_override is not None:
+        from app.models import PROVIDERS
+
+        provider_override = str(provider_override).strip().lower() or None
+        if provider_override not in PROVIDERS:
+            return api_error(
+                f"Invalid provider_override: must be one of {', '.join(PROVIDERS)}.",
+                status_code=400,
+            )
+    # The effective engine/model: an explicit provider wins over the idea's
+    # prompt config. Hosted engines validate the model against the instance
+    # allowlist (when one is configured); overrides never bypass it.
+    _eff_provider = provider_override or (
+        idea.prompt_config.provider if idea.prompt_config else "ollama"
+    )
+    _eff_model = model_override or (
+        idea.prompt_config.model_name if idea.prompt_config else None
+    )
+    if provider_override and not model_override:
+        return api_error(
+            f"provider_override {provider_override!r} needs a model_override for that engine.",
+            status_code=400,
+        )
+    if _eff_provider != "ollama" and _eff_model:
+        from app.routes.prompts import _check_model_allowlist
+
+        err = _check_model_allowlist(_eff_provider, _eff_model)
+        if err is not None:
+            return err
 
     # Optional run customization: opencode skills + guideline docs to inject.
     skills = data.get("skills") or []
@@ -577,11 +607,17 @@ def run_action(user, idea_id):
         extra["skills"] = skills
     if guidelines:
         extra["guidelines"] = guidelines
-    _provider = idea.prompt_config.provider if idea.prompt_config else None
+    _provider = provider_override or (
+        idea.prompt_config.provider if idea.prompt_config else None
+    )
     job = enqueue_generation(
         run_secondary_action,
         [str(idea_id), action_type, model_override],
-        {"run_id": str(run.id), "extra_context": extra or None},
+        {
+            "run_id": str(run.id),
+            "extra_context": extra or None,
+            "provider_override": provider_override,
+        },
         _provider,
     )
     run.job_id = job.id

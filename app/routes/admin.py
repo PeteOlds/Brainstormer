@@ -293,6 +293,13 @@ def activity_page(user):
     return render_template("admin/activity.html", user=user, current_user=user)
 
 
+@admin_pages_bp.route("/admin/ai", methods=["GET"])
+@admin_required
+def ai_settings_page(user):
+    """Instance AI provider configs (keys, allowlists, budgets)."""
+    return render_template("admin/ai_configs.html", user=user, current_user=user)
+
+
 @admin_api_bp.route("/admin/activity/stats", methods=["GET"])
 @admin_required
 def activity_stats(user):

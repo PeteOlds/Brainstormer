@@ -196,16 +196,20 @@ def upsert_ai_config(user, instance_id):
         config.chat_enabled = data["chat_enabled"]
     if "opencode_workspace" in data:
         # Repo mode grants filesystem access, so only a Site Admin may
-        # change it. Instance admins can read it (to_dict) but not write.
-        if not is_site_admin(user):
-            return api_error(
-                "opencode_workspace can only be changed by a Site Admin.",
-                status_code=403,
-            )
+        # change it. Re-stating the current value is a no-op anyone may do
+        # (otherwise instance admins could never save an opencode config,
+        # since edit forms always submit the field).
         if data["opencode_workspace"] not in OPENCODE_WORKSPACES:
             return api_error(
                 f"opencode_workspace must be one of {', '.join(OPENCODE_WORKSPACES)}.",
                 status_code=400,
+            )
+        if data["opencode_workspace"] != (
+            config.opencode_workspace or "sandbox"
+        ) and not is_site_admin(user):
+            return api_error(
+                "opencode_workspace can only be changed by a Site Admin.",
+                status_code=403,
             )
         config.opencode_workspace = data["opencode_workspace"]
     if "use_proxy" in data:

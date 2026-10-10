@@ -721,6 +721,63 @@ class TestSecondaryActionRobustness:
             )
 
     @patch("app.tasks.ollama_tasks.OllamaClient")
+    def test_prd_rerun_accumulates_answers(self, mock_client_class, celery_app):
+        """A PRD rerun keeps prior versions' answers on the new version.
+
+        Regression: answers were stored per-version, so each rerun displayed
+        only its own submission and earlier answers "disappeared".
+        """
+        import json as _json
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import SecondaryActionResult
+            from app.tasks.ollama_tasks import run_secondary_action
+
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.generate_sync.return_value = {
+                "response": _json.dumps(
+                    {
+                        "executive_summary": "Problem X for audience Y with KPI Z clearly stated here.",
+                        "user_personas": "Primary persona works this way and feels that pain daily.",
+                        "product_scope": "MVP must-haves listed, nice-to-haves deferred to phase two.",
+                        "functional_requirements": "Given a user When they act Then the system responds.",
+                        "non_functional_requirements": "99.9% uptime, encrypted data, GDPR compliant posture.",
+                        "ux_guidelines": "Three-step flow with loading, empty and error states covered.",
+                        "assumptions_risks": "Depends on API Q with fallback and mitigation plan.",
+                        "open_questions": ["What is the pricing model?"],
+                    }
+                ),
+                "done": True,
+            }
+            idea = self._seed(db, email="admin_prd_accum@test.com")
+            run_secondary_action(
+                str(idea.id),
+                "PRD_DOC",
+                extra_context={
+                    "answers": ["Q: What is the pricing model?\nA: Freemium"]
+                },
+            )
+            run_secondary_action(
+                str(idea.id),
+                "PRD_DOC",
+                extra_context={"answers": ["Q: Who is the buyer?\nA: Ops managers"]},
+            )
+            rows = (
+                SecondaryActionResult.query.filter_by(
+                    idea_id=idea.id, action_type="PRD_DOC"
+                )
+                .order_by(SecondaryActionResult.version)
+                .all()
+            )
+            assert len(rows) == 2
+            assert rows[1].is_current is True
+            texts = " ".join(rows[1].answers or [])
+            assert "Freemium" in texts
+            assert "Ops managers" in texts
+
+    @patch("app.tasks.ollama_tasks.OllamaClient")
     def test_validation_error_strict_retry(self, mock_client_class, celery_app):
         """First bad schema output triggers one strict retry; success stored."""
         import json as _json
@@ -792,6 +849,73 @@ class TestSecondaryActionRobustness:
 
 
 class TestRunSecondaryActionTask:
+    @patch("app.tasks.ollama_tasks.OllamaClient")
+    @patch("app.services.llm_backends.generate_for_prompt")
+    def test_provider_override_routes_hosted_and_persists_context(
+        self, mock_generate, mock_client_class, celery_app
+    ):
+        """provider_override wins; model/skills/guidelines stored on the row."""
+        import json as _json
+
+        from app.services.llm_backends import GenerationResult
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import SecondaryActionResult
+            from app.tasks.ollama_tasks import run_secondary_action
+
+            mock_generate.return_value = GenerationResult(
+                text=_json.dumps(
+                    {
+                        "elevator_pitch": "AI inventory management for small retailers",
+                        "target_audience": "Small retail businesses",
+                        "core_value_proposition": "Automated stock optimization",
+                        "monetization_strategy": "SaaS subscription",
+                    }
+                ),
+                model="opencode/big-pickle",
+            )
+            from app.extensions import db
+            from app.models import Idea, PromptConfig, User, UserRole
+
+            admin = User(email="admin_override@t.test", role=UserRole.ADMIN)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            db.session.commit()
+            prompt = PromptConfig(
+                title="Sec",
+                prompt_body="Test",
+                interval_minutes=60,
+                model_name="llama3:8b",
+                created_by_id=admin.id,
+            )
+            db.session.add(prompt)
+            db.session.commit()
+            idea = Idea(
+                reference_code="IDEA-OV1",
+                prompt_title="Test Prompt",
+                raw_content="AI-powered inventory management for small retailers.",
+                prompt_config_id=prompt.id,
+            )
+            db.session.add(idea)
+            db.session.commit()
+            run_secondary_action(
+                str(idea.id),
+                "REFINE",
+                model_override="opencode/big-pickle",
+                extra_context={"skills": ["tdd"], "guidelines": []},
+                provider_override="opencode",
+            )
+            shim = mock_generate.call_args.args[0]
+            assert shim.provider == "opencode"
+            assert shim.model_name == "opencode/big-pickle"
+            row = SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="REFINE"
+            ).one()
+            assert row.provider_used == "opencode"
+            assert row.model_used == "opencode/big-pickle"
+            assert row.skills_used == ["tdd"]
+
     @patch("app.tasks.ollama_tasks.OllamaClient")
     def test_run_secondary_action_refine(self, mock_client_class, celery_app):
         mock_client = MagicMock()

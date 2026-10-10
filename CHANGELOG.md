@@ -4,6 +4,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.51.0] - 2026-10-10
+### Added
+- Run dialog engine-first: Provider dropdown defaulting to the idea's prompt engine, model list per engine (tags/badges, allowlist, or free-text when unrestricted), cross-provider overrides via new `provider_override` (validated against the allowlist), and Recreate pre-filling provider/model/skills/guidelines from the latest run (persisted as `provider_used`/`skills_used`/`guidelines_used` on each result version).
+- Empty allowlists are now discoverable: models endpoint reports `unrestricted`, and both run dialog and prompt form offer free-text model input instead of an empty dropdown.
+- Instance AI settings page (`/admin/ai`): per-instance provider cards, spend table, login-scope indicator; prompt form links to it.
+- OpenCode model dropdown without an allowlist: the models endpoint now serves the LAN server's own catalog (`/api/model`, active + enabled, cached 5 min) instead of an empty list; free-text entry remains as fallback when the server is unreachable.
+- Navbar workspace chip: every app page shows the login scope (`Site 90 · Manual Test`, or `Unscoped`); tooltip explains how to change it.
+
+## [0.50.0] - 2026-10-09
+### Added
+- Prompt form AI Engine selector: provider dropdown (`ollama` + hosted) with the model list switching between local tags and the instance allowlist; provider chip in the prompt table; prompt-test button disabled for hosted engines.
+- Document export: Copy Markdown + `.md` download on every action tab, generated from the currently viewed version (headings, bullets, scores, answers).
+- Document version browser: version picker on PRD/DESIGN_DOC tabs swaps content, answers, discussion and export source; fresh runs return to current.
+- Instance AI settings page (`/admin/ai`, linked from the admin dashboard): per-instance provider cards (key write-only, endpoint, allowlist, budget, cutoff, degrade, chat, proxy, opencode workspace), spend table, and login-scope indicator. Prompt form links to it when an allowlist is empty.
+### Fixed
+- Scoped browser login now re-POSTs credentials with `instance_id` instead of swapping via `/refresh`, so auth cookies carry the scope too — previously pages (cookie auth) stayed unscoped while API calls were scoped.
+- Re-stating an unchanged `opencode_workspace` no longer 403s for instance admins (edit forms always submit the field); only actual changes require Site Admin.
+
+## [0.49.0] - 2026-10-08
+### Added
+- OpenCode attach mode: instance `endpoint` (or `OPENCODE_SERVER_URL`) routes runs to a LAN opencode server via `opencode run --attach <url> --dir <server-dir>`; `--agent` is never sent in attach mode (servers reject project-local agents, same as the free tier); sandbox `--dir` maps through `OPENCODE_SANDBOX_ROOT` ↔ `OPENCODE_SERVER_SANDBOX_ROOT` (one shared dir, fail loud if unset). Instance 90 configured against `http://192.168.1.130:4096` with `opencode/big-pickle`; full Run Now verified end to end (IDEA-9086 + spend row). Also applied the pending `opencode_workspace` migration on prod (ai-config reads were crashing without it).
+
+## [0.48.1] - 2026-10-03
+### Fixed
+- Rate limiting was silently disabled: `app/config.py` used `RATE_LIMIT_*` keys instead of Flask-Limiter's `RATELIMIT_*`, so storage/default/headers were ignored and the limiter fell back to per-process memory. Corrected the keys, defaulted storage to the app's `REDIS_URL` (host-network safe), enabled the in-memory fallback so a Redis blip degrades limits instead of 500ing, and pointed `.env` at a resolvable Redis host. Testing now uses `memory://`.
+- GitGuardian: a Fernet key was hardcoded in `.github/workflows/guardrails.yml`. CI now generates ephemeral `SECRET_KEY`/`JWT_SECRET_KEY`/`FERNET_KEY` per run (`$GITHUB_ENV`); `backup-drill.yml` likewise. `scripts/check_no_secrets.py` now matches YAML `KEY: value` (not just `KEY=value`) and more token types, and `.pre-commit-config.yaml` runs it + gitleaks locally. The leaked value was a throwaway CI key (production `.env` differs and was never committed).
+
+## [0.48.0] - 2026-10-03
+### Added
+- OpenCode as a fifth AI provider: CLI-backed agentic generation via `opencode run --format json` (NDJSON parsing, token/cost capture), shared server identity (no per-instance key), sandbox-by-default (throwaway empty cwd + read-only agent) with a Site-Admin-only `opencode_workspace` flag for repo access, hosted_ai entitlement + budget gates + DLP masking, dedicated serial `opencode` queue with longer time limits, argv-only subprocess with curated env and process-group timeout kill, admin queues strip + compose workers + docs
+
 ## [0.47.0] - 2026-10-01
 ### Added
 - Phase 13 ops: reserved site numbers verified refused-by-guard (no shells created), RLS overhead measured nil on production data, backup volume and goldens reviewed (both healthy in git/disk), fresh-database migration chain fixed and verified end to end (36 revisions), production migrated to head and healthy

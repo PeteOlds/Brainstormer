@@ -34,6 +34,7 @@ python run.py
 
 # 8. In separate terminals, start workers:
 celery -A app.tasks worker -Q ollama -c 1 --loglevel=info
+celery -A app.tasks worker -Q opencode -c 1 --loglevel=info
 celery -A app.tasks worker -Q default -c 4 --loglevel=info
 celery -A app.tasks beat --loglevel=info
 ```
@@ -107,8 +108,9 @@ Client (Web/PWA) → API Gateway (Flask) → Redis Queue → Celery Workers → 
 
 Key components:
 - **API Layer**: Flask blueprints, JWT auth, rate limiting
-- **Task Queue**: Celery + Redis (separate queues for Ollama vs default)
+- **Task Queue**: Celery + Redis (separate queues for Ollama, OpenCode vs default)
 - **Ollama Workers**: Dedicated concurrency=1 to prevent GPU contention
+- **OpenCode Provider**: CLI-backed agentic generation on its own serial queue (shared server identity; sandbox by default)
 - **Prompt Templates**: File-based, version-controlled, JSON-enforced outputs
 - **Response Validation**: Pydantic schemas for all LLM responses
 

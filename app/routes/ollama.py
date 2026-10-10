@@ -15,6 +15,8 @@ def list_models(user):
 
     `?provider=` selects a hosted allowlist for the request instance
     (keys never involved); default stays the local Ollama `/api/tags`.
+    `unrestricted` is true when no allowlist narrows the choice: any model
+    id is accepted (validation only enforces non-empty allowlists).
     """
     from app.models import InstanceAIConfig
 
@@ -22,12 +24,28 @@ def list_models(user):
     if provider != "ollama":
         instance_id = current_instance_id()
         allowlist = []
+        endpoint = None
         if instance_id is not None:
             config = InstanceAIConfig.query.filter_by(
                 instance_id=instance_id, provider=provider
             ).first()
             allowlist = list((config.model_allowlist if config else None) or [])
-        return api_ok({"models": allowlist, "provider": provider})
+            endpoint = (config.endpoint if config else None) or None
+        if allowlist:
+            return api_ok(
+                {"models": allowlist, "provider": provider, "unrestricted": False}
+            )
+        # No allowlist: anything goes (validation enforces nothing), but
+        # the dropdown still needs options. For opencode, serve the LAN
+        # server's own catalog; otherwise there is nothing to list and the
+        # UI falls back to free-text model entry.
+        models: list = []
+        if provider == "opencode":
+            from app.services.opencode_backend import list_server_models
+
+            server_url = endpoint or current_app.config.get("OPENCODE_SERVER_URL") or ""
+            models = list_server_models(server_url, provider=provider)
+        return api_ok({"models": models, "provider": provider, "unrestricted": True})
     try:
         # Short timeout: this backs UI dropdowns. A hung upstream must never
         # pin a server thread for minutes (see: threadpool exhaustion stalls).

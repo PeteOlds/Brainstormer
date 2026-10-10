@@ -420,13 +420,16 @@ def get_prompt(user, prompt_id):
     denied = check_access(prompt)
     if denied is not None:
         return denied
-    # Users (non-admin) only see title and answer/body
+    # Users (non-admin) only see title and answer/body, plus the engine
+    # and model names (needed to configure runs; not sensitive).
     if user.role.value != "ADMIN":
         return api_ok(
             {
                 "id": str(prompt.id),
                 "title": prompt.title,
                 "prompt_body": prompt.prompt_body,
+                "provider": prompt.provider,
+                "model_name": prompt.model_name,
             }
         )
     return api_ok(prompt.to_dict(include_prompt=True, include_stats=True))
