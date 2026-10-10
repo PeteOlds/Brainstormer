@@ -48,6 +48,64 @@
 </div>
 
 <script>
+// Optional workspace scoping for this browser session. Deep link:
+// /login?instance=90 (site number or UUID). Falls back to auto-scope
+// when the account belongs to exactly one instance, else stays unscoped.
+// Scoping is a second login POST carrying instance_id (membership is
+// validated server-side) rather than a token refresh, so the server also
+// replaces the auth cookies — page loads authenticate by cookie, and a
+// refresh-only swap would leave them unscoped. Any failure keeps the
+// unscoped session rather than blocking login.
+async function tryScopeWorkspace(email, password, remember, accessToken, refreshToken) {
+    const fallback = (warning) => ({accessToken: accessToken, refreshToken: refreshToken, warning: warning});
+    const params = new URLSearchParams(window.location.search);
+    const wanted = (params.get("instance") || "").trim().toLowerCase();
+    try {
+        const listRes = await fetch("/api/v1/instances", {
+            headers: {"Authorization": "Bearer " + accessToken}
+        });
+        const listData = await listRes.json();
+        if (!listRes.ok || !listData.success) {
+            return fallback(wanted ? "Could not scope to '" + wanted + "' — continuing unscoped." : null);
+        }
+        const instances = listData.data.instances || [];
+        let target = null;
+        if (wanted) {
+            for (const inst of instances) {
+                if (String(inst.number) === wanted || String(inst.id).toLowerCase() === wanted) {
+                    target = inst;
+                    break;
+                }
+            }
+            if (!target) {
+                const mine = instances.map((i) => 'Site ' + (i.number != null ? i.number : '?')).join(', ');
+                const hint = mine ? " (your workspaces: " + mine + ")" : " (your account has no workspaces)";
+                return fallback("Workspace '" + wanted + "' not found" + hint + " — continuing unscoped.");
+            }
+        } else if (instances.length === 1) {
+            target = instances[0];
+        } else {
+            return fallback(null);
+        }
+        const scopeRes = await fetch("/api/v1/login", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({email: email, password: password, remember: remember, instance_id: target.id})
+        });
+        const scopeData = await scopeRes.json();
+        if (!scopeRes.ok || !scopeData.success) {
+            return fallback(wanted ? "Could not scope to '" + wanted + "' — continuing unscoped." : null);
+        }
+        return {accessToken: scopeData.data.access_token,
+                refreshToken: scopeData.data.refresh_token,
+                warning: null};
+    } catch (err) {
+        const params = new URLSearchParams(window.location.search);
+        const wanted = (params.get("instance") || "").trim();
+        return fallback(wanted ? "Could not scope to '" + wanted + "' — continuing unscoped." : null);
+    }
+}
+
 document.getElementById("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = document.getElementById("submit-btn");
@@ -75,12 +133,21 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
         if (!res.ok || !data.success) {
             throw new Error(data.message || data.msg || "Login failed");
         }
-        localStorage.setItem("access_token", data.data.access_token);
-        localStorage.setItem("refresh_token", data.data.refresh_token);
+        let accessToken = data.data.access_token;
+        let refreshToken = data.data.refresh_token;
+        const scoped = await tryScopeWorkspace(email, password, remember, accessToken, refreshToken);
+        accessToken = scoped.accessToken;
+        refreshToken = scoped.refreshToken;
+        if (scoped.warning) {
+            errBox.textContent = scoped.warning;
+            errBox.classList.remove("hidden");
+        }
+        localStorage.setItem("access_token", accessToken);
+        localStorage.setItem("refresh_token", refreshToken);
         localStorage.setItem("user", JSON.stringify(data.data.user));
         succBox.textContent = "Login successful — redirecting...";
         succBox.classList.remove("hidden");
-        setTimeout(() => { window.location.href = "/ideas"; }, 600);
+        setTimeout(() => { window.location.href = "/ideas"; }, scoped.warning ? 1800 : 600);
     } catch (err) {
         errBox.textContent = err.message;
         errBox.classList.remove("hidden");

@@ -102,9 +102,23 @@ def login():
     tokens = auth.create_tokens(
         user.id, user.role.value, user.email, remember, instance_id
     )
+    # Admin visibility for the navbar: global ADMIN, a site-wide grant, or
+    # any instance-admin membership (instance admins otherwise never see
+    # the Admin menu, although they can use the admin pages when scoped).
+    from app.models import ROLE_INSTANCE_ADMIN, Membership
+
+    user_payload = user.to_dict()
+    user_payload["is_site_admin"] = Membership.is_site_admin(user.id)
+    user_payload["admin_instance_ids"] = [
+        str(m.instance_id)
+        for m in Membership.query.filter_by(
+            user_id=user.id, role=ROLE_INSTANCE_ADMIN
+        ).all()
+        if m.instance_id is not None
+    ]
     resp, code = api_ok(
         {
-            "user": user.to_dict(),
+            "user": user_payload,
             "access_token": tokens["access_token"],
             "refresh_token": tokens["refresh_token"],
         }

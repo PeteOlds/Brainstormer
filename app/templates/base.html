@@ -116,7 +116,7 @@ function updateNavbarFromToken() {
                 const nameEl = document.getElementById('nav-username');
                 if (nameEl) nameEl.textContent = u.name || u.email || '';
                 const adminLink = document.getElementById('nav-admin-link');
-                if (adminLink) adminLink.style.display = (u.role === 'ADMIN') ? '' : 'none';
+                if (adminLink) adminLink.style.display = (u.role === 'ADMIN' || u.is_site_admin || ((u.admin_instance_ids || []).length > 0)) ? '' : 'none';
             } catch (e) { /* ignore malformed stored user */ }
         }
     } else {
@@ -141,8 +141,25 @@ function wireLogoutButton() {
         });
     }
 }
-document.addEventListener('DOMContentLoaded', () => { updateNavbarFromToken(); wireLogoutButton(); });
-window.addEventListener('storage', updateNavbarFromToken);
+document.addEventListener('DOMContentLoaded', () => { updateNavbarFromToken(); updateNavScope(); wireLogoutButton(); });
+window.addEventListener('storage', () => { updateNavbarFromToken(); updateNavScope(); });
+async function updateNavScope() {
+    const chip = document.getElementById('nav-scope');
+    if (!chip) return;
+    const show = (text) => { chip.textContent = text; chip.style.display = text ? '' : 'none'; };
+    try {
+        const tok = localStorage.getItem('access_token');
+        if (!tok) { show(''); return; }
+        const part = ((tok.split('.')[1] || '').replace(/-/g, '+').replace(/_/g, '/'));
+        const iid = (JSON.parse(atob(part + '='.repeat((4 - part.length % 4) % 4))).instance_id || '').toString();
+        if (!iid) { show('Unscoped'); return; }
+        const res = await fetch('/api/v1/instances', { headers: { 'Authorization': 'Bearer ' + tok } });
+        if (!res.ok) { show(''); return; }
+        const data = await res.json();
+        const inst = ((data.data || data).instances || []).find((i) => String(i.id) === iid);
+        show(inst ? ('Site ' + (inst.number != null ? inst.number : '?') + ' · ' + (inst.name || '')) : 'Scoped');
+    } catch (e) { show(''); }
+}
 </script>
 </body>
 </html>
