@@ -1,115 +1,77 @@
 # Project Standards — Brainstormer
 
-This project follows the global SDLC standards. In addition:
+Flask + Celery + Ollama idea pipeline. SQLite dev/tests, **PostgreSQL prod**.
+This file + global SDLC standards apply. User rule: **no markdown files
+(`*.md`), passwords, or AI instructions in commits** — so `CHANGELOG.md`
+updates stay in the working tree only.
 
 ## Build Requirements
 Every build must:
-1. Run the full test suite (`pytest`, coverage >= 35% per pyproject.toml, aim for 80%+) before finishing
-2. Update documentation that the change affects (README, AGENTS.md, docs/*)
-3. Bump the semantic version in `VERSION` and add a CHANGELOG entry
-   - patch for bug fixes, minor for new features, major for breaking changes
-   - **Create CHANGELOG.md if it doesn't exist** (see Keep a Changelog format)
+1. Run the full test suite before finishing (`pytest`, `--cov-fail-under=35` per `pyproject.toml`)
+2. Bump `VERSION` (patch fixes, minor features, major breaking) — changelog entry in tree, never committed
+3. Never push to `main`; never commit `.env` or secrets; semantic prefixes (`feat:`, `fix:`, …)
 
 ## Commands
 ```bash
-# Activate venv
 source venv/bin/activate
-
-# Run tests
-pytest                          # all tests
-pytest tests/unit/              # unit tests only
-pytest tests/integration/       # integration tests only
-pytest -k "test_name"           # single test by name
-
-# Lint/format
-black app tests
-isort app tests
-mypy app
-
-# DB migrations
-flask db migrate -m "message"
-flask db upgrade
-
-# Dev server (with workers in separate terminals)
-python run.py
-celery -A app.tasks worker -Q ollama -c 1 --loglevel=info
-celery -A app.tasks worker -Q default -c 4 --loglevel=info
-celery -A app.tasks beat --loglevel=info
+pytest                                # full suite (~2.5 min)
+pytest tests/unit/ -q --no-cov        # fast subset
+pytest path/to/test.py -k "name" -q --no-cov
+black --check <changed-files>         # repo is NOT black-clean; match surrounding style, don't reformat whole files
 ```
+```bash
+# Migrations (model changes ALWAYS need one — SQLite create_all masks missing migrations)
+flask db migrate -m "msg"             # needs reachable DB; fails without one
+docker exec brainstormer-web flask db upgrade    # apply on prod
+docker exec brainstormer-web flask db stamp <rev> # only for enum ADD VALUE (can't run in txn)
+```
+Enum values (`ideastatus`, `actiontype`): `ALTER TYPE … ADD VALUE` via **psql autocommit only**, then `stamp`. Never expect `upgrade` to run them.
 
-## Conventions
-- Modular code: `app/models`, `app/routes`, `app/services`, `app/utils`
-- Development inside the `venv/` virtual environment
-- SQLite by default (`DATABASE_URL` env var overrides)
-- Never commit `.env` or real secrets
-- Semantic commit prefixes (feat:, fix:, docs:, refactor:, test:, chore:)
-- **Security & Privacy**: All changes must pass `Guardrail.md` checklist
-- **LLM Integration**: Follow the `ollama-integration`, `structured-output`, and `prompt-engineering` skills
+## Live Topology (this host — Docker, not local processes)
+- `brainstormer-web` (host network, `:8000`, hypercorn `--reload`), `brainstormer-worker-ollama`, `brainstormer-worker-opencode`, `brainstormer-worker-default`, `brainstormer-beat`, postgres + redis. `ps` shows container processes on host PIDs — there is only ONE worker set.
+- All app containers bind-mount the repo: **web/templates reload live; task/model/schema code needs `docker restart brainstormer-worker-*`**.
+- Containers were launched with plain `docker run` (no compose plugin installed): recreate (never just edit) via `docker inspect` flags; snapshot with `docker commit` before risky changes. Fresh `pip install` at boot can resolve deps differently — prefer snapshot images over base-image relaunches.
+- Host Ollama at `127.0.0.1:11434` (GTX 1050 Ti); workers use `OLLAMA_BASE_URL=http://127.0.0.1:11434`. Embedding models ONLY support `/api/embeddings` (400 on `/api/generate`).
+- Queues must be empty before restarts: check `/api/ready` (`queue_depth_*`); `/api/ready` worker counts double-count (`active`+`reserved` maps) — `default: 2` with one node is normal.
 
-## Project-Specific Requirements
-- **Background Jobs**: Celery + Redis (see `celery-tasks` skill)
-- **Ollama Client**: `app/services/ollama_client.py` with JSON enforcement; `@token_required` not `@admin_required` on `/ollama/models`
-- **Prompt Templates**: File-based in `app/prompt_templates/` (not hardcoded)
-- **Response Validation**: Pydantic schemas in `app/schemas/ollama_schemas.py`
-- **Structured Logging**: structlog JSON format (production)
-- **Metrics**: Prometheus counters/histograms for LLM latency, queue depth
-- **Auth persistence**: Refresh token rotation with database-backed `RefreshToken` model; old tokens invalidated on rotation; "Remember Me" extends to 30 days
+## Architecture Notes
+- App factory `app/__init__.py:create_app()` (lazy extensions; `init_celery_app=False` for scripts). Configs in `app/config.py`; testing = in-memory SQLite + eager Celery + **headers-only JWT** (cookie navigation untested).
+- Auth decorators `app/utils/decorators.py` (`token_required`/`admin_required`, `user` first arg). `GUID` + `ensure_aware()` in `app/models/types.py` (SQLite naive datetimes → `TypeError` without it). JSON columns: never mutate in place.
+- Idea pipeline statuses: `NEW CONSIDERATION HOLD DESIGN BUILD COMPLETE DISCARDED` (`app/models/enums.py`). List pagination is **server-side** — frontend must use `total`/`pages`, never re-slice. `ACTIVE_ONLY` excludes DISCARDED.
+- Secondary actions: registry (`app/services/secondary_actions.py`) → template (`app/prompt_templates/*.txt`, `${SUPPORTING_MATERIAL}`) → Pydantic schema (`app/schemas/ollama_schemas.py`) → `run_secondary_action`. Run dialog sends `model_override`/`skills`/`guidelines` via `extra`. PRD/DESIGN_DOC are versioned (`is_current`), never deleted.
+- Discovery: opencode skills from `SKILLS_DIRS` (`*/SKILL.md` frontmatter) via read-only container mounts; guidelines from repo `guidelines/*.md`. Rescanned per request, no DB.
+- **OpenCode provider** (`app/services/opencode_backend.py`): shared server identity (no per-instance key; the CLI reads the worker user's `~/.local/share/opencode/auth.json`). Sandbox mode runs in a throwaway empty dir with a read-only agent; `repo` mode (Site-Admin only, `opencode_workspace` on `InstanceAIConfig`) uses `OPENCODE_WORKSPACE_DIR`. Routed to the dedicated serial `opencode` queue (`enqueue_generation`) with longer time limits. `OPENCODE_SANDBOX_AGENT=""` disables `--agent` (OpenCode's free tier rejects it). Attach mode (instance `endpoint` or `OPENCODE_SERVER_URL`): `opencode run --attach <url> --dir <server-dir>` against the LAN server; `--agent` never sent (servers reject project-local agents); sandbox `--dir` maps via `OPENCODE_SANDBOX_ROOT` ↔ `OPENCODE_SERVER_SANDBOX_ROOT` (same shared dir, here the repo bind mount). Worker needs the CLI binary mounted (`/opt/opencode`, `OPENCODE_BIN`) + loopback `CELERY_*` env (`.env` bridge hostnames don't resolve on host net). Never serves embeddings.
 
-## Architecture Notes (Critical for Navigation)
-- **App factory**: `app/__init__.py:create_app()` — all extensions initialized lazily to avoid circular imports (especially Celery)
-- **Config**: `app/config.py` — three configs (development, production, testing); testing uses in-memory SQLite + eager Celery
-- **Auth decorators**: `app/utils/decorators.py` — `token_required` (any user) and `admin_required` (ADMIN role); pass `user` as first arg to route handlers
-- **GUID type**: `app/models/types.py:GUID` — platform-independent UUID (PostgreSQL native, SQLite CHAR(36))
-- **Naive datetimes**: SQLite returns naive datetimes for `DateTime(timezone=True)`. **Always use `ensure_aware()`** from `app.models.types` before datetime maths
-- **JSON columns**: `structured_content`, `embedding` use plain `db.JSON` (not `MutableDict`). **Never mutate in place** — build a fresh dict, else SQLAlchemy sees no change and skips UPDATE
+## Frontend Rules (Alpine + Jinja, `ideas/dashboard.html` ~2k lines)
+- **One `x-data="ideasApp()"` scope must wrap content AND all modals**; nested `x-data` is isolated (no parent access) — use parent state (e.g. `dropdownOpenId`), never nest scopes.
+- **API 200 proves nothing about UI.** Verify every template change in headless Chromium (binaries cached: `~/.cache/ms-playwright/chromium-1234/...`; `/tmp/pwvenv` pattern with file-backed SQLite seed). There is no E2E suite — `tests/ui/` is API-only despite the name.
+- Dynamic-key `x-model` (`obj[fn().key]`) silently drops writes; bind stable item objects/arrays instead. `x-show` on elements inside unexpanded `x-if` never appears — prefer `x-if` for conditional blocks.
+- Status dropdowns/colors/idea lists must stay in sync by hand (4 selects + `getStatusClass` + activity `dotClass`/`ideaStatuses`).
 
-## Lessons Learned (Critical for Future Sessions)
-- **Frontend bugs hide silently**: A broken `fetch` handler (missing `});`) causes form submits to reload the page with no feedback. Always check the browser devtools Console tab.
-- **Cache invalidation matters**: `base_auth.html` had no `Cache-Control` headers, so incognito windows could still serve stale broken scripts. Add `<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">` and `<meta http-equiv="Pragma" content="no-cache">` and `<meta http-equiv="Expires" content="0">` to all auth templates.
-- **Nested quotes in Jinja2 templates**: `JSON.stringify({email, password, remember: remember})` inside `body:` is fragile. Isolate the JSON string or use a template variable to avoid quote-escalation cycles.
-- **Check both backend and frontend**: API returning `200` with valid tokens does not guarantee the UI works. The `/login` page had valid HTML but broken JavaScript — the `fetch` handler was never registered.
-- **Test file quote bugs can mask real bugs**: `tests/ui/test_prompt_dropdown.py` had its own nested-quote syntax errors, which caused `pytest` collection failures and concealed the login issue. Keep test files syntactically clean.
-- **Error boundaries must be reachable**: The `catch` block in the login handler does set the error box, but only if the `fetch` promise resolves. Because the `fetch` call was never properly closed, the entire handler was silently ignored, and the `catch` never ran — hence "no message given."
-- **Test isolation is non-negotiable**: session-scoped fixtures sharing one `:memory:` SQLite DB caused order-dependent UNIQUE failures across the suite. Fixtures (`app`, `celery_app`) must be function-scoped so every test gets a fresh DB. Fixtures must be self-sufficient: no hardcoded seed rows (collide with tests inserting the same rows), no ORM objects passed across nested app contexts (DetachedInstanceError — pass ids/strings), mocked `.delay().id` must be a string (MagicMock breaks `job_id` commits).
-- **Never touch real Redis in tests**: the testing config points at a real shared Redis DB. Writing keys (e.g. calling the live `beat_heartbeat`) poisons later suites — a stale heartbeat reads as scheduler-degraded and fails `test_health_ok` hours later with no local cause. Stub it, pop `redis_client` from extensions, or use FakeRedis.
-- **`@patch` eats fixture slots**: a decorator-injected mock fills the first parameter after `self`, so `def test_x(self, celery_app)` under `@patch` receives the mock, not the fixture — name the mock parameter explicitly (`def test_x(self, mock_client, celery_app)`).
-- **Naive vs aware datetimes**: SQLite returns naive datetimes for `DateTime(timezone=True)` columns. Any expiry/duration comparison must go through `ensure_aware()` (`app/models/types.py`) or it raises `TypeError` (broke refresh-token validation and run failure recording).
+## What the Suite Cannot Catch (verify live)
+SQLite masks Postgres enum/column/table gaps; header-auth tests miss cookie navigation; mocked `OllamaClient` misses real API shapes/endpoints; fixtures never exceed one page (pagination paths untested); small-model output garbage (lists/dicts/truncation) needs recorded-payload contract tests. After any model/migration/task change: check prod (`information_schema`, `pg_enum`, `alembic_version`, row counts) — data is never at risk from additive migrations, but code ships ahead of schema.
 
 ## Test Patterns
-- **Fixtures**: Function-scoped `app`, `celery_app` (see `tests/conftest.py`). Each test gets fresh in-memory DB.
-- **Auth fixtures**: `user_with_token`, `admin_user`, `admin_client` — use these instead of manual login in tests.
-- **Admin client wrapper**: `_AuthHeaderClient` injects headers automatically — call `admin_client.get/post` directly.
-- **Test DB**: `sqlite:///:memory:` in testing config; `CELERY_TASK_ALWAYS_EAGER=True` for synchronous task execution.
-- **Coverage**: `--cov=app --cov-fail-under=35` (configured in pyproject.toml, aim for 80%+)
+- Function-scoped `app`/`celery_app` fixtures, fresh in-memory DB each test; no hardcoded seed collisions; no ORM objects across contexts (pass ids); mocked `.delay().id` must be a string; `@patch` fills the first param after `self` — name mocks explicitly.
+- Never touch real Redis in tests (shared DB; stale keys poison later suites).
+- Auth: `admin_client` (header wrapper), `auth_user` (register+login), `admin_user`/`admin_prompt` seeds.
 
-## Key Files to Know
+## Key Files
 | Purpose | File |
-|---------|------|
-| App factory + extensions | `app/__init__.py` |
-| Config (dev/prod/test) | `app/config.py` |
-| Extensions init | `app/extensions.py` |
-| Auth decorators | `app/utils/decorators.py` |
-| GUID + datetime helpers | `app/models/types.py` |
-| Ollama client (JSON mode) | `app/services/ollama_client.py` |
-| Prompt templates loader | `app/services/prompt_templates.py` |
-| Secondary actions registry | `app/services/secondary_actions.py` |
-| Celery tasks (Ollama) | `app/tasks/ollama_tasks.py` |
-| Pydantic schemas | `app/schemas/ollama_schemas.py` |
-| Prompt template files | `app/prompt_templates/*.txt` |
-| Test fixtures | `tests/conftest.py` |
+|---|---|
+| Ideas dashboard (list + modals + all JS) | `app/templates/ideas/dashboard.html` |
+| Admin activity (runs, charts) | `app/templates/admin/activity.html` |
+| Ideas/status/vote/actions/comments API | `app/routes/ideas.py` |
+| Admin pages + activity stats | `app/routes/admin.py` |
+| Discovery (skills/guidelines) | `app/services/discovery.py` |
+| Rich action context | `app/services/action_context.py` |
+| Embeddings + similarity | `app/services/embedding_service.py` |
+| Prompt template files | `app/prompt_templates/*.txt` (+ repo `guidelines/*.md`) |
+| Migrations (single head — verify) | `migrations/versions/` |
 
 ## Related Skills
-- `api-rest` — endpoint/pagination/filtering patterns
-- `auth-jwt` — authentication patterns
-- `sqlalchemy-migrations` — database migrations
-- `tdd` — test-driven development
-- `flask-testing` — test fixtures
-- `docker` — container patterns
-- `ci-cd` — GitHub Actions pipeline
-- `celery-tasks` — background jobs, retry, worker topology
-- `ollama-integration` — local LLM client patterns
-- `structured-output` — Pydantic validation of model responses
-- `prompt-engineering` — file-based prompt templates
+`api-rest`, `auth-jwt`, `sqlalchemy-migrations`, `tdd`, `flask-testing`, `docker`, `ci-cd`, `celery-tasks`, `ollama-integration`, `structured-output`, `prompt-engineering`. Guardrails: `Guardrail.md` §13 every PR.
 
-## Guardrails Reference
-See `Guardrail.md` for non-negotiable security/privacy rules. Every PR must satisfy the checklist in §13.
+## Git Rules (hard-won here)
+- `git stash` is broken in this repo (root-owned dirs make pop fail and roll back the tree — recover via `git show stash@{0}:path > path`, never pop blindly).
+- Commit code/tests/migrations/`VERSION` only; leave all `*.md`, `TODOS.md`, guideline content uncommitted. Scan staged diff for secrets before committing.
