@@ -20,6 +20,7 @@ class ActionType(str, Enum):
     HYPOTHESIS_TEST = "HYPOTHESIS_TEST"
     GTM_STRATEGY = "GTM_STRATEGY"
     DESIGN_DOC = "DESIGN_DOC"
+    BUILD_CODE = "BUILD_CODE"
 
 
 class SecondaryActionResult(db.Model):
@@ -57,6 +58,11 @@ class SecondaryActionResult(db.Model):
     # were injected into the prompt that produced this version.
     skills_used = db.Column(db.JSON, nullable=True)
     guidelines_used = db.Column(db.JSON, nullable=True)
+    # Build target this version was previewed/written for (BUILD_CODE).
+    # Plain GUID, no FK: deleting a target must not cascade doc history;
+    # the write path re-validates and fails clearly when it is gone.
+    target_id = db.Column(GUID(), nullable=True)
+    target_name = db.Column(db.String(200), nullable=True)
     # Provider that served this version (Recreate pre-selects it).
     provider_used = db.Column(db.String(20), nullable=True)
 
@@ -74,6 +80,8 @@ class SecondaryActionResult(db.Model):
             "skills_used": self.skills_used or [],
             "guidelines_used": self.guidelines_used or [],
             "provider_used": self.provider_used or None,
+            "target_id": str(self.target_id) if self.target_id else None,
+            "target_name": self.target_name or None,
             "executed_at": self.executed_at.isoformat() if self.executed_at else None,
         }
 

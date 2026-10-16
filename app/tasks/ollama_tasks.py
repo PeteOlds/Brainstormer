@@ -576,6 +576,777 @@ def _accumulate_answers(idea_id, action_type, new_answers):
     return list(keyed.values()) + unkeyed
 
 
+def _extract_runtime_info(files: list) -> dict:
+    """Infer how to run a built app from its manifest files.
+
+    Inspects Dockerfile (EXPOSE/CMD), docker-compose (ports/image),
+    package.json (start script) and .env.example (credentials) without
+    executing anything. Returns only plain JSON-safe values so the
+    result row can carry them straight to the UI instructions modal.
+    """
+    import json
+    import re
+
+    # Compose service names that conventionally serve the human UI
+    # rather than the API. Matched case-insensitively, exact or as a
+    # path segment of the build context (./frontend, ./client …).
+    FRONTEND_HINTS = (
+        "frontend",
+        "ui",
+        "client",
+        "web",
+        "www",
+        "site",
+        "dashboard",
+        "portal",
+        "app",
+    )
+
+    def _pub_ports(mapping):
+        """Published (host, container) ports from one compose ports entry."""
+        host, target = None, None
+        if isinstance(mapping, int):
+            target = mapping
+        elif isinstance(mapping, str) and mapping.strip():
+            parts = mapping.strip().strip("\"'").split(":")
+            try:
+                if len(parts) >= 2:
+                    host = int(parts[-2])
+                target = int(parts[-1])
+            except ValueError:
+                host = target = None
+        elif isinstance(mapping, dict) and mapping.get("target") is not None:
+            try:
+                target = int(mapping["target"])
+            except (TypeError, ValueError):
+                target = None
+            try:
+                host = (
+                    int(mapping["published"])
+                    if mapping.get("published") is not None
+                    else None
+                )
+            except (TypeError, ValueError):
+                host = None
+        return host, target
+
+    def _looks_frontend(name, svc):
+        low = str(name or "").lower()
+        if low in FRONTEND_HINTS:
+            return True
+        build = svc.get("build") if isinstance(svc, dict) else None
+        ctx = build.get("context") if isinstance(build, dict) else build
+        if isinstance(ctx, str) and any(h in ctx.lower() for h in FRONTEND_HINTS):
+            return True
+        image = svc.get("image") if isinstance(svc, dict) else None
+        if isinstance(image, str) and "nginx" in image.lower():
+            return True
+        return False
+
+    info: dict = {
+        "start_command": None,
+        "app_url": None,
+        "port": None,
+        "frontend_url": None,
+        "frontend_port": None,
+        "credentials": None,
+        "docker_image": None,
+        "docker_compose_file": None,
+        "run_notes": None,
+    }
+    by_path = {}
+    for entry in files or []:
+        if isinstance(entry, dict) and entry.get("path"):
+            by_path[str(entry["path"])] = str(entry.get("content") or "")
+
+    def _dockerfile():
+        for path, content in by_path.items():
+            if path == "Dockerfile" or path.endswith("/Dockerfile"):
+                return content
+        return None
+
+    def _compose():
+        for path, content in by_path.items():
+            low = path.lower()
+            if low.endswith("docker-compose.yml") or low.endswith(
+                "docker-compose.yaml"
+            ):
+                return path, content
+        return None, None
+
+    port = None
+    start_command = None
+    dockerfile = _dockerfile()
+    if dockerfile:
+        match = re.search(r"(?m)^\s*EXPOSE\s+(\d+)", dockerfile)
+        if match:
+            try:
+                port = int(match.group(1))
+            except ValueError:
+                pass
+        match = re.search(r"(?m)^\s*CMD\s+(.+)$", dockerfile)
+        if match:
+            start_command = match.group(1).strip()
+
+    compose_path, compose_content = _compose()
+    docker_image = None
+    frontend_port = None
+    if compose_content:
+        info["docker_compose_file"] = compose_path
+        try:
+            import yaml
+
+            compose = yaml.safe_load(compose_content) or {}
+        except Exception:
+            compose = {}
+        services = compose.get("services") or {}
+        compose_host_seen = False
+        if isinstance(services, dict):
+            for _name, svc in services.items():
+                if not isinstance(svc, dict):
+                    continue
+                for mapping in svc.get("ports") or []:
+                    # Host side is what the user opens and what can
+                    # collide: "HOST:CONTAINER" binds HOST, a bare port
+                    # (or int) only names the container side.
+                    host, target = _pub_ports(mapping)
+                    if _looks_frontend(_name, svc):
+                        if host and frontend_port is None:
+                            frontend_port = host
+                        continue
+                    if host:
+                        # A compose host binding is deployment truth: it
+                        # overwrites a Dockerfile EXPOSE, first one wins
+                        # across services — but keep scanning, a frontend
+                        # service may still follow.
+                        if not compose_host_seen:
+                            port = host
+                            compose_host_seen = True
+                        break
+                    if target and port is None:
+                        # Expose-only form: no host binding to collide
+                        # with, but still the port the app serves.
+                        port = target
+                if isinstance(svc.get("image"), str) and svc["image"].strip():
+                    docker_image = svc["image"].strip()
+
+    for path, content in by_path.items():
+        if path.endswith("package.json"):
+            try:
+                pkg = json.loads(content)
+                scripts = pkg.get("scripts") or {}
+                if isinstance(scripts, dict) and scripts.get("start"):
+                    start_command = start_command or str(scripts["start"])
+            except (ValueError, AttributeError):
+                pass
+            break
+
+    credentials = None
+    for path, content in by_path.items():
+        low = path.lower()
+        if low.endswith(".env.example") or low.endswith(".env.sample"):
+            found = {}
+            for line in content.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, _val = line.partition("=")
+                key = key.strip()
+                if key and (
+                    "password" in key.lower()
+                    or "secret" in key.lower()
+                    or "user" in key.lower()
+                    or "login" in key.lower()
+                ):
+                    found[key] = "<set via environment>"
+            if found:
+                credentials = found
+                break
+
+    notes = []
+    # No "Start command:" note: the How-to-run panel already shows it as a
+    # copyable Run row, and models restate it here verbatim (noise).
+    # Browser step goes last: open the app only after starting it.
+    app_url = None
+    if credentials:
+        notes.append("Default credentials: " + ", ".join(sorted(credentials)))
+    if docker_image:
+        notes.append(f"Docker image: {docker_image}")
+    if compose_path:
+        notes.append(f"Or run everything with docker-compose using {compose_path}.")
+    if port:
+        app_url = f"http://localhost:{port}"
+    frontend_url = None
+    if frontend_port:
+        frontend_url = f"http://localhost:{frontend_port}"
+        notes.append(f"Open {frontend_url} in your browser once it is running.")
+    elif app_url:
+        notes.append(f"Open {app_url} in your browser once it is running.")
+    info.update(
+        {
+            "start_command": start_command,
+            "app_url": app_url,
+            "port": port,
+            "frontend_url": frontend_url,
+            "frontend_port": frontend_port,
+            "credentials": credentials,
+            "docker_image": docker_image,
+            "run_notes": "\n".join(notes) if notes else None,
+        }
+    )
+    return info
+
+
+def _rewrite_compose_host_port(files: list, old: int, new: int) -> tuple[list, int]:
+    """Point a compose manifest's published host ports at ``new``.
+
+    Only entries publishing ``old`` are touched; the container side is
+    never changed, so the app's own code keeps working unmodified.
+    Returns (files, changed_count). Unparseable compose files are left
+    alone (0 changes) rather than risked.
+    """
+    try:
+        import yaml
+    except ImportError:
+        return files, 0
+    changed = 0
+    out = []
+    for entry in files or []:
+        if not isinstance(entry, dict):
+            out.append(entry)
+            continue
+        low = str(entry.get("path") or "").lower()
+        if not (
+            low.endswith("docker-compose.yml") or low.endswith("docker-compose.yaml")
+        ):
+            out.append(entry)
+            continue
+        try:
+            compose = yaml.safe_load(entry.get("content") or "") or {}
+        except Exception:
+            out.append(entry)
+            continue
+        if not isinstance(compose, dict):
+            out.append(entry)
+            continue
+        touched = False
+        services = compose.get("services") or {}
+        if isinstance(services, dict):
+            for _name, svc in services.items():
+                if not isinstance(svc, dict) or not isinstance(svc.get("ports"), list):
+                    continue
+                rewritten = []
+                for mapping in svc["ports"]:
+                    if isinstance(mapping, int) and mapping == old:
+                        # Expose-only form pins nothing: pin HOST:new so
+                        # the URL we show actually reaches the app.
+                        rewritten.append(f"{new}:{mapping}")
+                        touched = True
+                    elif isinstance(mapping, str) and mapping.strip():
+                        raw = mapping.strip()
+                        quote = ""
+                        if raw[:1] in "\"'" and raw[-1:] == raw[:1]:
+                            quote = raw[:1]
+                            raw = raw[1:-1]
+                        parts = raw.split(":")
+                        try:
+                            if len(parts) >= 2 and int(parts[-2]) == old:
+                                parts[-2] = str(new)
+                                rewritten.append(quote + ":".join(parts) + quote)
+                                touched = True
+                            elif len(parts) == 1 and int(parts[0]) == old:
+                                rewritten.append(quote + f"{new}:{parts[0]}" + quote)
+                                touched = True
+                            else:
+                                rewritten.append(mapping)
+                        except ValueError:
+                            rewritten.append(mapping)
+                    elif isinstance(mapping, dict):
+                        try:
+                            if (
+                                mapping.get("published") is not None
+                                and int(mapping["published"]) == old
+                            ):
+                                mapping = dict(mapping, published=new)
+                                touched = True
+                        except (TypeError, ValueError):
+                            pass
+                        rewritten.append(mapping)
+                    else:
+                        rewritten.append(mapping)
+                svc["ports"] = rewritten
+        if touched:
+            try:
+                entry = dict(
+                    entry,
+                    content=yaml.safe_dump(
+                        compose, sort_keys=False, default_flow_style=False
+                    ),
+                )
+                changed += 1
+            except Exception:
+                pass
+        out.append(entry)
+    return out, changed
+
+
+def _pretty_cmd(value) -> str:
+    """Model commands into runnable host commands.
+
+    Joins real and stringified lists ('["python", "app.py"]' →
+    'python app.py') and rewrites the bare `python` interpreter to
+    `python3` (host shells lack `python`; venvs provide `python3`).
+    """
+    import json as _json
+    import re as _re
+
+    if isinstance(value, (list, tuple)):
+        text = " ".join(str(v) for v in value)
+    elif isinstance(value, str) and value.strip().startswith("["):
+        try:
+            parsed = _json.loads(value)
+            text = (
+                " ".join(str(v) for v in parsed) if isinstance(parsed, list) else value
+            )
+        except ValueError:
+            text = value
+    else:
+        text = value if isinstance(value, str) else ""
+    return _re.sub(r"(^|&&\s*|;\s*|\|\s*|\)\s*)python(?=\s|$)", r"\1python3", text)
+
+
+def _derive_runbook(
+    files: list, start_command, host_root: str, container_root: str | None = None
+) -> dict | None:
+    """Derive verified paste-and-run commands from a build manifest.
+
+    Resolves the entry point (``python -m pkg.mod``, ``python app.py``,
+    ``uvicorn pkg.mod:app``) against the manifest's file list to find the
+    directory the command must run in, and pairs it with a venv setup step
+    when a pip requirements file ships (bare hosts refuse system pip via
+    PEP 668). Returns ``{"setup", "setup_fallback", "run", "workdir"}``
+    with absolute host paths (the fallback installs the same packages
+    unpinned, for newer Pythons the old pins no longer build on), plus
+    container-native ``run_argv``/``setup_argv``/``pip_argv`` for the
+    supervised runner when ``container_root`` is given (host paths do not
+    exist inside worker containers). Returns None when the command cannot
+    be resolved (callers fall back to the raw fields).
+    """
+    import os as _os
+    import re as _re
+
+    if not host_root or not start_command:
+        return None
+    cmd = _pretty_cmd(start_command).strip()
+    if not cmd:
+        return None
+    paths = [
+        str(e.get("path") or "").replace("\\", "/").lstrip("./")
+        for e in files or []
+        if isinstance(e, dict) and e.get("path")
+    ]
+    if not paths:
+        return None
+
+    def _resolve_module(mod: str) -> str | None:
+        mod_path = mod.replace(".", "/")
+        for cand in (mod_path + ".py", mod_path + "/__init__.py"):
+            hit = next((p for p in paths if p == cand or p.endswith("/" + cand)), None)
+            if hit is not None:
+                return hit[: len(hit) - len(cand)].rstrip("/")
+        return None
+
+    _RUNNERS = {"uvicorn", "gunicorn", "hypercorn", "daphne"}
+
+    def _resolve_dir() -> str | None:
+        # `python[3] -m dotted.mod ...` or `python[3] script.py ...`
+        m = _re.search(
+            r"(?:^|&&\s*|;\s*)\s*python3?\s+(?:-m\s+([\w.]+)|([\w./-]+\.pyw?))(?:\s|$)",
+            cmd,
+        )
+        if m and m.group(1):
+            mod = m.group(1)
+            if mod.split(".")[0] in _RUNNERS:
+                # Runner invocation (`python -m uvicorn pkg.mod:app`):
+                # the app Plugins is the `dotted:app` argument, not the runner.
+                appm = _re.search(r"([\w.]+):\S+", cmd)
+                if not appm:
+                    return None
+                return _resolve_module(appm.group(1))
+            return _resolve_module(mod)
+        if m and m.group(2):
+            script = m.group(2).lstrip("./")
+            hit = next(
+                (p for p in paths if p == script or p.endswith("/" + script)), None
+            )
+            if hit is None:
+                return None
+            # Run from the target root with the manifest-relative script
+            # path (never cd into its dir: that would double the path).
+            return ""
+        # `uvicorn|gunicorn dotted.mod:app ...`
+        m = _re.search(r"(?:^|&&\s*|;\s*)\s*(?:uvicorn|gunicorn)\s+([\w.]+):\S+", cmd)
+        if m:
+            mod_path = m.group(1).replace(".", "/") + ".py"
+            hit = next(
+                (p for p in paths if p == mod_path or p.endswith("/" + mod_path)), None
+            )
+            if hit is None:
+                return None
+            return hit[: len(hit) - len(mod_path)].rstrip("/")
+        return None
+
+    appdir = _resolve_dir()
+    if appdir is None:
+        return None
+    workdir = (
+        host_root.rstrip("/") if not appdir else host_root.rstrip("/") + "/" + appdir
+    )
+    quoted = f'cd "{workdir}"'
+    setup = None
+    req = next(
+        (p for p in paths if _re.search(r"(^|/)requirements[^/]*\.txt$", p or "")),
+        None,
+    )
+    if req is not None:
+        rel = _os.path.relpath(req, appdir) if appdir else req
+        if not rel.startswith(".."):
+            setup = (
+                f"{quoted} && python3 -m venv --upgrade .venv "
+                f"&& . .venv/bin/activate && pip install -r {rel}"
+            )
+    use_venv = setup is not None
+    # Supervised processes run inside worker containers, where host paths
+    # do not exist: argv uses the container twin when one was provided.
+    # Display strings above stay host-native for pasting.
+    cworkdir = None
+    if container_root:
+        cworkdir = (
+            container_root.rstrip("/")
+            if not appdir
+            else container_root.rstrip("/") + "/" + appdir
+        )
+    eworkdir = cworkdir or workdir
+    evenv = eworkdir.rstrip("/") + "/.venv" if use_venv else ""
+    # Bare interpreter for the setup-less case: the runner resolves it
+    # against its own PATH (absolute host paths do not exist there).
+    epython = evenv + "/bin/python" if use_venv else "python3"
+    venv_dir = workdir.rstrip("/") + "/.venv" if use_venv else ""
+    venv_python = venv_dir + "/bin/python" if use_venv else "/usr/bin/python3"
+    run_argv = None
+    pretty = _pretty_cmd(start_command).strip()
+    m = _re.match(r"^python3?\s+(.*)$", pretty)
+    if m:
+        import shlex as _shlex
+
+        try:
+            args = _shlex.split(m.group(1), posix=True)
+        except ValueError:
+            args = None
+        if args is not None:
+            run_argv = [epython] + args
+    setup_argv = ["python3", "-m", "venv", "--upgrade", evenv] if use_venv else []
+    pip_argv = [evenv + "/bin/pip", "install", "-r", rel] if use_venv else []
+    # Fallback for newer Pythons the pinned versions no longer build on:
+    # same packages, unpinned. Parsed from the requirements content so it
+    # can never name something the manifest does not use.
+    setup_fallback = None
+    pip_fallback_argv = []
+    if use_venv:
+        req_entry = next(
+            (
+                e
+                for e in files or []
+                if isinstance(e, dict) and str(e.get("path") or "") == req
+            ),
+            None,
+        )
+        names = []
+        for line in str((req_entry or {}).get("content") or "").splitlines():
+            line = line.split("#", 1)[0].split(";", 1)[0].strip()
+            m = _re.match(r"^([A-Za-z0-9_.-]+(?:\[[^\]]*\])?)", line)
+            if m and not line.startswith("-"):
+                names.append(m.group(1))
+        if names:
+            setup_fallback = (
+                f"{quoted} && . .venv/bin/activate && pip install {' '.join(names)}"
+            )
+            pip_fallback_argv = [evenv + "/bin/pip", "install"] + names
+    if run_argv is None:
+        # No safe argv (non-python command without installable requirements):
+        # the raw fields stay the only source.
+        return None
+    if use_venv:
+        # Display form stays pasteable; argv form is resolved by the
+        # runner inside its own container (absolute host python paths do
+        # not exist there).
+        run = f"{quoted} && . .venv/bin/activate && {cmd}"
+    else:
+        run = f"{quoted} && {cmd}"
+    return {
+        "setup": setup,
+        "setup_fallback": setup_fallback,
+        "run": run,
+        "workdir": workdir,
+        "workdir_container": cworkdir,
+        "venv_dir": venv_dir,
+        "setup_argv": setup_argv,
+        "pip_argv": pip_argv,
+        "pip_fallback_argv": pip_fallback_argv,
+        "run_argv": run_argv,
+    }
+
+
+def _allocate_build_port(runtime: dict, files: list) -> tuple[dict, list, list]:
+    """Give a confirmed build a free host port, rewriting host-side refs.
+
+    Checks ``runtime['port']`` against this machine. When busy, allocates
+    the next free port and rewrites the app URL, explicit ``--port`` flags
+    in the start command, and compose published ports (container side
+    untouched). Returns (runtime, files, report_lines) in plain language
+    for non-technical users. Never raises: worst case the conflict is
+    recorded in the notes and the original port kept.
+    """
+    from app.services.build_service import allocate_port, port_in_use
+
+    report = []
+    try:
+        port = int(runtime.get("port")) if runtime.get("port") else None
+    except (TypeError, ValueError):
+        port = None
+    try:
+        fport = (
+            int(runtime.get("frontend_port")) if runtime.get("frontend_port") else None
+        )
+    except (TypeError, ValueError):
+        fport = None
+    try:
+        busy = port_in_use(port) if port else False
+    except Exception:
+        busy = False
+    try:
+        fbusy = port_in_use(fport) if fport else False
+    except Exception:
+        fbusy = False
+    if not busy and not fbusy:
+        return runtime, files, report
+    if fbusy:
+        # Same for the frontend/dashboard port: the UI URL must open
+        # something, so a busy dashboard port moves too.
+        import re
+
+        fnew, _ = allocate_port(fport)
+        if fnew == fport:
+            line = (
+                f"Dashboard port {fport} is already in use and no free "
+                "port was found nearby — stop the other program first."
+            )
+        else:
+            files, _ = _rewrite_compose_host_port(files, fport, fnew)
+            runtime = dict(
+                runtime, frontend_port=fnew, frontend_url=f"http://localhost:{fnew}"
+            )
+            existing = runtime.get("run_notes")
+            if isinstance(existing, str) and existing:
+                runtime["run_notes"] = re.sub(
+                    r"(localhost|127\.0\.0\.1)" + r":" + str(fport) + r"\b",
+                    lambda m: m.group(1) + f":{fnew}",
+                    existing,
+                )
+            line = (
+                f"Dashboard port {fport} is already in use, so the dashboard "
+                f"moved to port {fnew} — the Open link below already uses {fnew}."
+            )
+        runtime["run_notes"] = "\n".join(
+            [n for n in [runtime.get("run_notes"), line] if n]
+        )
+        report.append(line)
+    if not busy:
+        return runtime, files, report
+    new_port, _changed = allocate_port(port)
+    if new_port == port:
+        line = (
+            f"Port {port} is already in use on this machine and no free "
+            "port was found nearby — stop the other program first, then run."
+        )
+        runtime["run_notes"] = "\n".join(
+            [n for n in [runtime.get("run_notes"), line] if n]
+        )
+        report.append(line)
+        return runtime, files, report
+    old, new = port, new_port
+    runtime = dict(runtime, port=new, port_requested=old, port_changed=True)
+    url = runtime.get("app_url")
+    if isinstance(url, str) and f":{old}" in url:
+        import re
+
+        runtime["app_url"] = re.sub(
+            r"(://[^/:]+)" + r":" + str(old) + r"(?=/|$)",
+            r"\g<1>" + f":{new}",
+            url,
+            count=1,
+        )
+    cmd = runtime.get("start_command")
+    cmd_rewritten = False
+    if isinstance(cmd, str) and cmd:
+        import re
+
+        # Separator class covers `--port 8000`, `--port=8000` and the
+        # Dockerfile-CMD JSON-array form `"--port", "8000"`.
+        rewritten, n = re.subn(
+            r"(--port)([\"',\s=]+)" + str(old) + r"\b",
+            lambda m: m.group(1) + m.group(2) + str(new),
+            cmd,
+        )
+        if not n:
+            rewritten, n = re.subn(
+                r"(PORT=|localhost:|127\.0\.0\.1:)" + str(old) + r"\b",
+                lambda m: m.group(1) + str(new),
+                cmd,
+            )
+        if n:
+            runtime["start_command"] = rewritten
+            cmd_rewritten = True
+    files, compose_rewritten = _rewrite_compose_host_port(files, old, new)
+    # Notes prose written before allocation names the old port (model and
+    # extractor output); point localhost URLs at the new one BEFORE
+    # appending the allocation notice (which must keep naming the old).
+    existing_notes = runtime.get("run_notes")
+    if isinstance(existing_notes, str) and existing_notes:
+        import re
+
+        runtime["run_notes"] = re.sub(
+            r"(localhost|127\.0\.0\.1)" + r":" + str(old) + r"\b",
+            lambda m: m.group(1) + f":{new}",
+            existing_notes,
+        )
+    line = (
+        f"Port {old} is already in use on this machine, so this build was "
+        f"set to port {new} — the commands below already use {new}."
+    )
+    if not cmd_rewritten and not compose_rewritten and cmd:
+        line += (
+            " The start command does not name its port, so if the app itself "
+            f"fixes its port, change that setting to {new} as well."
+        )
+    runtime["run_notes"] = "\n".join([n for n in [runtime.get("run_notes"), line] if n])
+    report.append(line)
+    if compose_rewritten:
+        report.append(
+            f"docker-compose.yml now publishes {new} on this machine "
+            f"(the app inside still uses {old})."
+        )
+    return runtime, files, report
+
+
+def _write_confirmed_build(idea, build_target, build_root, run_id):
+    """Write a previewed manifest to its target (confirm run, no LLM).
+
+    Loads the current unwritten BUILD_CODE preview for this target, writes
+    its stored files, and appends a new version carrying the write report.
+    Every failure marks the run failed with a plain message and returns.
+    """
+    from app.models import SecondaryActionResult
+    from app.schemas.ollama_schemas import BuildCodeOutput
+    from app.services.build_service import BuildError, server_path, write_manifest
+    from pydantic import ValidationError
+
+    preview = SecondaryActionResult.query.filter_by(
+        idea_id=idea.id, action_type="BUILD_CODE", is_current=True
+    ).first()
+    if (
+        preview is None
+        or preview.result_data.get("written")
+        or str(preview.target_id or "") != str(build_target.id)
+    ):
+        _record_failure(
+            run_id,
+            "No pending preview for this target — run the build preview first.",
+        )
+        return
+    try:
+        manifest = BuildCodeOutput.model_validate(preview.result_data)
+    except ValidationError as exc:
+        _record_failure(run_id, f"Stored preview is corrupt: {exc}")
+        return
+    try:
+        manifest_files = [f.model_dump() for f in manifest.files]
+        runtime = _extract_runtime_info(manifest_files)
+        # Port check + compose rewrite happen BEFORE writing so the
+        # on-disk compose file already publishes a free host port.
+        runtime, manifest_files, port_report = _allocate_build_port(
+            runtime, manifest_files
+        )
+        written, skipped = write_manifest(
+            build_root,
+            manifest_files,
+        )
+    except BuildError as exc:
+        _record_failure(run_id, str(exc))
+        return
+    report = [f"wrote {w['path']} ({w['bytes']} B)" for w in written]
+    report += [f"skipped {s['path']}: {s['reason']}" for s in skipped]
+    report += port_report
+    try:
+        runbook = _derive_runbook(
+            manifest_files,
+            runtime.get("start_command"),
+            server_path(str(build_root)),
+            str(build_root),
+        )
+    except Exception:
+        runbook = None
+    current = SecondaryActionResult.query.filter_by(
+        idea_id=idea.id, action_type="BUILD_CODE", is_current=True
+    ).all()
+    next_version = max([r.version for r in current], default=0) + 1
+    for r in current:
+        r.is_current = False
+    db.session.add(
+        SecondaryActionResult(
+            idea_id=idea.id,
+            action_type="BUILD_CODE",
+            model_used=preview.model_used,
+            provider_used=preview.provider_used,
+            result_data={
+                **preview.result_data,
+                "written": True,
+                "target_name": build_target.name,
+                "target_path": str(build_root),
+                "target_host_path": server_path(str(build_root)),
+                "runbook": runbook,
+                "write_report": report,
+                **{k: v for k, v in runtime.items() if v is not None},
+            },
+            version=next_version,
+            is_current=True,
+            skills_used=list(preview.skills_used or []) or None,
+            guidelines_used=list(preview.guidelines_used or []) or None,
+            target_id=str(build_target.id),
+            target_name=build_target.name,
+            instance_id=idea.instance_id,
+        )
+    )
+    db.session.commit()
+    logger.info(
+        "build_written",
+        idea_id=str(idea.id),
+        target=build_target.name,
+        files=len(written),
+    )
+    run = None
+    if run_id:
+        from app.models import PromptRun
+
+        try:
+            run = db.session.get(PromptRun, uuid.UUID(str(run_id)))
+        except (ValueError, TypeError):
+            run = None
+    if run is not None:
+        run.mark_success()
+        db.session.commit()
+
+
 @celery.task(
     bind=True,
     base=BaseTask,
@@ -623,10 +1394,10 @@ def run_secondary_action(
         db.session.commit()
 
     client = OllamaClient(timeout=600.0)
-    model = (
-        model_override or idea.prompt_config.model_name
-        if idea.prompt_config
-        else "llama3:8b"
+    # Explicit run args always win; the prompt (or the built-in default)
+    # only fills what the caller left blank.
+    model = model_override or (
+        idea.prompt_config.model_name if idea.prompt_config else "llama3:8b"
     )
     provider_cfg = idea.prompt_config
     provider = (provider_cfg.provider or "ollama").lower() if provider_cfg else "ollama"
@@ -644,8 +1415,9 @@ def run_secondary_action(
         provider = provider_override.lower()
     hosted = provider != "ollama"
     # A model override on a hosted idea is a litellm model id; on a
-    # prompt-less idea the override alone cannot imply a provider.
-    if model_override and not provider_cfg:
+    # prompt-less idea the override alone cannot imply a provider — unless
+    # the caller explicitly chose one via provider_override.
+    if model_override and not provider_cfg and not provider_override:
         hosted = False
         provider = "ollama"
     logger.info(
@@ -658,9 +1430,39 @@ def run_secondary_action(
         idea_id=idea_id,
     )
 
-    # Pre-flight: verify model exists in this Ollama instance (local only)
-    if not hosted and not client.is_model_available(model):
+    # Pre-flight: verify model exists in this Ollama instance (local only).
+    # Skipped for BUILD_CODE confirms: they write a stored manifest and
+    # never touch a model.
+    _build_confirm = action_type == "BUILD_CODE" and bool(
+        (extra_context or {}).get("confirm_build", False)
+    )
+    try:
+        _model_available = hosted or _build_confirm or client.is_model_available(model)
+    except Exception as exc:
+        # Unreachable Ollama fails the run with a clear message instead of
+        # orphaning it as RUNNING through silent autoretry exhaustion.
+        logger.error(
+            "ollama_unreachable",
+            base_url=client.base_url,
+            model=model,
+            action_type=action_type,
+            idea_id=idea_id,
+        )
+        run = _get_run()
+        if run is not None:
+            run.mark_failed(f"Ollama unreachable at {client.base_url}: {exc}")
+            db.session.commit()
+        return
+    if not _model_available:
         err_msg = f"Model '{model}' not installed at {client.base_url}"
+        if "/" in (model or "") and provider == "ollama":
+            # Classic stale-dialog shape: a hosted model id (e.g.
+            # 'opencode/...') sent without its provider_override, so the
+            # run fell back to the local engine. Say so plainly.
+            err_msg += (
+                " — the model name looks like a hosted-provider model; "
+                "re-run with that provider selected, not local Ollama."
+            )
         logger.error(
             "ollama_model_missing",
             base_url=client.base_url,
@@ -786,6 +1588,37 @@ def run_secondary_action(
         guideline_names = (
             (extra_context or {}).get("guidelines") or stage_cfg.get("guidelines") or []
         )
+        # BUILD_CODE target resolution, fail fast before spending on the LLM.
+        # The confirm run skips generation entirely (writes the stored
+        # preview manifest instead) — see _write_confirmed_build below.
+        build_target = None
+        build_root = None
+        build_confirm = False
+        if action_type == "BUILD_CODE":
+            import uuid as uuid_mod
+
+            from app.models import InstanceBuildTarget
+            from app.services.build_service import BuildError, resolve_target
+
+            build_confirm = bool((extra_context or {}).get("confirm_build", False))
+            try:
+                build_target = InstanceBuildTarget.query.filter_by(
+                    id=uuid_mod.UUID(str((extra_context or {}).get("target_id"))),
+                    instance_id=idea.instance_id,
+                ).first()
+            except (ValueError, TypeError, AttributeError):
+                build_target = None
+            if build_target is None:
+                _record_failure(run_id, "Unknown build target for this instance.")
+                return
+            try:
+                build_root = resolve_target(build_target)
+            except BuildError as exc:
+                _record_failure(run_id, str(exc))
+                return
+            if build_confirm:
+                _write_confirmed_build(idea, build_target, build_root, run_id)
+                return
         if skill_names or guideline_names:
             from app.services.discovery import read_guideline, read_skill_body
 
@@ -820,12 +1653,11 @@ def run_secondary_action(
                 guidelines=guideline_names,
             )
         base_prompt = get_base_prompt()
-        model = (
-            model_override or idea.prompt_config.model_name
-            if idea.prompt_config
-            else "llama3:8b"
-        )
-        prompt_config = idea.prompt_config
+        # Model/provider/prompt_config come from the canonical resolution
+        # above (explicit run args win); do NOT re-derive them here — a
+        # duplicate ternary once silently discarded model_override for
+        # prompt-less ideas while the log line above showed the right values.
+        prompt_config = provider_cfg
 
         # Analytical actions run cold: precision over creativity. Cap the
         # prompt's temperature at 0.3 (a lower setting is respected).
@@ -854,6 +1686,10 @@ def run_secondary_action(
             "PESTEL",
         }
         min_tokens = 8000 if action_type in complex_actions else 4000
+        if action_type == "BUILD_CODE":
+            # Manifests dwarf other outputs: raise the floor so file
+            # contents are not cut off mid-object (schema caps apply too).
+            min_tokens = 16000
         options["num_predict"] = max(options.get("num_predict") or 0, min_tokens)
         keep_alive = (
             prompt_config.keep_alive
@@ -889,10 +1725,16 @@ def run_secondary_action(
         if action_type in ("PRD_DOC", "DESIGN_DOC"):
             validated = _drop_answered_questions(validated, idea.id, action_type)
 
-        # Store result. PRD/DESIGN_DOC are versioned: supersede the
+        # Store result. PRD/DESIGN_DOC/BUILD_CODE are versioned: supersede the
         # current version instead of deleting history, so per-document
         # comment threads stay pinned to their version.
-        if action_type in ("PRD_DOC", "DESIGN_DOC"):
+        if action_type == "BUILD_CODE" and build_target is not None:
+            validated.target_name = build_target.name
+            validated.target_path = str(build_root)
+            from app.services.build_service import server_path
+
+            validated.target_host_path = server_path(str(build_root))
+        if action_type in ("PRD_DOC", "DESIGN_DOC", "BUILD_CODE"):
             current = SecondaryActionResult.query.filter_by(
                 idea_id=idea.id, action_type=action_type, is_current=True
             ).all()
@@ -916,6 +1758,16 @@ def run_secondary_action(
             ),
             skills_used=list(dict.fromkeys(skill_names)) or None,
             guidelines_used=list(dict.fromkeys(guideline_names)) or None,
+            target_id=(
+                str(build_target.id)
+                if action_type == "BUILD_CODE" and build_target is not None
+                else None
+            ),
+            target_name=(
+                build_target.name
+                if action_type == "BUILD_CODE" and build_target is not None
+                else None
+            ),
             instance_id=idea.instance_id,
         )
         db.session.add(result)

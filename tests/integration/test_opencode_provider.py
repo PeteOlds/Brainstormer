@@ -504,12 +504,18 @@ def test_models_endpoint_serves_server_catalog_when_unrestricted(app, client):
 
     with patch(
         "app.services.opencode_backend.list_server_models",
-        return_value=["opencode/aaa-model", "opencode/big-pickle"],
+        return_value=[
+            {"id": "opencode/aaa-model", "name": "Aaa Model"},
+            {"id": "opencode/big-pickle", "name": "opencode/big-pickle"},
+        ],
     ) as mock_list:
         res = client.get("/api/v1/ollama/models?provider=opencode", headers=headers)
     assert res.status_code == 200
     body = res.get_json()["data"]
-    assert body["models"] == ["opencode/aaa-model", "opencode/big-pickle"]
+    assert body["models"] == [
+        {"id": "opencode/aaa-model", "name": "Aaa Model"},
+        {"id": "opencode/big-pickle", "name": "opencode/big-pickle"},
+    ]
     assert body["unrestricted"] is True
     mock_list.assert_called_once()
 

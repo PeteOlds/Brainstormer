@@ -59,6 +59,24 @@ class Config:
     # the same shared directory seen from each side.
     OPENCODE_SANDBOX_ROOT = get_env("OPENCODE_SANDBOX_ROOT", "")
     OPENCODE_SERVER_SANDBOX_ROOT = get_env("OPENCODE_SERVER_SANDBOX_ROOT", "")
+    # Build roots (os.pathsep-separated, worker-visible): the only
+    # directories BUILD_CODE runs may write into. Defaults to the repo's
+    # own `projects/` folder (resolved per process, so host and container
+    # views agree); explicit roots add side mounts like /builds.
+    OPENCODE_BUILD_ROOTS = get_env(
+        "OPENCODE_BUILD_ROOTS",
+        os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "projects",
+        ),
+    )
+    # Host-side build roots, parallel to OPENCODE_BUILD_ROOTS (same order):
+    # where the containers' write dirs live on the machine users paste
+    # commands into. Run instructions `cd` into these so commands work
+    # outside containers. Roots without a host twin stay untranslated.
+    # Real container env wins; the repo .env fills the rest (load_dotenv
+    # does not override), so this ships without recreating containers.
+    OPENCODE_SERVER_BUILD_ROOTS = get_env("OPENCODE_SERVER_BUILD_ROOTS", "")
 
     # App / Slack
     APP_BASE_URL = get_env("APP_BASE_URL", "http://localhost:8000")

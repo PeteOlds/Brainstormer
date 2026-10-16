@@ -5,6 +5,9 @@ from .ai_config import (
     PROVIDERS,
     InstanceAIConfig,
 )
+from .build_target import InstanceBuildTarget
+from .release import CHILD_KINDS, RELEASE_STATUSES, Release
+from .managed_app import ManagedApp
 from .chat import CHAT_KINDS, CHAT_ROLES, ChatSession, ChatTurn, content_hash
 from .comment import Comment
 from .entitlement import (
@@ -76,6 +79,11 @@ __all__ = [
     "PROVIDERS",
     "CUTOFF_BEHAVIOURS",
     "OPENCODE_WORKSPACES",
+    "InstanceBuildTarget",
+    "Release",
+    "RELEASE_STATUSES",
+    "CHILD_KINDS",
+    "ManagedApp",
     "ChatSession",
     "ChatTurn",
     "CHAT_ROLES",

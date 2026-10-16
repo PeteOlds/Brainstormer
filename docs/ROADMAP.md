@@ -149,19 +149,22 @@ choice plus webhook mapping, Phase 13 items 15 and 17–20. What is
 left:
 
 ### Next: merge and cut over
-1. **Review + merge PR #1** (`feat/phase-0-backup` → `main`;
-   open and mergeable), then deploy main to production and re-verify
-   `/api/health` + migration head.
-2. **`LEGACY_WEB_ENABLED=False` flip** after two clean weeks of
-   Flutter production use (per C10), then delete the templates a
-   release later.
+1. ~~**Review + merge PR #1**~~ — **closed 2026-10-16**: branch `feat/phase-0-backup`
+   is 68+ commits behind main; retire it. Main is now the commit target
+   (global rule changed).
+2. **`LEGACY_WEB_ENABLED=False` flip** — two clean weeks of Flutter web
+   production use with zero P1s, then delete the Jinja templates a release
+   later. Flag currently True.
 
 ### Needs external inputs (blocked, not forgotten)
-3. **Remote push (FCM)**: Firebase project + APNs credentials, then
-   backend device-token endpoint per the runbook in `flutter/README.md`.
-4. **Live Stripe loop**: configure real plans in the Stripe dashboard
-   mapping onto entitlement keys, then run the test-mode money loop
-   (grant → gate → revoke) against staging.
+3. ~~**Remote push (FCM)**~~ — **ON HOLD 2026-10-16**: no Firebase project
+   will be provisioned. Specific tasks parked: `POST/DELETE /api/v1/devices`,
+   FCM HTTP v1 send, Flutter `firebase_messaging` wiring,
+   `flutterfire configure`, APNs key upload, G3 push half. Local
+   notifications (digests + chat replies) stay — no Firebase needed.
+4. ~~**Live Stripe loop**~~ — **operational only**: real plans in the Stripe
+   dashboard mapping to entitlement keys, then the test-mode grant → gate →
+   revoke loop against staging. ~30 min of admin time, zero code.
 5. **Device CI maiden run**: the Chrome job exists in
    `guardrails.yml` but has never gone green — watch its first run.
 
@@ -172,6 +175,20 @@ left:
    (AGENTS.md, PRD.md, `docs/erd.md` edits owned; `guidelines/.gitkeep`
    restored.)
 7. Coverage ratchet: 81% today — hold the line on every build, aim 85%+.
+
+### Decisions logged 2026-10-16
+- **G1 Start/End/Free enforcement: CLOSED** — decision (b) block writes but
+  allow reads + (c) pause scheduler is exactly what the code already does
+  (`expiry_gate_rejection` + scheduler skip). No work needed.
+- **GitHub**: per-instance PAT (repo scope), direct push to the instance's
+  own repo (no PR). Build target directory pushed only when there is a
+  confirmed build to push.
+- **Messaging**: two-way with Slack (replies land back in Brainstormer).
+- **Dashboard**: two separate pages — a user homepage for all users and the
+  Admin Panel for admins. Admin UI unchanged for now; user homepage built
+  Ideas-first.
+- **Release completion UI**: "Mark release done" shows disabled with a
+  tooltip once a release is done.
 
 ---
 
@@ -338,3 +355,70 @@ change).
 Recommendation: **keep** until the mobile release cadence diverges
 from the backend (e.g. app-store review trains) — then split with a
 versioned API compatibility matrix, not before.
+
+
+---
+# ROADMAP
+
+# Recommendations
+Make recommendations on
+- Implementing SSL (see /mnt/General/OpenCode/brainstormer/Guides/Guide_SecuringWithSSL.md for a potential approach)
+- A complete review of the UI to make the flow more logical
+# General Changes
+Move the Refine Idea tab to beside the Ideda tab
+
+Under System Settings
+- Allow each Instance Admin to configure use of Github (keeping it seperate for each instance)
+
+Under the AI Settings
+- Allow each Instance Admin to set the following for each stage:
+	 - default AI settings for each stage
+	- the default skills
+	- the default guides
+Note:
+- that under each phase, the Instance Admin will be able to change these default settings (and they till be retained)
+- Under Scale, the Instance Admin will be able to change these default settings for each Release
+
+# Messages and Feedback
+Allow all users in an instance to send feedback to the Instance Admin
+Allow the Instance Admin to send feedback (or forward User Feedback) to the overall Admin (including screengrabs and shortcuts)
+Allow Admins to message users (or forward User Feedback) to the overall Admin (including screengrabs and shortcuts) 
+Record the Read timestamp on messages
+Allow users to share links to comments (shortcut link or Message to existing user)
+Allow users to share links to Ideas (shortcut link or Message to existing user)
+
+# Dashboard
+Create a Dashboard including
+Ideas: In Each Phase (pie graph)
+Ideas Not Voted on (list)
+Most Popular Ideas
+Most Commented on Ideas
+Comments: new / all / responses 
+Any messages: Unread / All 
+
+# Scale
+When creating a creating a Release, it should be possible to deal with Ideas individually. Currently, when an Idea is added to a Release, it is not possible to move that new Idea through phases or create a PRD / Design etc
+Once a Release has been marked as Mark Release Done, do not show that option again.  
+Allow a Instance Administrator to commit each subsequent release to GitHub (if they are using Github). Once a Release has been committed to GitHub, don't allow it to be re-committed.  Any subsequent updates will require a new Release
+Allow the Instance Admin to change AI, skills and guides settings for each Release
+Allow each Idea moved to commit to Github when it moves to Scale
+
+**Scale decisions logged 2026-10-16:**
+- A1 per-idea work in a release: inline status select per row + per-row
+  "+ Doc" (PRD/Design/Build) opening the run dialog for that child.
+- A2: "Mark release done" shows **disabled** once the release is done.
+- A3/A5 GitHub: per-instance PAT, direct push of the build target
+  directory (only when a confirmed build exists); once committed, no
+  re-commit — updates need a new release.
+- A4/B4 per-release AI/skills/guides overrides: Phase 2.
+
+
+# Documentation
+- a full readme for github
+- a "getting started"
+- a casual users guide
+- release notes
+- architecture overview
+
+# Testing
+Full and complete testing, including the UI

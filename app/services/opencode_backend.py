@@ -294,11 +294,14 @@ SERVER_MODELS_TTL_SECONDS = 300
 
 def list_server_models(
     server_url: str, provider: str = "opencode", timeout: float = 10.0
-) -> list[str]:
-    """Model slugs (`provider/id`) from an opencode server's catalog.
+) -> list[dict]:
+    """Model options (`{id: provider/slug, name: display name}`) from an
+    opencode server's catalog.
 
     Queries ``<server>/api/model`` (the same catalog the server's own UI
     uses) and keeps active, enabled entries for the requested provider.
+    ``id`` is what runs submit; ``name`` is the server's display name so
+    dropdowns can show "Muse Spark 1.3 Free" instead of a bare slug.
     Returns [] when the server is unreachable or the catalog is unusable —
     callers fall back to free-text model entry. Results are cached briefly
     per server URL.
@@ -313,8 +316,8 @@ def list_server_models(
     now = _time.monotonic()
     cached = _server_models_cache.get((base, provider))
     if cached and cached[0] > now:
-        return list(cached[1])
-    slugs: list[str] = []
+        return [dict(m) for m in cached[1]]
+    slugs: list[dict] = []
     try:
         with httpx.Client(timeout=timeout) as client:
             response = client.get(f"{base}/api/model")
@@ -336,13 +339,15 @@ def list_server_models(
                 continue
             model_id = str(entry.get("id") or "").strip()
             if model_id:
-                slugs.append(f"{provider}/{model_id}")
+                slug = f"{provider}/{model_id}"
+                name = str(entry.get("name") or "").strip() or slug
+                slugs.append({"id": slug, "name": name})
     except Exception as exc:
         logger.warning("opencode_models_unparseable", server=base, error=str(exc)[:200])
         return []
-    slugs = sorted(set(slugs))
+    slugs = sorted({m["id"]: m for m in slugs}.values(), key=lambda m: m["id"])
     _server_models_cache[(base, provider)] = (now + SERVER_MODELS_TTL_SECONDS, slugs)
-    return list(slugs)
+    return [dict(m) for m in slugs]
 
 
 def opencode_generate(

@@ -12,6 +12,41 @@ from app.models import Comment, Idea, SecondaryActionResult, Vote
 from sqlalchemy import func
 
 
+def parent_context(child: Idea, max_chars: int = 2000) -> str:
+    """Why-this-was-asked-for: parent summary + top non-ignored comments.
+
+    Shown on child views and prepended to child AI context so fixes keep
+    the original request in sight. Returns '' for top-level ideas.
+    """
+    if getattr(child, "parent_id", None) is None:
+        return ""
+    parent = Idea.query.get(child.parent_id)
+    if parent is None:
+        return ""
+    lines = [
+        f"Requested for {parent.reference_code} — {parent.prompt_title}: "
+        f"{parent.excerpt(300)}"
+    ]
+    comments = (
+        Comment.query.filter_by(
+            idea_id=parent.id, is_deleted=False, is_ignored=False, scope="idea"
+        )
+        .order_by(Comment.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    for c in comments:
+        author = (
+            c.user.name
+            if c.user and c.user.name
+            else (c.user.email if c.user else "Unknown")
+        )
+        body = c.body[:300] + ("..." if len(c.body) > 300 else "")
+        lines.append(f"- {author}: {body}")
+    out = "### Parent request\n" + "\n".join(lines)
+    return out[:max_chars]
+
+
 def build_idea_context(idea: Idea, max_chars: int = 8000) -> str:
     """Build a rich context string for an idea, including all supporting material.
 
@@ -24,6 +59,15 @@ def build_idea_context(idea: Idea, max_chars: int = 8000) -> str:
     Total output is capped at max_chars.
     """
     sections = []
+
+    # 0. Parent request (children only): why this fix was asked for.
+    if getattr(idea, "parent_id", None) is not None:
+        try:
+            parent_ctx = parent_context(idea, max_chars=2000)
+        except Exception:
+            parent_ctx = ""
+        if parent_ctx:
+            sections.append(parent_ctx)
 
     # 1. Structured content
     sc = idea.structured_content

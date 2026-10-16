@@ -44,6 +44,22 @@ class Idea(db.Model):
     created_by_id = db.Column(
         GUID(), db.ForeignKey("users.id"), nullable=True, index=True
     )
+    # Scale-phase collaboration: NULL = top-level idea. Set once at
+    # creation, immutable after. Parent must be SCALE (enforced in routes).
+    parent_id = db.Column(
+        GUID(),
+        db.ForeignKey("ideas.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    # 'enhancement' | 'bugfix' when parent_id set, else NULL.
+    child_kind = db.Column(db.String(20), nullable=True)
+    release_id = db.Column(
+        GUID(),
+        db.ForeignKey("releases.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -77,6 +93,12 @@ class Idea(db.Model):
         lazy="dynamic",
         cascade="all, delete-orphan",
     )
+    children = db.relationship(
+        "Idea",
+        backref=db.backref("parent", remote_side="Idea.id"),
+        lazy="dynamic",
+        foreign_keys="Idea.parent_id",
+    )
 
     def excerpt(self, limit: int = 200) -> str:
         """Readable one-liner: prefers a structured pitch over a raw dump.
@@ -109,6 +131,7 @@ class Idea(db.Model):
         data = {
             "id": str(self.id),
             "reference_code": self.reference_code,
+            "instance_id": str(self.instance_id) if self.instance_id else None,
             "prompt_title": self.prompt_title,
             "summary": self.excerpt(),
             "status": self.status.value,
@@ -120,6 +143,9 @@ class Idea(db.Model):
                 str(self.prompt_config_id) if self.prompt_config_id else None
             ),
             "created_by_id": (str(self.created_by_id) if self.created_by_id else None),
+            "parent_id": str(self.parent_id) if self.parent_id else None,
+            "child_kind": self.child_kind,
+            "release_id": str(self.release_id) if self.release_id else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "actions_run": [a.action_type for a in self.actions],

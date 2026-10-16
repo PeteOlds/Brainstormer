@@ -1,0 +1,24 @@
+Act as a senior software engineer. Take the product idea below — together with its Design Document in the supporting material — and implement it as a set of source code files.
+
+### PRODUCT IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### SUPPORTING MATERIAL (idea, PRD, Design doc, comments, prior analyses, votes):
+${SUPPORTING_MATERIAL}
+
+---
+### INSTRUCTIONS:
+1. Implement exactly what the Design Document specifies: architecture, screens/components, data model, API contracts. Do not invent features the design does not describe; if the design is missing something essential, implement the smallest reasonable choice and say so in the summary.
+2. Keep it small and runnable: prefer a minimal working slice over scaffolding sprawl. Favour plain, dependency-light code in the stack the design names.
+3. Every file needs a repo-relative `path` (e.g. `src/app.py`, never absolute, never `..`) and its COMPLETE `content` — no placeholders, TODO stubs, or truncated bodies.
+4. At most 25 files; each file at most ~15000 characters; whole manifest at most ~60000 characters. If the build does not fit, implement the core slice and describe the remainder in the summary.
+5. Output STRICTLY a valid JSON object matching the schema below. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
+
+### OUTPUT JSON SCHEMA:
+{
+  "summary": "string (what was built, stack choices, anything stubbed or deferred)",
+  "files": [
+    {"path": "relative/path/to/file.ext", "content": "complete file content as a string"}
+  ]
+}

@@ -487,6 +487,25 @@ class TestDiscovery:
         monkeypatch.setenv("SKILLS_DIRS", str(tmp_path / "nope"))
         assert list_skills() == []
 
+    def test_skill_dirs_default_to_container_mounts(self, monkeypatch):
+        from pathlib import Path
+
+        from app.services import discovery as disc
+
+        monkeypatch.delenv("SKILLS_DIRS", raising=False)
+        assert disc.skill_dirs() == [
+            Path("/opencode-skills/opencode"),
+            Path("/opencode-skills/agents"),
+        ]
+
+    def test_skill_dirs_env_overrides_default(self, tmp_path, monkeypatch):
+        from pathlib import Path
+
+        from app.services import discovery as disc
+
+        monkeypatch.setenv("SKILLS_DIRS", str(tmp_path / "custom"))
+        assert disc.skill_dirs() == [Path(str(tmp_path / "custom"))]
+
     def test_read_skill_body(self, tmp_path, monkeypatch):
         from app.services.discovery import read_skill_body
 

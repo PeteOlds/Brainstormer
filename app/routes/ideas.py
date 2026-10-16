@@ -2,6 +2,7 @@ import json
 import random
 import string
 import uuid
+from datetime import datetime, timezone
 
 from flask import Blueprint, request
 from sqlalchemy import asc, desc, func, or_
@@ -12,6 +13,7 @@ from app.models import (
     Idea,
     IdeaEdit,
     IdeaStatusHistory,
+    Release,
     SecondaryActionResult,
     User,
     Vote,
@@ -92,6 +94,16 @@ def list_ideas(user):
     for idea in pagination.items:
         user_vote = _get_user_vote(user.id, idea.id)
         ideas_data.append(idea.to_dict(user_vote=user_vote))
+
+    # One batched lookup so child rows can name their parent without N+1.
+    parent_ids = {i.parent_id for i in pagination.items if i.parent_id}
+    if parent_ids:
+        pmap = {p.id: p for p in Idea.query.filter(Idea.id.in_(list(parent_ids))).all()}
+        for row, idea in zip(ideas_data, pagination.items):
+            parent = pmap.get(idea.parent_id)
+            if parent is not None and check_access(parent) is None:
+                row["parent_reference_code"] = parent.reference_code
+                row["parent_title"] = parent.prompt_title
 
     return api_ok(
         {
@@ -183,6 +195,49 @@ def create_idea(user):
         prompt_config_id=None,  # Manual ideas have no associated prompt config
         created_by_id=user.id,  # Authorship drives edit-own permissions.
     )
+    # Scale-phase child: linked at creation, immutable after. Parent must
+    # be a live SCALE idea in the same instance; kind is required.
+    parent_id = data.get("parent_id")
+    child_kind = (data.get("child_kind") or "").strip().lower() or None
+    if parent_id or child_kind:
+        from app.models import CHILD_KINDS
+
+        if not parent_id:
+            return api_error(
+                "parent_id is required when child_kind is given.",
+                status_code=400,
+            )
+        if child_kind not in CHILD_KINDS:
+            return api_error(
+                "child_kind must be one of: enhancement, bugfix.",
+                status_code=400,
+            )
+        try:
+            parent_uuid = uuid.UUID(str(parent_id))
+        except (ValueError, TypeError):
+            return api_error("Invalid parent_id.", status_code=400)
+        parent = Idea.query.get(parent_uuid)
+        if parent is None:
+            return api_error("Parent idea not found.", status_code=404)
+        denied = check_access(parent)
+        if denied is not None:
+            return denied
+        if parent.parent_id is not None:
+            return api_error(
+                "A child idea cannot be a parent — link to the main app instead.",
+                status_code=400,
+            )
+        if (
+            parent.status.value if hasattr(parent.status, "value") else parent.status
+        ) != "SCALE":
+            return api_error(
+                "Child ideas can only be added to apps in Scale. "
+                f"{parent.reference_code} is {parent.status.value if hasattr(parent.status, 'value') else parent.status}.",
+                status_code=400,
+            )
+        idea.parent_id = parent.id
+        idea.child_kind = child_kind
+        idea.instance_id = parent.instance_id
     stamp(idea)
 
     db.session.add(idea)
@@ -254,6 +309,19 @@ def get_idea(user, idea_id):
         "actions": [a.to_dict() for a in actions],
         "edit_history": _edit_history(idea_id),
     }
+    # Scale-phase family: child views get a breadcrumb; SCALE parents get
+    # counts so the Improve section knows whether to render.
+    if idea.parent_id is not None:
+        parent = Idea.query.get(idea.parent_id)
+        if parent is not None and check_access(parent) is None:
+            payload["parent"] = {
+                "id": str(parent.id),
+                "reference_code": parent.reference_code,
+                "prompt_title": parent.prompt_title,
+                "status": parent.status.value,
+            }
+    else:
+        payload["child_count"] = Idea.query.filter_by(parent_id=idea.id).count()
     if user.role.value == "ADMIN" or current_instance_role() in (
         "INSTANCE_ADMIN",
         "SITE_ADMIN",
@@ -377,6 +445,600 @@ def bulk_update_idea_status(user):
     )
 
 
+def _release_counts(parent_id):
+    """child counts per release id (plus unassigned) for one parent."""
+    from sqlalchemy import func
+
+    from app.models import Release
+
+    rows = (
+        db.session.query(Idea.release_id, func.count(Idea.id))
+        .filter(Idea.parent_id == parent_id)
+        .group_by(Idea.release_id)
+        .all()
+    )
+    return {str(rid) if rid else None: n for rid, n in rows}
+
+
+@bp.route("/ideas/<uuid:idea_id>/children", methods=["GET"])
+@token_required
+def list_children(user, idea_id):
+    """Children (enhancements/bugfixes) of one idea, server-side paginated."""
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    page = request.args.get("page", 1, type=int)
+    limit = min(request.args.get("limit", 20, type=int), 100)
+    release_id = request.args.get("release_id")
+    kind = (request.args.get("kind") or "").strip().lower() or None
+
+    query = Idea.query.filter_by(parent_id=idea.id)
+    if kind:
+        query = query.filter_by(child_kind=kind)
+    if release_id == "none":
+        query = query.filter(Idea.release_id.is_(None))
+    elif release_id:
+        try:
+            query = query.filter_by(release_id=uuid.UUID(str(release_id)))
+        except (ValueError, TypeError):
+            return api_error("Invalid release_id.", status_code=400)
+    query = query.order_by(desc(Idea.created_at))
+    pagination = query.paginate(page=page, per_page=limit, error_out=False)
+    ideas_data = []
+    for child in pagination.items:
+        user_vote = _get_user_vote(user.id, child.id)
+        ideas_data.append(child.to_dict(user_vote=user_vote))
+
+    # Build status per child (one batched query): the latest BUILD_CODE
+    # run's state, so the Scale tab can show Queued/Running/Done/Failed
+    # without opening each idea.
+    from app.models import PromptRun, PromptRunStatus
+
+    child_ids = [c.id for c in pagination.items]
+    run_rows = (
+        PromptRun.query.filter(
+            PromptRun.idea_id.in_(child_ids),
+            PromptRun.action_type == "BUILD_CODE",
+        )
+        .order_by(PromptRun.created_at.desc())
+        .all()
+    )
+    latest_by_idea = {}
+    for r in run_rows:
+        latest_by_idea.setdefault(r.idea_id, r)
+    for row, child in zip(ideas_data, pagination.items):
+        run = latest_by_idea.get(child.id)
+        if run is None:
+            row["build_status"] = None
+        else:
+            row["build_status"] = {
+                "status": run.status.value,
+                "job_id": run.job_id,
+                "error": (
+                    (run.error or None)
+                    if run.status == PromptRunStatus.FAILED
+                    else None
+                ),
+            }
+    return api_ok(
+        {
+            "ideas": ideas_data,
+            "total": pagination.total,
+            "page": pagination.page,
+            "pages": pagination.pages,
+        }
+    )
+
+
+@bp.route("/ideas/<uuid:parent_id>/scale-status", methods=["GET"])
+@token_required
+def scale_status(user, parent_id):
+    """Build run states for one parent's children (Scale tab auto-refresh).
+
+    Returns {child_id: {"status": ..., "job_id": ..., "error": ...}} so the
+    tab can poll while any build is queued or running.
+    """
+    from app.models import PromptRun, PromptRunStatus
+
+    parent = Idea.query.get_or_404(parent_id)
+    denied = check_access(parent)
+    if denied is not None:
+        return denied
+    child_ids = [c.id for c in Idea.query.filter_by(parent_id=parent.id).all()]
+    if not child_ids:
+        return api_ok({"builds": {}})
+    run_rows = (
+        db.session.query(
+            PromptRun.idea_id,
+            PromptRun.status,
+            PromptRun.job_id,
+            PromptRun.error,
+            PromptRun.created_at,
+        )
+        .filter(
+            PromptRun.idea_id.in_(child_ids),
+            PromptRun.action_type == "BUILD_CODE",
+        )
+        .order_by(PromptRun.created_at.desc())
+        .all()
+    )
+    latest_by_idea = {}
+    for idea_id, status, job_id, error, _created in run_rows:
+        if idea_id not in latest_by_idea:
+            latest_by_idea[idea_id] = (status, job_id, error)
+    builds = {}
+    for cid, (status, job_id, error) in latest_by_idea.items():
+        builds[str(cid)] = {
+            "status": status.value,
+            "job_id": job_id,
+            "error": (error or None) if status == PromptRunStatus.FAILED else None,
+        }
+    return api_ok({"builds": builds})
+
+
+@bp.route("/ideas/<uuid:parent_id>/releases", methods=["GET"])
+@token_required
+def list_releases(user, parent_id):
+    """Releases for one SCALE parent, each with its child count."""
+    from app.models import Release
+
+    parent = Idea.query.get_or_404(parent_id)
+    denied = check_access(parent)
+    if denied is not None:
+        return denied
+    releases = (
+        Release.query.filter_by(parent_idea_id=parent.id)
+        .order_by(Release.created_at.desc())
+        .all()
+    )
+    counts = _release_counts(parent.id)
+    data = [r.to_dict(child_count=counts.get(str(r.id), 0)) for r in releases]
+    data.append(
+        {
+            "id": None,
+            "parent_idea_id": str(parent.id),
+            "name": "No release yet",
+            "status": "planned",
+            "target_date": None,
+            "child_count": counts.get(None, 0),
+            "notes": None,
+            "created_at": None,
+        }
+    )
+    return api_ok({"releases": data})
+
+
+@bp.route("/ideas/<uuid:parent_id>/releases", methods=["POST"])
+@require_permission("change_status")
+def create_release(user, parent_id):
+    """New release batch for one parent (admin: same people who move status)."""
+    from datetime import datetime
+
+    from app.models import Release
+    from app.models.release import RELEASE_STATUSES
+
+    parent = Idea.query.get_or_404(parent_id)
+    denied = check_access(parent)
+    if denied is not None:
+        return denied
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return api_error("Release name is required.", status_code=400)
+    if len(name) > 120:
+        return api_error(
+            "Release name must be 120 characters or fewer.", status_code=400
+        )
+    status = (data.get("status") or "planned").strip().lower()
+    if status not in RELEASE_STATUSES:
+        return api_error(
+            "status must be one of: planned, in_progress, done.", status_code=400
+        )
+    target_date = None
+    if data.get("target_date"):
+        try:
+            target_date = datetime.fromisoformat(str(data["target_date"]))
+        except ValueError:
+            return api_error("target_date must be ISO format.", status_code=400)
+    release = Release(
+        parent_idea_id=parent.id,
+        name=name,
+        status=status,
+        target_date=target_date,
+        created_by_id=user.id,
+    )
+    stamp(release)
+    # Children inherit the parent's instance when linked at creation, but a
+    # parent made before tenancy may carry NULL — fall back to the request.
+    if release.instance_id is None:
+        release.instance_id = parent.instance_id
+    db.session.add(release)
+    db.session.commit()
+    return api_created({"release": release.to_dict()})
+
+
+@bp.route("/releases/<uuid:release_id>", methods=["PATCH"])
+@require_permission("change_status")
+def update_release(user, release_id):
+    """Rename / retarget / move a release through planned → in_progress → done."""
+    from datetime import datetime
+
+    from app.models import Release
+    from app.models.release import RELEASE_STATUSES
+
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    data = request.get_json() or {}
+    if "name" in data:
+        name = (data.get("name") or "").strip()
+        if not name:
+            return api_error("Release name cannot be empty.", status_code=400)
+        if len(name) > 120:
+            return api_error(
+                "Release name must be 120 characters or fewer.", status_code=400
+            )
+        release.name = name
+    if "status" in data:
+        status = (data.get("status") or "").strip().lower()
+        if status not in RELEASE_STATUSES:
+            return api_error(
+                "status must be one of: planned, in_progress, done.", status_code=400
+            )
+        release.status = status
+    if "target_date" in data:
+        if data["target_date"] is None:
+            release.target_date = None
+        else:
+            try:
+                release.target_date = datetime.fromisoformat(str(data["target_date"]))
+            except ValueError:
+                return api_error("target_date must be ISO format.", status_code=400)
+    if "notes" in data:
+        notes = data["notes"]
+        if notes is not None and not isinstance(notes, str):
+            return api_error("notes must be text.", status_code=400)
+        release.notes = (notes or "").strip() or None
+    db.session.commit()
+    if "notes" in data:
+        from app.models import Idea
+        from app.services.release_notes import write_release_notes_file
+
+        parent = Idea.query.get(release.parent_idea_id)
+        write_release_notes_file(release, parent)
+    counts = _release_counts(release.parent_idea_id)
+    return api_ok(
+        {"release": release.to_dict(child_count=counts.get(str(release.id), 0))}
+    )
+
+
+@bp.route("/releases/<uuid:release_id>", methods=["DELETE"])
+@require_permission("change_status")
+def delete_release(user, release_id):
+    """Delete an empty release. Non-empty ones must be reassigned first."""
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    held = Idea.query.filter_by(release_id=release.id).count()
+    if held:
+        return api_error(
+            f"Move the {held} idea(s) out of this release first.",
+            status_code=400,
+        )
+    db.session.delete(release)
+    db.session.commit()
+    return api_ok({"deleted": str(release_id)})
+
+
+@bp.route("/releases/<uuid:release_id>/assign", methods=["PATCH"])
+@require_permission("change_status")
+def assign_release(user, release_id):
+    """Move child ideas into (or out of, with release_id null) a release."""
+    from app.models import Release
+
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    data = request.get_json() or {}
+    idea_ids = data.get("idea_ids", [])
+    if not isinstance(idea_ids, list) or not idea_ids:
+        return api_error("Missing required field: idea_ids.", status_code=400)
+    moved = 0
+    for raw in idea_ids:
+        try:
+            child = Idea.query.get(uuid.UUID(str(raw)))
+        except (ValueError, TypeError):
+            continue
+        if child is None or child.parent_id != release.parent_idea_id:
+            continue  # Only this parent's children can join its releases.
+        if check_access(child) is not None:
+            continue
+        child.release_id = release.id
+        moved += 1
+    db.session.commit()
+    return api_ok({"moved": moved, "release_id": str(release.id)})
+
+
+@bp.route("/releases/<uuid:release_id>/unassign", methods=["PATCH"])
+@require_permission("change_status")
+def unassign_release(user, release_id):
+    """Move child ideas back to 'No release yet'."""
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    data = request.get_json() or {}
+    idea_ids = data.get("idea_ids", [])
+    if not isinstance(idea_ids, list) or not idea_ids:
+        return api_error("Missing required field: idea_ids.", status_code=400)
+    moved = 0
+    for raw in idea_ids:
+        try:
+            child = Idea.query.get(uuid.UUID(str(raw)))
+        except (ValueError, TypeError):
+            continue
+        if child is None or child.release_id != release.id:
+            continue
+        if check_access(child) is not None:
+            continue
+        child.release_id = None
+        moved += 1
+    db.session.commit()
+    return api_ok({"moved": moved, "release_id": str(release.id)})
+
+
+@bp.route("/releases/<uuid:release_id>/complete", methods=["POST"])
+@require_permission("change_status")
+def complete_release(user, release_id):
+    """Finish a release: bulk-move its children (SHIP or DROP), mark done.
+
+    Reuses the bulk-status transition rules, so illegal moves are skipped
+    and reported in plain language rather than failing the whole batch.
+    """
+    from app.models import Release
+    from app.models.lifecycle import can_transition
+
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    data = request.get_json() or {}
+    target = (data.get("status") or "SHIP").upper()
+    if target not in ("SHIP", "DROP"):
+        return api_error(
+            "Releases complete to SHIP (shipped) or DROP (rejected).", status_code=400
+        )
+    new_status_enum = IdeaStatus[target]
+    children = Idea.query.filter_by(release_id=release.id).all()
+    updated = 0
+    skipped = 0
+    for child in children:
+        if check_access(child) is not None:
+            continue
+        if child.status == new_status_enum:
+            continue
+        if not can_transition(child.status, new_status_enum):
+            skipped += 1
+            continue
+        history = IdeaStatusHistory(
+            idea_id=child.id,
+            changed_by_id=user.id,
+            old_status=child.status,
+            new_status=new_status_enum,
+        )
+        stamp(history)
+        db.session.add(history)
+        child.status = new_status_enum
+        updated += 1
+    release.status = "done"
+    release.completed_at = datetime.now(timezone.utc)
+    db.session.commit()
+    parent = Idea.query.get(release.parent_idea_id)
+    release.notes = _build_release_notes(release, parent)
+    db.session.commit()
+    from app.services.release_notes import write_release_notes_file
+
+    write_release_notes_file(release, parent)
+    counts = _release_counts(release.parent_idea_id)
+    return api_ok(
+        {
+            "release_id": str(release.id),
+            "status": target,
+            "updated_count": updated,
+            "skipped_illegal": skipped,
+            "total": len(children),
+            "release": release.to_dict(child_count=counts.get(str(release.id), 0)),
+        }
+    )
+
+
+def _build_release_notes(release, parent):
+    """Deterministic 'what shipped' text (no AI: always accurate, free).
+
+    Regenerated on completion and on demand; admins can edit after.
+    """
+    from datetime import datetime, timezone
+
+    from app.models import Idea
+
+    children = (
+        Idea.query.filter_by(release_id=release.id).order_by(Idea.created_at).all()
+    )
+    shipped = [
+        c
+        for c in children
+        if (c.status.value if hasattr(c.status, "value") else c.status) == "SHIP"
+    ]
+    rejected = [
+        c
+        for c in children
+        if (c.status.value if hasattr(c.status, "value") else c.status) == "DROP"
+    ]
+    parent_ref = parent.reference_code if parent else "?"
+    parent_title = parent.prompt_title if parent else "the app"
+    done_date = release.completed_at or release.target_date or release.created_at
+    if done_date is not None:
+        if done_date.tzinfo is None:
+            done_date = done_date.replace(tzinfo=timezone.utc)
+        done_str = done_date.astimezone(timezone.utc).strftime("%d-%b-%y")
+    else:
+        done_str = None
+    lines = [
+        f"{release.name} — {parent_title} ({parent_ref})",
+        f"Finished {done_str or 'recently'}: "
+        f"{len(shipped)} shipped, {len(rejected)} rejected.",
+        "",
+    ]
+    bugs = [c for c in shipped if c.child_kind == "bugfix"]
+    feats = [c for c in shipped if c.child_kind != "bugfix"]
+    if feats:
+        lines.append("Improvements:")
+        lines += [f"- {c.prompt_title} ({c.reference_code})" for c in feats]
+        lines.append("")
+    if bugs:
+        lines.append("Problems fixed:")
+        lines += [f"- {c.prompt_title} ({c.reference_code})" for c in bugs]
+        lines.append("")
+    pending = [c for c in children if c not in shipped and c not in rejected]
+    if pending:
+        lines.append("Not finished yet:")
+        lines += [
+            f"- {c.prompt_title} ({c.reference_code}) — "
+            f"{c.status.value if hasattr(c.status, 'value') else c.status}"
+            for c in pending
+        ]
+    return "\n".join(lines).strip()
+
+
+@bp.route("/releases/<uuid:release_id>/notes", methods=["POST"])
+@require_permission("change_status")
+def regenerate_release_notes(user, release_id):
+    """Rebuild the release notes from current children (admin touch-up base)."""
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    parent = Idea.query.get(release.parent_idea_id)
+    release.notes = _build_release_notes(release, parent)
+    db.session.commit()
+    from app.services.release_notes import write_release_notes_file
+
+    write_release_notes_file(release, parent)
+    counts = _release_counts(release.parent_idea_id)
+    return api_ok(
+        {"release": release.to_dict(child_count=counts.get(str(release.id), 0))}
+    )
+
+
+@bp.route("/releases/<uuid:release_id>/run-action", methods=["POST"])
+@require_permission("run_actions")
+def bulk_run_action(user, release_id):
+    """Run one action for every idea in a release (related work together).
+
+    Same gates as single runs, so ineligible children are skipped with the
+    same plain-language reason instead of failing the batch. Docs are only
+    started where missing (reruns stay a per-idea choice). BUILD_CODE writes
+    into each child's default repo (parent app's repo, else the only repo);
+    pass confirm_build=true only after previews exist. Bulk runs are
+    auto-confirmed: the admin chose the whole release deliberately.
+    """
+    from app.services.secondary_actions import get_action
+    from app.services.secondary_actions import list_actions as registry_actions
+
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    data = request.get_json() or {}
+    action_type = data.get("action_type")
+    if not action_type:
+        return api_error("Missing required field: action_type", status_code=400)
+    entry = get_action(action_type)
+    if entry is None:
+        known = [a["key"] for a in registry_actions()]
+        return api_error(
+            f"Unknown action_type: {action_type}. Known: {', '.join(known)}",
+            status_code=400,
+        )
+    action_type = entry["key"]
+    confirm_build = bool(data.get("confirm_build", False))
+
+    children = (
+        Idea.query.filter_by(release_id=release.id).order_by(Idea.created_at).all()
+    )
+    if not children:
+        return api_error(
+            "No ideas in this release yet — move some in first.",
+            status_code=400,
+        )
+    started: list = []
+    skipped: list = []
+    for child in children:
+        if check_access(child) is not None:
+            continue
+        if action_type in ("PRD_DOC", "DESIGN_DOC"):
+            from app.models import SecondaryActionResult
+
+            exists = (
+                SecondaryActionResult.query.filter_by(
+                    idea_id=child.id, action_type=action_type
+                ).first()
+                is not None
+            )
+            if exists:
+                skipped.append(
+                    {
+                        "reference_code": child.reference_code,
+                        "reason": "Already has one — open it to read or rerun.",
+                    }
+                )
+                continue
+        _target, gate_err = _check_action_allowed(
+            child,
+            action_type,
+            target_id=data.get("target_id"),
+            confirm_build=confirm_build,
+            confirm=True,
+        )
+        if gate_err is not None:
+            skipped.append(
+                {
+                    "reference_code": child.reference_code,
+                    "reason": gate_err["message"],
+                }
+            )
+            continue
+        extra = {}
+        if action_type == "BUILD_CODE" and _target is not None:
+            extra["target_id"] = str(_target.id)
+            if confirm_build:
+                extra["confirm_build"] = True
+        _enqueue_action(child, action_type, extra)
+        started.append(child.reference_code)
+    summary = (
+        f"Started {action_type} for {len(started)} idea(s)"
+        if started
+        else f"No {action_type} runs started"
+    )
+    if skipped:
+        summary += f"; {len(skipped)} skipped"
+    summary += "."
+    return api_ok(
+        {
+            "release_id": str(release.id),
+            "action_type": action_type,
+            "started": started,
+            "skipped": skipped,
+            "summary": summary,
+        },
+        status_code=202,
+    )
+
+
 @bp.route("/ideas/<uuid:idea_id>/vote", methods=["POST"])
 @token_required
 def vote_idea(user, idea_id):
@@ -448,11 +1110,189 @@ def discovery(user):
     )
 
 
+def _child_default_target(idea):
+    """Best-guess repo for a child fix: the parent app's repo first.
+
+    Falls back to the only registered repo when there is exactly one.
+    Returns None when ambiguous (caller asks the user instead) — never
+    guesses across repos, so illiterate users can't spray files wrongly.
+    """
+    from app.models import InstanceBuildTarget, SecondaryActionResult
+
+    if idea.parent_id is not None:
+        row = (
+            SecondaryActionResult.query.filter_by(
+                idea_id=idea.parent_id, action_type="BUILD_CODE"
+            )
+            .filter(SecondaryActionResult.target_id.isnot(None))
+            .order_by(SecondaryActionResult.executed_at.desc())
+            .first()
+        )
+        if row is not None:
+            target = InstanceBuildTarget.query.get(row.target_id)
+            if target is not None and str(target.instance_id) == str(idea.instance_id):
+                return target
+    options = InstanceBuildTarget.query.filter_by(instance_id=idea.instance_id).all()
+    if len(options) == 1:
+        return options[0]
+    return None
+
+
+def _resolve_build_target(idea, target_id):
+    """(target, error_msg): explicit id wins; children get a safe default."""
+    from app.models import InstanceBuildTarget
+
+    if target_id:
+        try:
+            import uuid as uuid_mod
+
+            target = InstanceBuildTarget.query.get(uuid_mod.UUID(str(target_id)))
+        except (ValueError, TypeError, AttributeError):
+            target = None
+        if target is None or str(target.instance_id) != str(idea.instance_id):
+            return None, "Unknown build target for this instance."
+        return target, None
+    if idea.parent_id is not None:
+        auto = _child_default_target(idea)
+        if auto is not None:
+            return auto, None
+    return None, "Building code needs a target_id: pick the repo to build into."
+
+
+def _check_action_allowed(
+    idea, action_type, target_id=None, confirm_build=False, confirm=False
+):
+    """Shared gate check for single + bulk action runs.
+
+    Returns (target_or_None, None) when runnable, else
+    (None, {"message", "status", "error_code"}). Messages match the
+    single-run endpoint exactly so bulk skip reasons read the same.
+    """
+    from app.models import Comment
+    from app.models.lifecycle import (
+        ACTIONS_BLOCKED_STATES,
+        BUILD_MIN_STATES,
+        DESIGN_DOC_STATES,
+        PRD_MIN_STATES,
+    )
+
+    def _err(message, status=400, error_code=None):
+        return {"message": message, "status": status, "error_code": error_code}
+
+    if idea.status in ACTIONS_BLOCKED_STATES:
+        return None, _err("No actions can run on dropped or archived ideas.")
+    if action_type == "PRD_DOC" and idea.status not in PRD_MIN_STATES:
+        return None, _err("PRD creation requires the idea to reach Scope stage.")
+    if action_type == "DESIGN_DOC" and idea.status not in DESIGN_DOC_STATES:
+        return None, _err("Design documents require the idea to reach Map stage.")
+    if action_type == "BUILD_CODE" and idea.status not in BUILD_MIN_STATES:
+        return None, _err("Building code requires the idea to reach Ship stage.")
+    if action_type == "DESIGN_DOC":
+        from app.models import SecondaryActionResult
+
+        has_prd = (
+            SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="PRD_DOC"
+            ).first()
+            is not None
+        )
+        if not has_prd:
+            return None, _err("Design requires an existing PRD for this idea.")
+    target = None
+    if action_type == "BUILD_CODE":
+        from app.models import SecondaryActionResult
+
+        has_design = (
+            SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="DESIGN_DOC"
+            ).first()
+            is not None
+        )
+        if not has_design:
+            return (
+                None,
+                _err("Building code requires an existing Design doc for this idea."),
+            )
+        target, target_err = _resolve_build_target(idea, target_id)
+        if target_err:
+            status = 404 if target_err.startswith("Unknown") else 400
+            return None, _err(target_err, status=status)
+        if confirm_build:
+            preview = SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="BUILD_CODE", is_current=True
+            ).first()
+            if (
+                preview is None
+                or (preview.result_data or {}).get("written")
+                or str(preview.target_id or "") != str(target.id)
+            ):
+                return (
+                    None,
+                    _err(
+                        "No build preview ready for this repo yet — "
+                        "run the preview first, then write it."
+                    ),
+                )
+    actions_done = idea.actions_run or []
+    comment_count = Comment.query.filter_by(idea_id=idea.id).count()
+    if (
+        action_type in ("REFINE", "PRD_DOC")
+        and comment_count == 0
+        and len(actions_done) < 3
+        and not confirm
+    ):
+        return (
+            None,
+            _err(
+                "Are you sure you want to continue? This idea doesn't have "
+                "much more additional information yet",
+                status=409,
+                error_code="CONFIRMATION_REQUIRED",
+            ),
+        )
+    return target, None
+
+
+def _enqueue_action(
+    idea, action_type, extra=None, model_override=None, provider_override=None
+):
+    """Record a PromptRun and enqueue it; returns (run, job)."""
+    from app.models import PromptRun
+
+    run = PromptRun(
+        prompt_config_id=None,
+        action_type=action_type,
+        idea_id=idea.id,
+        triggered_by="manual",
+    )
+    stamp(run)
+    db.session.add(run)
+    db.session.commit()
+    from app.tasks import enqueue_generation
+    from app.tasks.ollama_tasks import run_secondary_action
+
+    _provider = provider_override or (
+        idea.prompt_config.provider if idea.prompt_config else None
+    )
+    job = enqueue_generation(
+        run_secondary_action,
+        [str(idea.id), action_type, model_override],
+        {
+            "run_id": str(run.id),
+            "extra_context": extra or None,
+            "provider_override": provider_override,
+        },
+        _provider,
+    )
+    run.job_id = job.id
+    db.session.commit()
+    return run, job
+
+
 @bp.route("/ideas/<uuid:idea_id>/actions", methods=["POST"])
 @require_permission("run_actions")
 def run_action(user, idea_id):
     """Run a secondary action on an idea (Admin only)."""
-    from app.models import Comment
     from app.services.secondary_actions import (
         get_action,
     )
@@ -475,61 +1315,26 @@ def run_action(user, idea_id):
             status_code=400,
         )
     action_type = entry["key"]
+    confirm_build = bool(data.get("confirm_build", False))
 
-    # V2 stage gates (PRD_V2 §5.4): dropped/archived ideas are read-only
-    # history; PRD unlocks at Scope; Design docs unlock at Map.
-    from app.models.lifecycle import (
-        ACTIONS_BLOCKED_STATES,
-        DESIGN_DOC_STATES,
-        PRD_MIN_STATES,
+    # Shared gates (stages, pipeline order, build target, confirm prompt):
+    # identical messages feed bulk skip reasons.
+    target, gate_err = _check_action_allowed(
+        idea,
+        action_type,
+        target_id=data.get("target_id"),
+        confirm_build=confirm_build,
+        confirm=bool(data.get("confirm", False)),
     )
-
-    if idea.status in ACTIONS_BLOCKED_STATES:
-        return api_error(
-            "No actions can run on dropped or archived ideas.", status_code=400
-        )
-    if action_type == "PRD_DOC" and idea.status not in PRD_MIN_STATES:
-        return api_error(
-            "PRD creation requires the idea to reach Scope stage.",
-            status_code=400,
-        )
-    if action_type == "DESIGN_DOC" and idea.status not in DESIGN_DOC_STATES:
-        return api_error(
-            "Design documents require the idea to reach Map stage.",
-            status_code=400,
-        )
-    # Design doc requires an existing PRD (pipeline order: PRD first).
-    if action_type == "DESIGN_DOC":
-        from app.models import SecondaryActionResult
-
-        has_prd = (
-            SecondaryActionResult.query.filter_by(
-                idea_id=idea.id, action_type="PRD_DOC"
-            ).first()
-            is not None
-        )
-        if not has_prd:
+    if gate_err is not None:
+        if gate_err["status"] == 409:
             return api_error(
-                "Design requires an existing PRD for this idea.", status_code=400
+                gate_err["message"],
+                status_code=409,
+                error_code=gate_err["error_code"],
+                errors={"action_type": action_type},
             )
-
-    # Confirmation check for Refine and PRD (PRD §13.33-13.38)
-    # If no comments and <3 secondary actions done, require explicit confirmation
-    confirm = data.get("confirm", False)
-    actions_done = idea.actions_run or []
-    comment_count = Comment.query.filter_by(idea_id=idea.id).count()
-    if (
-        action_type in ("REFINE", "PRD_DOC")
-        and comment_count == 0
-        and len(actions_done) < 3
-        and not confirm
-    ):
-        return api_error(
-            "Are you sure you want to continue? This idea doesn't have much more additional information yet",
-            status_code=409,
-            error_code="CONFIRMATION_REQUIRED",
-            errors={"action_type": action_type},
-        )
+        return api_error(gate_err["message"], status_code=gate_err["status"])
 
     model_override = data.get("model_override")
     provider_override = data.get("provider_override")
@@ -583,23 +1388,6 @@ def run_action(user, idea_id):
     # NOTE: PRD_DOC/DESIGN_DOC reruns no longer delete history — the task
     # appends a new version (is_current flip) so doc threads stay pinned.
 
-    # Record the run first so it shows as pending immediately.
-    from app.models import PromptRun
-
-    run = PromptRun(
-        prompt_config_id=None,
-        action_type=action_type,
-        idea_id=idea.id,
-        triggered_by="manual",
-    )
-    stamp(run)
-    db.session.add(run)
-    db.session.commit()
-
-    # Enqueue action task
-    from app.tasks import enqueue_generation
-    from app.tasks.ollama_tasks import run_secondary_action
-
     extra = {}
     if answers:
         extra["answers"] = answers
@@ -607,21 +1395,14 @@ def run_action(user, idea_id):
         extra["skills"] = skills
     if guidelines:
         extra["guidelines"] = guidelines
-    _provider = provider_override or (
-        idea.prompt_config.provider if idea.prompt_config else None
+    if action_type == "BUILD_CODE":
+        if target is not None:
+            extra["target_id"] = str(target.id)
+        if confirm_build:
+            extra["confirm_build"] = True
+    run, job = _enqueue_action(
+        idea, action_type, extra, model_override, provider_override
     )
-    job = enqueue_generation(
-        run_secondary_action,
-        [str(idea_id), action_type, model_override],
-        {
-            "run_id": str(run.id),
-            "extra_context": extra or None,
-            "provider_override": provider_override,
-        },
-        _provider,
-    )
-    run.job_id = job.id
-    db.session.commit()
 
     return api_ok(
         {
@@ -664,11 +1445,10 @@ def _can_see_flags(user) -> bool:
 
 def _doc_comment_tree(result, include_flag=False):
     """Threaded comments scoped to one document version, oldest first."""
-    comments = (
-        Comment.query.filter_by(action_result_id=result.id, scope="doc")
-        .order_by(Comment.created_at)
-        .all()
-    )
+    query = Comment.query.filter_by(action_result_id=result.id, scope="doc")
+    if not include_flag:
+        query = query.filter_by(is_ignored=False)
+    comments = query.order_by(Comment.created_at).all()
     authors = {}
     user_ids = {c.user_id for c in comments}
     if user_ids:
@@ -817,10 +1597,16 @@ def _edit_history(idea_id):
 
 
 def _comment_tree(idea_id, phase=None, include_flag=False):
-    """Nested comment tree for an idea, oldest first, with author names."""
+    """Nested comment tree for an idea, oldest first, with author names.
+
+    Ignored (moderated) comments are hidden from normal users entirely;
+    admins/BA see them with the flag so Hide/Show stays reversible.
+    """
     query = Comment.query.filter_by(idea_id=idea_id, scope="idea")
     if phase:
         query = query.filter_by(phase=phase)
+    if not include_flag:
+        query = query.filter_by(is_ignored=False)
     comments = query.order_by(Comment.created_at).all()
     authors = {}
     user_ids = {c.user_id for c in comments}

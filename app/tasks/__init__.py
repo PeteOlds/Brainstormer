@@ -69,12 +69,18 @@ def init_celery(app):
         task_acks_late=True,
         task_reject_on_worker_lost=True,
         worker_prefetch_multiplier=1,
+        # TestingConfig sets eager (tasks run inline, no broker); prod
+        # leaves it off. Nothing mapped these Flask-style keys before,
+        # so tests hitting apply_async reached for a real broker.
+        task_always_eager=app.config.get("CELERY_TASK_ALWAYS_EAGER", False),
+        task_eager_propagates=app.config.get("CELERY_TASK_EAGER_PROPAGATES", False),
         # Ollama generation on CPU can take several minutes per idea.
         task_soft_time_limit=600,
         task_time_limit=660,
         task_routes={
             "app.tasks.ollama_tasks.*": {"queue": "ollama"},
             "app.tasks.maintenance_tasks.*": {"queue": "default"},
+            "app.tasks.supervision_tasks.*": {"queue": "default"},
         },
         beat_schedule={
             "check-due-prompts": {
@@ -91,6 +97,7 @@ def init_celery(app):
     # Import tasks to register them
     from . import ollama_tasks  # noqa: F401
     from . import maintenance_tasks  # noqa: F401
+    from . import supervision_tasks  # noqa: F401
 
     return celery
 

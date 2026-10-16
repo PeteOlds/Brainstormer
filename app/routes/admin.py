@@ -743,3 +743,41 @@ def update_ai_connections_settings(user):
     settings.update_ai_connections(data)
     db.session.commit()
     return api_ok(settings.to_dict())
+
+
+@admin_api_bp.route("/admin/settings/builds", methods=["PATCH"])
+@admin_required
+def update_builds_settings(user):
+    """Default projects root for new build repos.
+
+    The root must itself sit inside the configured build roots
+    (validated now, not at first use). Empty clears back to default.
+    """
+    import os
+
+    from app.models import SystemSettings
+    from app.services.build_service import build_roots
+
+    data = request.get_json() or {}
+    root = (data.get("default_root") or "").strip()
+    if root:
+        if not os.path.isabs(root):
+            return api_error("default_root must be an absolute path.", status_code=400)
+        try:
+            resolved = os.path.realpath(os.path.abspath(root))
+        except OSError as exc:
+            return api_error(f"default_root is unusable: {exc}", status_code=400)
+        roots = build_roots()
+        if all(resolved != r and not resolved.startswith(r + os.sep) for r in roots):
+            return api_error(
+                "default_root must sit inside the configured build roots "
+                f"({', '.join(roots) if roots else 'none configured'}).",
+                status_code=400,
+            )
+        data = {"default_root": resolved}
+    else:
+        data = {}
+    settings = SystemSettings.get_instance()
+    settings.update_builds(data)
+    db.session.commit()
+    return api_ok(settings.to_dict())

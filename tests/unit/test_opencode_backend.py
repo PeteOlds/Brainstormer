@@ -296,6 +296,7 @@ _CATALOG = {
         },
         {
             "id": "aaa-model",
+            "name": "Aaa Model",
             "providerID": "opencode",
             "status": "active",
             "enabled": True,
@@ -358,7 +359,10 @@ def test_list_server_models_filters_and_sorts(monkeypatch):
     _FakeCatalogClient.calls = 0
     monkeypatch.setattr(httpx, "Client", _FakeCatalogClient)
     got = ob.list_server_models("http://srv:4096", provider="opencode")
-    assert got == ["opencode/aaa-model", "opencode/big-pickle"]
+    assert got == [
+        {"id": "opencode/aaa-model", "name": "Aaa Model"},
+        {"id": "opencode/big-pickle", "name": "opencode/big-pickle"},
+    ]
     assert _FakeCatalogClient.calls == 1
     # Second call is served from cache: no further HTTP.
     assert ob.list_server_models("http://srv:4096", provider="opencode") == got

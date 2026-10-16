@@ -2,8 +2,12 @@
 
 Skills are opencode skills (``*/SKILL.md`` with YAML frontmatter holding
 at least ``name`` and ``description``), discovered under the directories
-in ``SKILLS_DIRS`` (os.pathsep-separated). The worker/web containers can
-only see host skill dirs through explicit read-only volume mounts.
+in ``SKILLS_DIRS`` (os.pathsep-separated). When ``SKILLS_DIRS`` is unset
+or empty, the conventional container mount points
+(``/opencode-skills/opencode`` and ``/opencode-skills/agents`` — host
+skill dirs mounted read-only) are used, so a stock deployment discovers
+skills with no extra configuration. The worker/web containers can only
+see host skill dirs through explicit read-only volume mounts.
 
 Guidelines are ``*.md`` files under ``GUIDELINES_DIR`` (default
 ``<repo>/guidelines``, i.e. ``/app/guidelines`` in containers).
@@ -21,9 +25,17 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
+# Conventional read-only mount points for host skill directories inside
+# the app containers (see Live Topology). Used when SKILLS_DIRS is unset.
+DEFAULT_SKILL_DIRS = ("/opencode-skills/opencode", "/opencode-skills/agents")
+
+
 def skill_dirs() -> list:
     raw = os.getenv("SKILLS_DIRS", "")
-    return [Path(p).expanduser() for p in raw.split(os.pathsep) if p.strip()]
+    dirs = [p.strip() for p in raw.split(os.pathsep) if p.strip()]
+    if not dirs:
+        dirs = list(DEFAULT_SKILL_DIRS)
+    return [Path(p).expanduser() for p in dirs]
 
 
 def guidelines_dir() -> Path:

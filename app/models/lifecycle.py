@@ -23,6 +23,7 @@ ALLOWED_TRANSITIONS: dict[IdeaStatus, frozenset] = {
 ACTIONS_BLOCKED_STATES = frozenset({S.DROP, S.ARCHIVE})
 PRD_MIN_STATES = frozenset({S.SCOPE, S.MAP, S.SHIP, S.SCALE, S.FREEZE})
 DESIGN_DOC_STATES = frozenset({S.MAP, S.SHIP, S.SCALE, S.FREEZE})
+BUILD_MIN_STATES = frozenset({S.SHIP, S.SCALE})
 
 
 def can_transition(frm: IdeaStatus, to: IdeaStatus) -> bool:

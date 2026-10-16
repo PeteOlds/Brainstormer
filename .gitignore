@@ -51,3 +51,6 @@ backups/
 
 # OpenCode per-run sandbox dirs (created under the repo by attached runs)
 .opencode-sandbox/
+
+# Build workspaces (created under the repo by target registration)
+projects/

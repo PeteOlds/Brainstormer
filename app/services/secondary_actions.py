@@ -1,11 +1,15 @@
 """Registry of follow-up AI actions runnable on existing ideas.
 
-Adding a new action takes three steps, nothing else to touch:
+Adding a new action takes four steps, nothing else to touch:
 1. Add a prompt template ``app/prompt_templates/<name>.txt`` using the
    ``${ORIGINAL_IDEA_CONTENT}`` placeholder.
 2. Add its Pydantic output schema in ``app/schemas/ollama_schemas.py``
    and map the key in ``_ACTION_SCHEMAS`` there.
-3. Append one entry to ``ACTION_REGISTRY`` below.
+3. Map the template name in ``get_prompt_template`` in
+   ``app/services/prompt_templates.py``.
+4. Append one entry to ``ACTION_REGISTRY`` below (plus stage gates in
+   ``app/models/lifecycle.py`` + ``app/routes/ideas.py`` + the dashboard
+   ``docActionVisible`` if the action is stage-restricted).
 
 ``GET /api/v1/actions`` serves this list, the admin UI renders its
 buttons from it, and ``POST /api/v1/ideas/<id>/actions`` validates
@@ -103,6 +107,13 @@ ACTION_REGISTRY = [
         "description": "Go-To-Market execution: segmentation, positioning, pricing, channels, launch plan, AARRR metrics — phased roadmap with owners and timelines.",
         "template": "gtm_strategy",
         "done_label": "Planned",
+    },
+    {
+        "key": "BUILD_CODE",
+        "label": "Build",
+        "description": "Implement the Design document as code files in a registered instance target repo: manifest preview first, files written on confirm. Requires a Design doc and Ship stage.",
+        "template": "build_code",
+        "done_label": "Built",
     },
 ]
 

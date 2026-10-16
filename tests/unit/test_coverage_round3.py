@@ -224,6 +224,17 @@ def test_admin_user_and_settings_paths(admin_client, app, admin_user):
     assert res.status_code == 200
     res = admin_client.patch("/api/v1/admin/settings/ai_connections", json={"a": 1})
     assert res.status_code == 200
+    res = admin_client.patch(
+        "/api/v1/admin/settings/builds", json={"default_root": "/nope-not-a-root-xyz"}
+    )
+    assert res.status_code == 400
+    res = admin_client.patch(
+        "/api/v1/admin/settings/builds", json={"default_root": "relative/path"}
+    )
+    assert res.status_code == 400
+    res = admin_client.get("/api/v1/admin/settings")
+    assert res.status_code == 200
+    assert "builds" in res.get_json()["data"]
 
 
 def test_instance_member_and_oauth_errors(app, client, admin_client):

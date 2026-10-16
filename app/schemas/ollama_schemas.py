@@ -1,5 +1,5 @@
 from typing import List, get_args, get_origin
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from enum import Enum
 import json
 from json import JSONDecodeError
@@ -155,6 +155,100 @@ class GtmStrategyOutput(BaseModel):
     launch_roadmap: List[str]
 
 
+BUILD_MAX_FILES = 25
+BUILD_MAX_FILE_CHARS = 15000
+BUILD_MAX_TOTAL_CHARS = 60000
+
+
+class BuildFile(BaseModel):
+    """One generated source file: repo-relative path + full content."""
+
+    path: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1, max_length=BUILD_MAX_FILE_CHARS)
+
+    @field_validator("path")
+    @classmethod
+    def _safe_relative_path(cls, value: str) -> str:
+        # Absolute paths, home/drive prefixes and escapes are rejected
+        # outright (never silently rewritten); "./" and "\" separators
+        # are normalized.
+        raw = str(value)
+        if (
+            not raw.strip()
+            or raw.strip().startswith("/")
+            or raw.strip().startswith("~")
+            or (len(raw.strip()) >= 2 and raw.strip()[1] == ":")
+        ):
+            raise ValueError(f"unsafe file path: {value!r}")
+        cleaned = raw.replace("\\", "/").strip()
+        while cleaned.startswith("./"):
+            cleaned = cleaned[2:]
+        parts = [p for p in cleaned.split("/") if p not in ("", ".")]
+        if not parts or any(p == ".." for p in parts):
+            raise ValueError(f"unsafe file path: {value!r}")
+        return "/".join(parts)
+
+
+class BuildCodeOutput(BaseModel):
+    """Code build manifest: files to write, plus write-state tracking.
+
+    The first (preview) version carries ``written=False``; the confirm run
+    writes the stored manifest and appends a version with ``written=True``.
+    """
+
+    summary: str = Field(..., min_length=20)
+    files: List[BuildFile] = Field(..., min_length=1, max_length=BUILD_MAX_FILES)
+    written: bool = False
+    target_name: str | None = None
+    # Absolute server-side target root, set by the task (not the model) so
+    # run instructions can ship copy/pasteable `cd "<path>" && ...` commands.
+    target_path: str | None = None
+    # Host-side twin of target_path (same machine users paste into), for
+    # the same commands. Falls back to target_path when unmapped.
+    target_host_path: str | None = None
+    # Server-derived, verified runbook ({setup, run, workdir}): fully
+    # rendered paste-and-run commands (host paths, venv setup, resolved
+    # working directory). The UI prefers these over the raw model fields.
+    runbook: dict | None = None
+    write_report: List[str] = Field(default_factory=list)
+
+    # --- Runtime / deployment info (populated by the task from generated code) ---
+    # How to start the application
+    start_command: str | None = None
+    # URL where the application will be accessible (e.g., "http://localhost:3000")
+    app_url: str | None = None
+    # Port the application listens on (host side: what the user opens)
+    port: int | None = None
+    # Port the manifest originally asked for, when allocation moved it.
+    port_requested: int | None = None
+    # True when the requested port was busy and a free one was allocated.
+    port_changed: bool = False
+    # Human UI URL when the build ships a separate frontend/dashboard
+    # (e.g. a compose `frontend` service): Open points here, not at the
+    # API above (which stays the health-check target). None for
+    # single-service builds.
+    frontend_url: str | None = None
+    # Frontend host port (what the user opens), when one was detected.
+    frontend_port: int | None = None
+    # Credentials for initial login (if applicable)
+    credentials: dict | None = None
+    # Docker image name if containerized
+    docker_image: str | None = None
+    # Docker Compose file path (relative to target root)
+    docker_compose_file: str | None = None
+    # Additional notes for the user (how to access, default credentials, etc.)
+    run_notes: str | None = None
+
+    @model_validator(mode="after")
+    def _cap_total_size(self):
+        total = sum(len(f.content) for f in self.files)
+        if total > BUILD_MAX_TOTAL_CHARS:
+            raise ValueError(
+                f"manifest too large: {total} chars (max {BUILD_MAX_TOTAL_CHARS})"
+            )
+        return self
+
+
 # Action type to schema mapping
 _ACTION_SCHEMAS = {
     "REFINE": RefineOutput,
@@ -170,6 +264,7 @@ _ACTION_SCHEMAS = {
     "BUSINESS_MODEL_CANVAS": BusinessModelCanvasOutput,
     "HYPOTHESIS_TEST": HypothesisTestOutput,
     "GTM_STRATEGY": GtmStrategyOutput,
+    "BUILD_CODE": BuildCodeOutput,
 }
 
 

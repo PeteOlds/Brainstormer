@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}AI Settings - Brainstormer{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="aiSettingsApp()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">AI Settings</h1>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Provider keys, model allowlists, budgets and spend — per instance</p>
+        </div>
+        <div class="mt-4 sm:mt-0 flex items-center space-x-3">
+            <a href="/admin" class="px-4 py-2 min-h-[44px] inline-flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Admin Dashboard</a>
+        </div>
+    </div>
+
+    <div x-show="fatal" class="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl px-5 py-3 text-sm text-red-700 dark:text-red-300">
+        <span x-text="fatal"></span> <a href="/ideas" class="underline">Back to ideas</a>
+    </div>
+
+    <div x-show="!fatal" class="flex flex-col sm:flex-row sm:items-center gap-3">
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300" for="ai-instance">Instance</label>
+        <select id="ai-instance" @change="selectInstance($event.target.value)" class="block w-full sm:w-80 px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+            <template x-for="inst in instances" :key="inst.id">
+                <option :value="inst.id" :selected="String(inst.id) === String(instanceId)" x-text="(inst.number != null ? 'Site ' + inst.number + ' · ' : '') + (inst.name || inst.id)"></option>
+            </template>
+        </select>
+        <span class="text-xs text-slate-500 dark:text-slate-400" x-text="scopeNote"></span>
+    </div>
+
+    <div x-show="saveMsg" class="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl px-5 py-3 text-sm text-green-700 dark:text-green-300" x-text="saveMsg"></div>
+    <div x-show="saveErr" class="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl px-5 py-3 text-sm text-red-700 dark:text-red-300" x-text="saveErr"></div>
+
+    <div x-show="!fatal && instanceId" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <template x-for="p in providers" :key="p">
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="p"></h2>
+                    <span class="text-xs px-2 py-0.5 rounded-full" :class="(configs[p] ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300')" x-text="configs[p] ? 'configured' : 'not configured'"></span>
+                </div>
+                <template x-if="configs[p]">
+                    <dl class="mt-3 space-y-1 text-sm text-slate-600 dark:text-slate-400">
+                        <div class="flex gap-2"><dt class="font-medium">Key:</dt><dd x-text="configs[p].has_key ? 'set (write-only)' : 'none'"></dd></div>
+                        <div class="flex gap-2"><dt class="font-medium">Models:</dt><dd x-text="(configs[p].model_allowlist || []).join(', ') || 'any'"></dd></div>
+                        <div class="flex gap-2"><dt class="font-medium">Endpoint:</dt><dd class="font-mono break-all" x-text="configs[p].endpoint || '—'"></dd></div>
+                        <div class="flex gap-2"><dt class="font-medium">Budget:</dt><dd x-text="configs[p].budget_cents != null ? (configs[p].budget_cents + '¢ / 30d') : 'none'"></dd></div>
+                        <div class="flex gap-2" x-show="p === 'opencode'"><dt class="font-medium">Workspace:</dt><dd x-text="configs[p].opencode_workspace || 'sandbox'"></dd></div>
+                    </dl>
+                </template>
+                <div class="mt-3">
+                    <button @click="startEdit(p)" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30" x-text="configs[p] ? 'Edit' : 'Configure'"></button>
+                </div>
+                <template x-if="editingProvider === p && draft">
+                    <div class="mt-4 space-y-3 border-t border-slate-200 dark:border-slate-700 pt-4">
+                        <div x-show="p !== 'ollama'">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API key (write-only — blank keeps current)</label>
+                            <input type="password" x-model="draft.key" autocomplete="off" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="leave blank to keep">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Model allowlist (one per line or comma-separated; empty = unrestricted, any model id accepted)</label>
+                            <textarea x-model="draft.allowlist" rows="2" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Endpoint (optional)</label>
+                            <input type="text" x-model="draft.endpoint" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="opencode: http://host:4096">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Budget (cents / 30d)</label>
+                                <input type="number" x-model="draft.budget_cents" min="0" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">On budget exceeded</label>
+                                <select x-model="draft.cutoff_behaviour" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    <option value="refuse">refuse</option>
+                                    <option value="queue">queue</option>
+                                    <option value="degrade">degrade</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Embedding model / degrade model (optional)</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <input type="text" x-model="draft.embedding_model" placeholder="embedding model" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                <input type="text" x-model="draft.degrade_model" placeholder="degrade model" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            </div>
+                        </div>
+                        <div x-show="p === 'opencode'">
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Workspace <span class="font-normal text-slate-500">(repo mode is Site-Admin only)</span></label>
+                            <select x-model="draft.opencode_workspace" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                <option value="sandbox">sandbox</option>
+                                <option value="repo">repo</option>
+                            </select>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" x-model="draft.chat_enabled" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500"> Chat enabled
+                        </label>
+                        <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" x-model="draft.use_proxy" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500"> Route via proxy <span class="text-xs text-slate-500">(needs a provisioned virtual key — CLI only)</span>
+                        </label>
+                        <div class="flex gap-2">
+                            <button @click="saveEdit()" :disabled="saving" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save</button>
+                            <button @click="cancelEdit()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
+
+    <div x-show="!fatal && instanceId" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Build repos</h2>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Project folders this instance builds code into. New repos are created from the run dialog when you build an idea; they appear here for review and removal.</p>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400" x-show="!targets.length">No repos registered yet.</p>
+        <ul class="mt-3 space-y-2" x-show="targets.length">
+            <template x-for="t in targets" :key="t.id">
+                <li class="flex items-center justify-between gap-3 text-sm">
+                    <span><span class="font-medium text-slate-900 dark:text-white" x-text="t.name"></span> <span class="font-mono text-slate-500 dark:text-slate-400" x-text="t.path"></span></span>
+                    <button @click="deleteTarget(t.id)" class="shrink-0 px-3 py-1.5 min-h-[36px] text-xs font-medium text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20">Delete</button>
+                </li>
+            </template>
+        </ul>
+    </div>
+
+    <div x-show="!fatal && instanceId" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Spend (rolling 30 days)</h2>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400" x-show="!spendRows.length">No spend recorded yet.</p>
+        <table class="mt-3 w-full text-sm" x-show="spendRows.length">
+            <thead><tr class="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <th class="py-1 pr-4">Provider</th><th class="py-1 pr-4">Prompt tokens</th><th class="py-1 pr-4">Completion tokens</th><th class="py-1 pr-4">Cost</th><th class="py-1">Budget</th>
+            </tr></thead>
+            <tbody>
+                <template x-for="row in spendRows" :key="row.provider">
+                    <tr class="border-t border-slate-200 dark:border-slate-700">
+                        <td class="py-1 pr-4 font-mono" x-text="row.provider"></td>
+                        <td class="py-1 pr-4 tabular-nums" x-text="row.prompt_tokens"></td>
+                        <td class="py-1 pr-4 tabular-nums" x-text="row.completion_tokens"></td>
+                        <td class="py-1 pr-4 tabular-nums" x-text="(row.cost_cents / 100).toFixed(2) + ' $'"></td>
+                        <td class="py-1 tabular-nums" x-text="row.budget == null ? '—' : (row.spent + '¢ / ' + row.budget + '¢')"></td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function aiSettingsApp() {
+    return {
+        instances: [],
+        instanceId: '',
+        scopeNote: '',
+        providers: ['ollama', 'openai', 'anthropic', 'gemini', 'opencode'],
+        configs: {},
+        editingProvider: '',
+        draft: null,
+        saving: false,
+        saveMsg: '',
+        saveErr: '',
+        fatal: '',
+        spendRows: [],
+        targets: [],
+
+        tokenInstanceId() {
+            try {
+                const tok = localStorage.getItem('access_token') || '';
+                const part = ((tok.split('.')[1] || '').replace(/-/g, '+').replace(/_/g, '/'));
+                return (JSON.parse(atob(part + '='.repeat((4 - part.length % 4) % 4))).instance_id || '').toString() || '';
+            } catch (e) { return ''; }
+        },
+
+        async init() {
+            if (!localStorage.getItem('access_token')) { window.location.href = '/login'; return; }
+            try {
+                const res = await authFetch('/api/v1/instances');
+                if (!res.ok) throw new Error('forbidden');
+                const data = await res.json();
+                this.instances = (data.data || data).instances || [];
+            } catch (e) {
+                this.fatal = 'You need instance-admin access to view AI settings.';
+                return;
+            }
+            if (!this.instances.length) {
+                this.fatal = 'No instances available for your account.';
+                return;
+            }
+            const scoped = this.tokenInstanceId();
+            const match = scoped && this.instances.find((i) => String(i.id) === scoped);
+            this.instanceId = (match && match.id) || this.instances[0].id;
+            this.updateScopeNote();
+            await this.loadAll();
+        },
+
+        updateScopeNote() {
+            const inst = this.instances.find((i) => String(i.id) === String(this.instanceId));
+            const label = inst ? ('Site ' + (inst.number != null ? inst.number : '?') + ' · ' + (inst.name || '')) : '';
+            const scoped = this.tokenInstanceId();
+            if (scoped && String(scoped) === String(this.instanceId)) {
+                this.scopeNote = 'Your login is scoped to ' + label + '.';
+            } else {
+                this.scopeNote = 'Managing ' + label + ' (your login token is unscoped — API calls use the selected instance).';
+            }
+        },
+
+        async selectInstance(id) {
+            this.instanceId = id;
+            this.editingProvider = '';
+            this.draft = null;
+            this.saveMsg = '';
+            this.saveErr = '';
+            this.updateScopeNote();
+            await this.loadAll();
+        },
+
+        async loadAll() {
+            this.saveErr = '';
+            try {
+                const [cfgRes, spendRes, tgtRes] = await Promise.all([
+                    authFetch(`/api/v1/instances/${this.instanceId}/ai-configs`),
+                    authFetch(`/api/v1/instances/${this.instanceId}/spend`),
+                    authFetch(`/api/v1/instances/${this.instanceId}/build-targets`),
+                ]);
+                if (cfgRes.status === 403 || cfgRes.status === 404) {
+                    this.fatal = 'Instance admin access required for this instance.';
+                    return;
+                }
+                const cfgData = await cfgRes.json();
+                const rows = ((cfgData.data || cfgData).configs) || [];
+                const map = {};
+                rows.forEach((c) => { map[c.provider] = c; });
+                this.configs = map;
+                const spendData = await spendRes.json().catch(() => ({}));
+                const payload = spendData.data || spendData || {};
+                const byProvider = payload.by_provider || {};
+                const budgets = payload.budgets || {};
+                this.spendRows = Object.keys(byProvider).map((provider) => ({
+                    provider,
+                    prompt_tokens: byProvider[provider].prompt_tokens || 0,
+                    completion_tokens: byProvider[provider].completion_tokens || 0,
+                    cost_cents: byProvider[provider].cost_cents || 0,
+                    budget: budgets[provider] ? budgets[provider].budget_cents : null,
+                    spent: budgets[provider] ? budgets[provider].spent_cents : null,
+                }));
+                const tgtData = await tgtRes.json().catch(() => ({}));
+                this.targets = (((tgtData.data || tgtData).targets) || []);
+            } catch (e) {
+                this.saveErr = 'Failed to load AI settings.';
+            }
+        },
+
+        async deleteTarget(id) {
+            if (!confirm('Remove this build repo? Pending previews for it will no longer write.')) return;
+            this.saveMsg = '';
+            this.saveErr = '';
+            try {
+                const res = await authFetch(`/api/v1/instances/${this.instanceId}/build-targets/${id}`, {
+                    method: 'DELETE',
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data && (data.message || data.msg)) || 'Delete failed');
+                this.saveMsg = 'Repo removed.';
+                setTimeout(() => { this.saveMsg = ''; }, 3000);
+                await this.loadAll();
+            } catch (e) {
+                this.saveErr = e.message || 'Delete failed.';
+            }
+        },
+
+        startEdit(provider) {
+            const cur = this.configs[provider] || {};
+            this.editingProvider = provider;
+            this.draft = {
+                key: '',
+                allowlist: (cur.model_allowlist || []).join('\n'),
+                endpoint: cur.endpoint || '',
+                budget_cents: cur.budget_cents != null ? String(cur.budget_cents) : '',
+                cutoff_behaviour: cur.cutoff_behaviour || 'refuse',
+                embedding_model: cur.embedding_model || '',
+                degrade_model: cur.degrade_model || '',
+                chat_enabled: !!cur.chat_enabled,
+                use_proxy: !!cur.use_proxy,
+                opencode_workspace: cur.opencode_workspace || 'sandbox',
+            };
+            this.saveMsg = '';
+            this.saveErr = '';
+        },
+
+        cancelEdit() {
+            this.editingProvider = '';
+            this.draft = null;
+        },
+
+        async saveEdit() {
+            if (!this.draft) return;
+            this.saving = true;
+            this.saveMsg = '';
+            this.saveErr = '';
+            try {
+                const body = { provider: this.editingProvider };
+                if (this.draft.key) body.key = this.draft.key;
+                body.model_allowlist = String(this.draft.allowlist || '')
+                    .split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+                if (this.draft.endpoint.trim()) body.endpoint = this.draft.endpoint.trim();
+                if (String(this.draft.budget_cents).trim() !== '') {
+                    const n = parseInt(this.draft.budget_cents, 10);
+                    if (isNaN(n) || n < 0) throw new Error('Budget must be a non-negative integer.');
+                    body.budget_cents = n;
+                }
+                body.cutoff_behaviour = this.draft.cutoff_behaviour;
+                if (this.draft.embedding_model.trim()) body.embedding_model = this.draft.embedding_model.trim();
+                if (this.draft.degrade_model.trim()) body.degrade_model = this.draft.degrade_model.trim();
+                body.chat_enabled = !!this.draft.chat_enabled;
+                body.use_proxy = !!this.draft.use_proxy;
+                if (this.editingProvider === 'opencode') body.opencode_workspace = this.draft.opencode_workspace;
+                const res = await authFetch(`/api/v1/instances/${this.instanceId}/ai-configs`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data && (data.message || data.msg)) || 'Save failed');
+                this.editingProvider = '';
+                this.draft = null;
+                this.saveMsg = 'Saved.';
+                setTimeout(() => { this.saveMsg = ''; }, 3000);
+                await this.loadAll();
+            } catch (e) {
+                this.saveErr = e.message || 'Save failed.';
+            } finally {
+                this.saving = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

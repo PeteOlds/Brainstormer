@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from flask import Blueprint, request
 
 from app.extensions import db
@@ -271,6 +273,429 @@ def instance_spend(user, instance_id):
             "by_provider": by_provider,
             "budgets": budgets,
         }
+    )
+
+
+@bp.route("/instances/<uuid:instance_id>/build-targets", methods=["GET"])
+@token_required
+def list_build_targets(user, instance_id):
+    """Named repos BUILD_CODE runs may write into (this instance)."""
+    from app.models import InstanceBuildTarget
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    targets = (
+        InstanceBuildTarget.query.filter_by(instance_id=instance.id)
+        .order_by(InstanceBuildTarget.name)
+        .all()
+    )
+    from app.services.build_service import build_roots
+
+    roots = build_roots()
+    from app.models import SystemSettings
+
+    settings = SystemSettings.get_instance()
+    configured = ((settings.builds or {}).get("default_root") or "").strip() or None
+    return api_ok(
+        {
+            "targets": [t.to_dict() for t in targets],
+            "defaults": {
+                "projects_root": roots[0] if roots else None,
+                "configured_root": configured,
+            },
+        }
+    )
+
+
+@bp.route("/instances/<uuid:instance_id>/build-targets", methods=["POST"])
+@token_required
+def create_build_target(user, instance_id):
+    """Register a repo for BUILD_CODE runs. Path must resolve under
+    OPENCODE_BUILD_ROOTS and be an existing directory (fail closed)."""
+    from app.models import InstanceBuildTarget
+    from app.services.build_service import BuildError, ensure_target_path
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name or len(name) > 100:
+        return api_error("name is required (up to 100 chars).", status_code=400)
+    if InstanceBuildTarget.query.filter_by(instance_id=instance.id, name=name).first():
+        return api_error(
+            f"A build target named '{name}' already exists.", status_code=409
+        )
+    try:
+        path = ensure_target_path(data.get("path"))
+    except BuildError as exc:
+        return api_error(str(exc), status_code=400)
+    target = InstanceBuildTarget(
+        instance_id=instance.id,
+        name=name,
+        path=path,
+        created_by_id=user.id,
+    )
+    db.session.add(target)
+    db.session.commit()
+    return api_ok({"target": target.to_dict()}, status_code=201)
+
+
+@bp.route(
+    "/instances/<uuid:instance_id>/build-targets/<uuid:target_id>",
+    methods=["DELETE"],
+)
+@token_required
+def delete_build_target(user, instance_id, target_id):
+    """Remove a build target (pending previews for it can no longer write)."""
+    from app.models import InstanceBuildTarget
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    target = InstanceBuildTarget.query.filter_by(
+        id=target_id, instance_id=instance.id
+    ).first()
+    if target is None:
+        return api_error("Unknown build target for this instance.", status_code=404)
+    db.session.delete(target)
+    db.session.commit()
+    return api_ok({"deleted": str(target_id)})
+
+
+def _managed_row(instance_id, app_id):
+    from app.models import ManagedApp
+
+    return ManagedApp.query.filter_by(id=app_id, instance_id=instance_id).first()
+
+
+def _managed_live(row):
+    """Stored fields plus fresh status. Health-first: pid checks are
+    container-local, so a pid the web container cannot see proves
+    nothing — an answering health endpoint means running (this adopts
+    processes orphaned by earlier failures instead of misreporting
+    them stopped). Only a silent health endpoint + dead pid reconciles
+    a `running` row back to stopped."""
+    from app.services.runner import get_runner, poll_health
+
+    data = row.to_dict()
+    healthy = poll_health(row.health_url)
+    if healthy is True:
+        if row.state != "running":
+            row.state = "running"
+            row.last_error = None
+            db.session.commit()
+            data = row.to_dict()
+        data["live"] = {
+            "state": "running",
+            "healthy": True,
+            "pid": row.pid,
+        }
+        return data
+    live = get_runner().status(row.pid, row.health_url)
+    if row.state == "running" and live["state"] == "stopped":
+        row.state = "stopped"
+        row.pid = None
+        row.stopped_at = datetime.now(timezone.utc)
+        db.session.commit()
+        data = row.to_dict()
+        live = {"state": "stopped", "healthy": None, "pid": None}
+    data["live"] = live
+    return data
+
+
+def _spec_from_build_version(version_row, target, idea_ref):
+    """Runnable spec from a written BUILD_CODE version. Returns (spec dict,
+    display command, error message). Never executes anything.
+
+    Paths here are worker-visible (container) paths: supervised processes
+    run inside worker containers, where host paths do not exist. Display
+    strings stay host-native in the runbook itself.
+    """
+    from app.services.build_service import container_path, server_path
+    from app.tasks.ollama_tasks import _derive_runbook
+
+    out = version_row.result_data or {}
+    if not out.get("written"):
+        return None, None, "Only confirmed builds can run — confirm the preview first."
+    host_root = out.get("target_host_path") or server_path(
+        out.get("target_path") or (target.path if target else "")
+    )
+    files = out.get("files") or []
+    manifest = [
+        {"path": f.get("path"), "content": f.get("content", "")}
+        for f in files
+        if isinstance(f, dict) and f.get("path")
+    ]
+    runbook = out.get("runbook") if isinstance(out.get("runbook"), dict) else None
+    if runbook is None or not (runbook or {}).get("workdir_container"):
+        # Missing or pre-container-shape runbook: re-derive so argv is
+        # container-native. Stored display strings stay untouched.
+        try:
+            runbook = _derive_runbook(
+                manifest,
+                out.get("start_command"),
+                host_root,
+                out.get("target_path") or (target.path if target else ""),
+            )
+        except Exception:
+            runbook = None
+    argv = (runbook or {}).get("run_argv") if runbook else None
+    if not argv:
+        return (
+            None,
+            None,
+            (
+                "This build has no runnable command recorded — "
+                "recreate it with the current builder."
+            ),
+        )
+    setup_argv = (runbook or {}).get("setup_argv") or []
+    pip_argv = (runbook or {}).get("pip_argv") or []
+    venv_dir = (runbook or {}).get("workdir") or ""
+    # Container working folder first (runner context); host path only as
+    # a last resort for rows predating container-native runbooks.
+    workdir = (
+        (runbook or {}).get("workdir_container")
+        or container_path((runbook or {}).get("workdir") or "")
+        or None
+    )
+    if not workdir:
+        workdir = out.get("target_path") or (target.path if target else "") or None
+    if not workdir:
+        return None, None, "This build has no working folder recorded."
+    try:
+        port = int(out.get("port")) if out.get("port") else None
+    except (TypeError, ValueError):
+        port = None
+    app_url = (out.get("app_url") or "").strip() or None
+    # Open goes to the human UI when the build ships one (recorded at
+    # confirm time by the extractor); health always polls the API.
+    open_url = (out.get("frontend_url") or "").strip() or app_url
+    log_path = workdir.rstrip("/") + "/.brainstormer/" + idea_ref + ".log"
+    display = (runbook or {}).get("run") or str(out.get("start_command") or "")
+    spec = {
+        "workdir": workdir,
+        "venv_dir": venv_dir,
+        "run_argv": argv,
+        "setup_argv": setup_argv,
+        "pip_argv": pip_argv,
+        "log_path": log_path,
+        "health_url": app_url,
+        "open_url": open_url,
+    }
+    return spec, display, None
+
+
+@bp.route("/instances/<uuid:instance_id>/managed-apps", methods=["GET"])
+@token_required
+def list_managed_apps(user, instance_id):
+    """Supervised apps with live status (stale running rows reconcile)."""
+    from app.models import ManagedApp
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    rows = (
+        ManagedApp.query.filter_by(instance_id=instance.id)
+        .order_by(ManagedApp.updated_at.desc())
+        .all()
+    )
+    return api_ok({"apps": [_managed_live(r) for r in rows]})
+
+
+@bp.route("/instances/<uuid:instance_id>/managed-apps", methods=["POST"])
+@token_required
+def upsert_managed_app(user, instance_id):
+    """Point supervision at a confirmed build (creates or reconfigures).
+    Body: {idea_id, target_id}. Only written versions can run."""
+    import uuid as uuid_mod
+
+    from app.models import Idea, InstanceBuildTarget, ManagedApp, SecondaryActionResult
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    try:
+        idea_id = uuid_mod.UUID(str(data.get("idea_id")))
+        target_id = uuid_mod.UUID(str(data.get("target_id")))
+    except (ValueError, TypeError, AttributeError):
+        return api_error("idea_id and target_id are required.", status_code=400)
+    idea = Idea.query.filter_by(id=idea_id, instance_id=instance.id).first()
+    if idea is None:
+        return api_error("Unknown idea for this instance.", status_code=404)
+    target = InstanceBuildTarget.query.filter_by(
+        id=target_id, instance_id=instance.id
+    ).first()
+    if target is None:
+        return api_error("Unknown build target for this instance.", status_code=404)
+    versions = (
+        SecondaryActionResult.query.filter_by(idea_id=idea.id, action_type="BUILD_CODE")
+        .order_by(SecondaryActionResult.version.desc())
+        .all()
+    )
+    version_row = next(
+        (
+            r
+            for r in versions
+            if (r.result_data or {}).get("written")
+            and str(r.target_id or "") == str(target.id)
+        ),
+        None,
+    )
+    if version_row is None:
+        return api_error(
+            "Nothing runnable here yet — confirm a build for this repo first.",
+            status_code=400,
+        )
+    spec, display, spec_err = _spec_from_build_version(
+        version_row, target, idea.reference_code
+    )
+    if spec_err:
+        return api_error(spec_err, status_code=400)
+    out = version_row.result_data or {}
+    try:
+        port = int(out.get("port")) if out.get("port") else None
+    except (TypeError, ValueError):
+        port = None
+    row = ManagedApp.query.filter_by(idea_id=idea.id, target_id=target.id).first()
+    created = row is None
+    if created:
+        row = ManagedApp(
+            instance_id=instance.id,
+            idea_id=idea.id,
+            target_id=target.id,
+            state="stopped",
+        )
+        db.session.add(row)
+    row.target_name = target.name
+    row.build_version = version_row.version
+    row.port = port
+    row.workdir = spec["workdir"]
+    row.command = display
+    row.health_url = spec["health_url"]
+    row.open_url = spec.get("open_url") or spec["health_url"]
+    row.log_path = spec["log_path"]
+    row.spec = spec
+    db.session.commit()
+    return api_ok(
+        {"app": _managed_live(row), "reconfigured": not created},
+        status_code=201 if created else 200,
+    )
+
+
+@bp.route(
+    "/instances/<uuid:instance_id>/managed-apps/<uuid:app_id>/start",
+    methods=["POST"],
+)
+@token_required
+def start_managed_app_route(user, instance_id, app_id):
+    """Enqueue the (slow) bring-up: venv setup, install, launch, record."""
+    from app.models import ManagedApp
+    from app.tasks.supervision_tasks import start_managed_app
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    row = _managed_row(instance.id, app_id)
+    if row is None:
+        return api_error("Unknown supervised app for this instance.", status_code=404)
+    if not (row.spec or {}).get("run_argv"):
+        return api_error(
+            "The recorded start command cannot be run safely — "
+            "reconfigure from a current build first.",
+            status_code=400,
+        )
+    # Double presses must not launch twins. Two signals, either wins:
+    # an answering health endpoint (cross-container truth), or a live
+    # pid in this namespace (same-process truth, e.g. tests). A starting
+    # row older than 30 minutes is an orphaned task (see:
+    # unregistered-task loss) — allow a retry.
+    from app.services.runner import get_runner, poll_health
+
+    if poll_health(row.health_url) is True:
+        row.state = "running"
+        row.last_error = None
+        db.session.commit()
+        return api_ok({"app": _managed_live(row), "already": True})
+    live = get_runner().status(row.pid, None)
+    if live["state"] == "running" and live["pid"] == row.pid:
+        row.state = "running"
+        row.last_error = None
+        db.session.commit()
+        return api_ok({"app": _managed_live(row), "already": True})
+    if row.state == "starting" and row.updated_at is not None:
+        from app.models.types import ensure_aware
+
+        age = datetime.now(timezone.utc) - ensure_aware(row.updated_at)
+        if age.total_seconds() < 30 * 60:
+            return api_ok({"app": _managed_live(row), "already": True})
+    row.state = "starting"
+    row.last_error = None
+    db.session.commit()
+    start_managed_app.apply_async(
+        args=[str(row.id)],
+        queue="default",
+        soft_time_limit=1500,
+        time_limit=1620,
+    )
+    return api_ok({"app": _managed_live(row)}, status_code=202)
+
+
+@bp.route(
+    "/instances/<uuid:instance_id>/managed-apps/<uuid:app_id>/stop",
+    methods=["POST"],
+)
+@token_required
+def stop_managed_app_route(user, instance_id, app_id):
+    """Enqueue the stop on a worker: pids are container-local, so only a
+    worker sharing the spawner's PID namespace may signal the process
+    group (a direct kill from the web container could hit an unrelated
+    process reusing the same pid)."""
+    from app.models import ManagedApp
+    from app.tasks.supervision_tasks import stop_managed_app
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    row = _managed_row(instance.id, app_id)
+    if row is None:
+        return api_error("Unknown supervised app for this instance.", status_code=404)
+    row.state = "stopping"
+    db.session.commit()
+    stop_managed_app.apply_async(
+        args=[str(row.id)],
+        queue="default",
+        soft_time_limit=120,
+        time_limit=180,
+    )
+    return api_ok({"app": _managed_live(row)}, status_code=202)
+
+
+@bp.route(
+    "/instances/<uuid:instance_id>/managed-apps/<uuid:app_id>/logs",
+    methods=["GET"],
+)
+@token_required
+def managed_app_logs(user, instance_id, app_id):
+    """Tail the app's stdout/stderr log (newest last, capped)."""
+    from app.models import ManagedApp
+    from app.services.runner import get_runner
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    row = _managed_row(instance.id, app_id)
+    if row is None:
+        return api_error("Unknown supervised app for this instance.", status_code=404)
+    try:
+        lines = max(1, min(int(request.args.get("lines", 200)), 500))
+    except (TypeError, ValueError):
+        lines = 200
+    return api_ok(
+        {"lines": get_runner().tail(row.log_path or "", lines), "state": row.state}
     )
 
 

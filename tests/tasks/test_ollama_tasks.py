@@ -516,6 +516,50 @@ class TestSecondaryActionRobustness:
         return idea
 
     @patch("app.tasks.ollama_tasks.OllamaClient")
+    def test_hosted_model_prefix_without_provider_hints(self, mock_client_class, celery_app):
+        """Stale-dialog shape: hosted model id, no provider_override.
+
+        Must fail with a plain-language pointer at the provider mismatch,
+        not a bare 'not installed' (IDEA-9603 re-run showed why).
+        """
+        from unittest.mock import MagicMock
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import Idea, PromptRun
+            from app.tasks.ollama_tasks import run_secondary_action
+
+            mock_client = MagicMock()
+            mock_client_class.return_value = mock_client
+            mock_client.is_model_available.return_value = False
+            idea = Idea(
+                reference_code="IDEA-PXH",
+                prompt_title="t",
+                raw_content="prompt-less idea",
+            )
+            db.session.add(idea)
+            db.session.commit()
+            run = PromptRun(
+                prompt_config_id=None,
+                action_type="REFINE",
+                idea_id=idea.id,
+                triggered_by="manual",
+            )
+            db.session.add(run)
+            db.session.commit()
+            run_secondary_action(
+                str(idea.id),
+                "REFINE",
+                model_override="opencode/nemotron-3-ultra-free",
+                run_id=str(run.id),
+            )
+            db.session.expire_all()
+            got = db.session.get(PromptRun, run.id)
+            assert got.status.value == "FAILED"
+            assert "not installed" in (got.error or "")
+            assert "provider" in (got.error or "").lower()
+
+    @patch("app.tasks.ollama_tasks.OllamaClient")
     def test_secondary_runs_cold(self, mock_client_class, celery_app):
         """Analytical actions cap temperature at 0.3 (prompt had 0.9)."""
         import json as _json
@@ -915,6 +959,64 @@ class TestRunSecondaryActionTask:
             assert row.provider_used == "opencode"
             assert row.model_used == "opencode/big-pickle"
             assert row.skills_used == ["tdd"]
+
+    @patch("app.tasks.ollama_tasks.OllamaClient")
+    @patch("app.services.llm_backends.generate_for_prompt")
+    def test_provider_override_applies_without_prompt(
+        self, mock_generate, mock_client_class, celery_app
+    ):
+        """Prompt-less ideas honor explicit overrides (regression).
+
+        The old resolution discarded model_override and forced provider
+        back to ollama whenever the idea had no prompt config.
+        """
+        import json as _json
+
+        from app.services.llm_backends import GenerationResult
+
+        with celery_app.app_context():
+            from app.extensions import db
+            from app.models import Idea, SecondaryActionResult, User, UserRole
+
+            admin = User(email="admin_no_prompt@t.test", role=UserRole.ADMIN)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            db.session.commit()
+            idea = Idea(
+                reference_code="IDEA-NP1",
+                prompt_title="T",
+                raw_content="content",
+                prompt_config_id=None,
+            )
+            db.session.add(idea)
+            db.session.commit()
+
+            from app.tasks.ollama_tasks import run_secondary_action
+
+            mock_generate.return_value = GenerationResult(
+                text=_json.dumps(
+                    {
+                        "elevator_pitch": "AI inventory management for small retailers",
+                        "target_audience": "Small retail businesses",
+                        "core_value_proposition": "Automated stock optimization",
+                        "monetization_strategy": "SaaS subscription",
+                    }
+                ),
+                model="opencode/big-pickle",
+            )
+            run_secondary_action(
+                str(idea.id),
+                "REFINE",
+                model_override="opencode/big-pickle",
+                provider_override="opencode",
+            )
+            shim = mock_generate.call_args.args[0]
+            assert shim.provider == "opencode"
+            assert shim.model_name == "opencode/big-pickle"
+            row = SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type="REFINE"
+            ).one()
+            assert row.provider_used == "opencode"
 
     @patch("app.tasks.ollama_tasks.OllamaClient")
     def test_run_secondary_action_refine(self, mock_client_class, celery_app):
