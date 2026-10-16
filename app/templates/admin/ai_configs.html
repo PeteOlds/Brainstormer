@@ -109,6 +109,31 @@
     </div>
 
     <div x-show="!fatal && instanceId" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">GitHub</h2>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Repo this instance pushes finished releases to. Needs a personal access token with repo scope — it is stored encrypted and never shown again.</p>
+        <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Repo (owner/name)</label>
+                <input x-model="ghDraft.repo" type="text" placeholder="e.g. my-org/my-app" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Branch</label>
+                <input x-model="ghDraft.branch" type="text" placeholder="main" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Personal access token <span class="font-normal" x-show="ghHasPat">(saved ✓ — leave blank to keep it)</span></label>
+                <input x-model="ghDraft.pat" type="password" autocomplete="new-password" placeholder="ghp_…" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+            </div>
+        </div>
+        <div class="mt-3 flex items-center gap-2">
+            <button @click="saveGithub()" :disabled="ghSaving" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save GitHub settings</button>
+            <button x-show="ghConfigured" @click="clearGithub()" :disabled="ghSaving" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">Remove</button>
+            <span class="text-xs text-green-700 dark:text-green-400" x-show="ghMsg" x-text="ghMsg"></span>
+            <span class="text-xs text-red-700 dark:text-red-400" x-show="ghErr" x-text="ghErr"></span>
+        </div>
+    </div>
+
+    <div x-show="!fatal && instanceId" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Build repos</h2>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Project folders this instance builds code into. New repos are created from the run dialog when you build an idea; they appear here for review and removal.</p>
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400" x-show="!targets.length">No repos registered yet.</p>
@@ -160,6 +185,12 @@ function aiSettingsApp() {
         fatal: '',
         spendRows: [],
         targets: [],
+        ghDraft: { repo: '', branch: 'main', pat: '' },
+        ghHasPat: false,
+        ghConfigured: false,
+        ghSaving: false,
+        ghMsg: '',
+        ghErr: '',
 
         tokenInstanceId() {
             try {
@@ -243,8 +274,72 @@ function aiSettingsApp() {
                 }));
                 const tgtData = await tgtRes.json().catch(() => ({}));
                 this.targets = (((tgtData.data || tgtData).targets) || []);
+                await this.loadGithub();
             } catch (e) {
                 this.saveErr = 'Failed to load AI settings.';
+            }
+        },
+
+        async loadGithub() {
+            this.ghErr = '';
+            try {
+                const res = await authFetch(`/api/v1/instances/${this.instanceId}/github-config`);
+                if (!res.ok) return;
+                const data = await res.json().catch(() => ({}));
+                const cfg = (data.data || data).github_config;
+                if (cfg) {
+                    this.ghDraft = { repo: cfg.repo || '', branch: cfg.branch || 'main', pat: '' };
+                    this.ghHasPat = !!cfg.has_pat;
+                    this.ghConfigured = true;
+                } else {
+                    this.ghDraft = { repo: '', branch: 'main', pat: '' };
+                    this.ghHasPat = false;
+                    this.ghConfigured = false;
+                }
+            } catch (e) {
+                this.ghErr = 'Failed to load GitHub settings.';
+            }
+        },
+
+        async saveGithub() {
+            this.ghMsg = '';
+            this.ghErr = '';
+            const payload = { repo: (this.ghDraft.repo || '').trim(), branch: (this.ghDraft.branch || '').trim() || 'main' };
+            if ((this.ghDraft.pat || '').trim()) payload.pat = this.ghDraft.pat.trim();
+            else if (!this.ghHasPat) {
+                this.ghErr = 'A personal access token is required (repo scope).';
+                return;
+            }
+            this.ghSaving = true;
+            try {
+                const res = await authFetch(`/api/v1/instances/${this.instanceId}/github-config`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data && (data.message || data.msg)) || 'Save failed');
+                this.ghMsg = 'GitHub settings saved.';
+                setTimeout(() => { this.ghMsg = ''; }, 3000);
+                await this.loadGithub();
+            } catch (e) {
+                this.ghErr = e.message || e;
+            } finally {
+                this.ghSaving = false;
+            }
+        },
+
+        async clearGithub() {
+            if (!confirm('Remove GitHub settings? Finished releases can no longer be pushed.')) return;
+            this.ghSaving = true;
+            try {
+                const res = await authFetch(`/api/v1/instances/${this.instanceId}/github-config`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Remove failed');
+                await this.loadGithub();
+            } catch (e) {
+                this.ghErr = e.message || e;
+            } finally {
+                this.ghSaving = false;
             }
         },
 

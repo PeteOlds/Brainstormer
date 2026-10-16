@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.65.0] - 2026-10-17
+### Added
+- In-app messaging (Phase 4 Talk): users message instance admins, admins message any member, read receipts, unread badge, idea/comment share links, admin picker endpoint. New user homepage (`/home`, in nav): My ideas, Most popular, Most discussed, Messages with send form, and admin-only phase analytics.
+
+## [0.64.0] - 2026-10-17
+### Added
+- GitHub flow (Phase 3): per-instance repo + PAT settings on the admin AI page (encrypted at rest, never shown), "Push to GitHub" on finished releases (worker-side clone/sync/commit/push, SHA recorded, no re-commit — updates need a new release), and automatic push of an idea's own build when it enters Scale with GitHub configured. All guards speak plain language.
+
+## [0.63.0] - 2026-10-16
+### Added
+- Per-idea work inside a release (A1): inline status select per child row and a + Doc dropdown (PRD/Design/Build) opening the run dialog for that child, with readiness pills refreshing after each run.
+- "Mark release done" disables itself on finished releases (A2); Refine Idea tab pinned beside the Idea tab (B1).
+
 ## [0.62.1] - 2026-10-16
 ### Added
 - Release Date beside the release name on the Scale tab (`SR1 15-Oct-26`): the completion date when the release has been finished (new `completed_at` column), else the planned target, else creation date. The same date heads the Release Notes ("Finished 16-Oct-26: …").

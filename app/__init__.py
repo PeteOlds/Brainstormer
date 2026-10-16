@@ -52,6 +52,7 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     from .routes.health import bp as health_bp
     from .routes.ideas import bp as ideas_bp
     from .routes.instances import bp as instances_bp
+    from .routes.messages import bp as messages_bp
     from .routes.oauth import bp as oauth_bp
     from .routes.billing import bp as billing_bp
     from .routes.ollama import bp as ollama_bp
@@ -66,6 +67,7 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     app.register_blueprint(ollama_bp, url_prefix="/api/v1")
     app.register_blueprint(prompts_bp, url_prefix="/api/v1")
     app.register_blueprint(ideas_bp, url_prefix="/api/v1")
+    app.register_blueprint(messages_bp, url_prefix="/api/v1")
     app.register_blueprint(admin_pages_bp)
     app.register_blueprint(admin_api_bp, url_prefix="/api/v1")
     app.register_blueprint(instances_bp, url_prefix="/api/v1")
@@ -117,6 +119,15 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
         """
         return {
             "nav_links": [
+                {
+                    "label": "Home",
+                    "endpoint": "pages.home",
+                    "icon": (
+                        "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10"
+                        "a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4"
+                        "a1 1 0 001 1m-6 0h6"
+                    ),
+                },
                 {
                     "label": "Ideas",
                     "endpoint": "pages.ideas",

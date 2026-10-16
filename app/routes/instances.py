@@ -926,6 +926,75 @@ def set_entitlement(user, instance_id):
     return api_ok({"entitlement": row.to_dict()})
 
 
+@bp.route("/instances/<uuid:instance_id>/github-config", methods=["GET"])
+@token_required
+def get_github_config(user, instance_id):
+    """Per-instance GitHub push settings (PAT never returned)."""
+    from app.models import InstanceGitHubConfig
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    row = InstanceGitHubConfig.query.filter_by(instance_id=instance.id).first()
+    return api_ok({"github_config": row.to_dict() if row else None})
+
+
+@bp.route("/instances/<uuid:instance_id>/github-config", methods=["PUT"])
+@token_required
+def upsert_github_config(user, instance_id):
+    """Create or update the instance's GitHub repo + PAT (admin)."""
+    import re
+
+    from app.models import InstanceGitHubConfig
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    row = InstanceGitHubConfig.query.filter_by(instance_id=instance.id).first()
+    if row is None:
+        row = InstanceGitHubConfig(instance_id=instance.id, repo="", branch="main")
+        db.session.add(row)
+    if "repo" in data:
+        repo = (data.get("repo") or "").strip()
+        if repo and not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            return api_error("repo must look like 'owner/name'.", status_code=400)
+        if repo:
+            row.repo = repo
+    if "branch" in data:
+        branch = (data.get("branch") or "").strip() or "main"
+        if len(branch) > 100:
+            return api_error("branch must be 100 characters or fewer.", status_code=400)
+        row.branch = branch
+    if "pat" in data:
+        pat = data.get("pat")
+        if pat is None or (isinstance(pat, str) and not pat.strip()):
+            row.pat = None
+        elif isinstance(pat, str):
+            row.pat = pat.strip()
+        else:
+            return api_error("pat must be text.", status_code=400)
+    if not row.repo:
+        db.session.rollback()
+        return api_error("repo is required (e.g. 'my-org/my-app').", status_code=400)
+    db.session.commit()
+    return api_ok({"github_config": row.to_dict()})
+
+
+@bp.route("/instances/<uuid:instance_id>/github-config", methods=["DELETE"])
+@token_required
+def delete_github_config(user, instance_id):
+    """Remove the instance's GitHub settings (pushes stop working)."""
+    from app.models import InstanceGitHubConfig
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    InstanceGitHubConfig.query.filter_by(instance_id=instance.id).delete()
+    db.session.commit()
+    return api_ok({"cleared": str(instance.id)})
+
+
 @bp.route("/instances/<uuid:instance_id>/stage-config", methods=["GET"])
 @token_required
 def list_stage_configs(user, instance_id):

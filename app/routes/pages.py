@@ -35,6 +35,11 @@ def dashboard():
     return redirect(url_for("pages.ideas"))
 
 
+@bp.route("/home", methods=["GET"])
+def home():
+    return render_template("home.html")
+
+
 @bp.route("/ideas", methods=["GET"])
 def ideas():
     return render_template("ideas/dashboard.html")

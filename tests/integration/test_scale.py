@@ -735,3 +735,310 @@ class TestModerationAndContext:
             full = build_idea_context(child)
             assert "Parent request" in full
             assert parent_context(parent) == ""
+
+
+class TestMessages:
+    def _two_users(self, client, app):
+        from app.models import Instance, Membership, User
+
+        with app.app_context():
+            inst = Instance(number=9971, name="Msg inst")
+            db.session.add(inst)
+            db.session.flush()
+            iid = inst.id
+            maker = User(email="msg-maker@example.com")
+            maker.set_password("password123")
+            db.session.add(maker)
+            admin = User(email="msg-admin@example.com")
+            admin.set_password("password123")
+            db.session.add(admin)
+            db.session.flush()
+            db.session.add(Membership(user_id=maker.id, instance_id=iid, role="USER"))
+            db.session.add(
+                Membership(user_id=admin.id, instance_id=iid, role="INSTANCE_ADMIN")
+            )
+            db.session.commit()
+        res = client.post(
+            "/api/v1/register",
+            json={"email": "msg-user@example.com", "password": "password123"},
+        )
+        user_token = res.get_json()["data"]["access_token"]
+        res = client.post(
+            "/api/v1/login",
+            json={
+                "email": "msg-maker@example.com",
+                "password": "password123",
+                "instance_id": str(iid),
+            },
+        )
+        maker_token = res.get_json()["data"]["access_token"]
+        res = client.post(
+            "/api/v1/login",
+            json={
+                "email": "msg-admin@example.com",
+                "password": "password123",
+                "instance_id": str(iid),
+            },
+        )
+        admin_token = res.get_json()["data"]["access_token"]
+        with app.app_context():
+            maker = User.query.filter_by(email="msg-maker@example.com").one()
+            admin = User.query.filter_by(email="msg-admin@example.com").one()
+            other = User.query.filter_by(email="msg-user@example.com").one()
+            made, aid, oid = str(maker.id), str(admin.id), str(other.id)
+        return maker_token, admin_token, user_token, made, aid, oid, str(iid)
+
+    def test_user_to_admin_and_read(self, client, app):
+        maker_token, admin_token, user_token, made, aid, oid, iid = self._two_users(
+            client, app
+        )
+        # Normal user cannot message another normal user.
+        res = client.post(
+            "/api/v1/messages",
+            json={"recipient_id": made, "body": "hi"},
+            headers={"Authorization": f"Bearer {user_token}"},
+        )
+        assert res.status_code == 403
+        # Scoped member messages the instance admin.
+        res = client.post(
+            "/api/v1/messages",
+            json={"recipient_id": aid, "body": "please help"},
+            headers={"Authorization": f"Bearer {maker_token}"},
+        )
+        assert res.status_code == 201, res.get_json()
+        mid2 = res.get_json()["data"]["message"]["id"]
+        # Admin can message anyone.
+        res = client.post(
+            "/api/v1/messages",
+            json={"recipient_id": made, "body": "on it"},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert res.status_code == 201
+        # Unread count + read receipt.
+        res = client.get(
+            "/api/v1/messages/unread-count",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert res.get_json()["data"]["unread"] == 1
+        res = client.patch(
+            f"/api/v1/messages/{mid2}/read",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert res.status_code == 200
+        assert res.get_json()["data"]["message"]["read_at"] is not None
+        res = client.get(
+            "/api/v1/messages/unread-count",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert res.get_json()["data"]["unread"] == 0
+
+    def test_message_with_idea_link(self, client, app):
+        maker_token, _, _, _, aid, _, iid = self._two_users(client, app)
+
+        with app.app_context():
+            parent = _idea("IDEA-MSG1", status="SCALE")
+            parent.instance_id = iid
+            db.session.commit()
+            pid = str(parent.id)
+        res = client.post(
+            "/api/v1/messages",
+            json={
+                "recipient_id": aid,
+                "body": "look at this",
+                "idea_id": pid,
+            },
+            headers={"Authorization": f"Bearer {maker_token}"},
+        )
+        assert res.status_code == 201, res.get_json()
+        msg = res.get_json()["data"]["message"]
+        assert msg["idea_id"] == pid
+        assert msg["link"] and pid in msg["link"]
+
+    def test_admins_picker_and_filters(self, client, app):
+        maker_token, admin_token, _, _, aid, _, iid = self._two_users(client, app)
+        headers = {"Authorization": f"Bearer {maker_token}"}
+        res = client.get("/api/v1/messages/admins", headers=headers)
+        assert res.status_code == 200
+        admins = res.get_json()["data"]["admins"]
+        assert any(a["id"] == aid for a in admins)
+        # mine filter + comments sort + phase counts
+        res = client.get("/api/v1/ideas?mine=true&limit=5", headers=headers)
+        assert res.status_code == 200
+        res = client.get("/api/v1/ideas?sort_by=comments&limit=5", headers=headers)
+        assert res.status_code == 200
+        ideas = res.get_json()["data"]["ideas"]
+        counts = [i["comments_count"] for i in ideas]
+        assert counts == sorted(counts, reverse=True)
+        res = client.get("/api/v1/ideas/phase-counts", headers=headers)
+        body = res.get_json()["data"]
+        assert body["total"] >= 0
+        assert isinstance(body["counts"], dict)
+
+
+class TestGitHubFlow:
+    def _admin(self, app, client, email, inst_id):
+        from app.models import ROLE_INSTANCE_ADMIN, Membership, User
+
+        with app.app_context():
+            admin = User.query.filter_by(email=email).first()
+            if admin is None:
+                from app.models import User as _User
+
+                admin = _User(email=email)
+                admin.set_password("password123")
+                db.session.add(admin)
+                db.session.flush()
+            if (
+                Membership.query.filter_by(
+                    user_id=admin.id, instance_id=inst_id
+                ).first()
+                is None
+            ):
+                db.session.add(
+                    Membership(
+                        user_id=admin.id,
+                        instance_id=inst_id,
+                        role=ROLE_INSTANCE_ADMIN,
+                    )
+                )
+                db.session.commit()
+        res = client.post(
+            "/api/v1/login",
+            json={
+                "email": email,
+                "password": "password123",
+                "instance_id": str(inst_id),
+            },
+        )
+        assert res.status_code == 200, res.get_json()
+        token = res.get_json()["data"]["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    def _instance(self, app, number=9981):
+        from app.models import Instance
+
+        inst = Instance(number=number, name=f"GH {number}")
+        db.session.add(inst)
+        db.session.flush()
+        iid = inst.id
+        db.session.commit()
+        return iid
+
+    def test_config_crud_hides_pat(self, app, client):
+        with app.app_context():
+            iid = self._instance(app)
+        headers = self._admin(app, client, "gh-admin@t.test", iid)
+        res = client.get(f"/api/v1/instances/{iid}/github-config", headers=headers)
+        assert res.get_json()["data"]["github_config"] is None
+        res = client.put(
+            f"/api/v1/instances/{iid}/github-config",
+            json={"repo": "my-org/my-app", "branch": "main", "pat": "ghp_secret123"},
+            headers=headers,
+        )
+        assert res.status_code == 200, res.get_json()
+        cfg = res.get_json()["data"]["github_config"]
+        assert cfg["repo"] == "my-org/my-app"
+        assert cfg["has_pat"] is True
+        assert "pat" not in cfg and "ghp_secret123" not in res.get_data(as_text=True)
+        res = client.put(
+            f"/api/v1/instances/{iid}/github-config",
+            json={"repo": "bad repo name!!"},
+            headers=headers,
+        )
+        assert res.status_code == 400
+        res = client.delete(f"/api/v1/instances/{iid}/github-config", headers=headers)
+        assert res.status_code == 200
+        res = client.get(f"/api/v1/instances/{iid}/github-config", headers=headers)
+        assert res.get_json()["data"]["github_config"] is None
+
+    def test_push_guards(self, app, client):
+        from app.models import InstanceGitHubConfig, Release
+
+        with app.app_context():
+            iid = self._instance(app, 9982)
+            parent = _idea("IDEA-GH1", status="SCALE")
+            parent.instance_id = iid
+            db.session.add(
+                InstanceGitHubConfig(instance_id=iid, repo="o/r", branch="main")
+            )
+            db.session.flush()
+            cfg = InstanceGitHubConfig.query.filter_by(instance_id=iid).one()
+            cfg.pat = "ghp_x"
+            rel = Release(parent_idea_id=parent.id, name="R")
+            rel.instance_id = iid
+            db.session.add(rel)
+            db.session.commit()
+            rid = str(rel.id)
+        headers = self._admin(app, client, "gh-admin2@t.test", iid)
+        # Not done yet.
+        res = client.post(f"/api/v1/releases/{rid}/github-push", headers=headers)
+        assert res.status_code == 400
+        assert "Finish the release" in res.get_json()["message"]
+        # Done but no GitHub PAT.
+        with app.app_context():
+            rel = Release.query.get(rid)
+            rel.status = "done"
+            InstanceGitHubConfig.query.filter_by(instance_id=iid).delete()
+            db.session.commit()
+        res = client.post(f"/api/v1/releases/{rid}/github-push", headers=headers)
+        assert res.status_code == 400
+        assert "not set up" in res.get_json()["message"]
+
+    def test_push_starts_and_no_recommit(self, app, client):
+        from unittest.mock import patch as _patch
+
+        from app.models import InstanceGitHubConfig, Release
+
+        with app.app_context():
+            iid = self._instance(app, 9983)
+            parent = _idea("IDEA-GH2", status="SCALE")
+            parent.instance_id = iid
+            kid = _idea(
+                "IDEA-GH3",
+                status="SHIP",
+                parent_id=parent.id,
+                child_kind="bugfix",
+            )
+            kid.instance_id = iid
+            db.session.add(
+                InstanceGitHubConfig(instance_id=iid, repo="o/r", branch="main")
+            )
+            db.session.flush()
+            InstanceGitHubConfig.query.filter_by(instance_id=iid).one().pat = "ghp_x"
+            from app.models import InstanceBuildTarget, SecondaryActionResult
+
+            tgt = InstanceBuildTarget(instance_id=iid, name="repo", path="/tmp/repo")
+            db.session.add(tgt)
+            db.session.flush()
+            db.session.add(
+                SecondaryActionResult(
+                    idea_id=parent.id,
+                    action_type="BUILD_CODE",
+                    model_used="m",
+                    provider_used="ollama",
+                    result_data={"summary": "x" * 30, "written": True},
+                    version=1,
+                    is_current=True,
+                    target_id=tgt.id,
+                    target_name="repo",
+                )
+            )
+            rel = Release(parent_idea_id=parent.id, name="R", status="done")
+            rel.instance_id = iid
+            db.session.add(rel)
+            db.session.commit()
+            rid = str(rel.id)
+        headers = self._admin(app, client, "gh-admin3@t.test", iid)
+        with _patch("app.tasks.enqueue_generation") as mock_enq:
+            mock_enq.return_value.id = "job-gh"
+            res = client.post(f"/api/v1/releases/{rid}/github-push", headers=headers)
+        assert res.status_code == 202, res.get_json()
+        assert res.get_json()["data"]["job_id"] == "job-gh"
+        # No re-commit once pushed.
+        with app.app_context():
+            rel = Release.query.get(rid)
+            rel.github_sha = "abc123"
+            db.session.commit()
+        res = client.post(f"/api/v1/releases/{rid}/github-push", headers=headers)
+        assert res.status_code == 400
+        assert "already on GitHub" in res.get_json()["message"]

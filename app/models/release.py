@@ -30,6 +30,10 @@ class Release(db.Model):
     created_by_id = db.Column(
         GUID(), db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # GitHub push state: once a SHA is recorded the release cannot be
+    # re-committed — further updates need a new release.
+    github_sha = db.Column(db.String(64), nullable=True)
+    github_pushed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     # Plain-language "what shipped", auto-written when the release
     # completes (deterministic template, no AI) and admin-editable after.
     notes = db.Column(db.Text, nullable=True)
@@ -61,6 +65,10 @@ class Release(db.Model):
             "notes_file": path.name,
             "completed_at": (
                 self.completed_at.isoformat() if self.completed_at else None
+            ),
+            "github_sha": self.github_sha,
+            "github_pushed_at": (
+                self.github_pushed_at.isoformat() if self.github_pushed_at else None
             ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

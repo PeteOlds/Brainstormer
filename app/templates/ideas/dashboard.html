@@ -557,6 +557,8 @@
                                         <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" x-text="rel.status.replace('_', ' ')"></span>
                                         <span class="flex gap-2 ml-auto" x-show="isAdmin && rel.id">
                                             <button @click="completeRelease(rel.id)" :disabled="releaseBusy || rel.status === 'done'" :title="rel.status === 'done' ? 'Release finished ' + releaseDate(rel) : 'Move every item in this release to shipped'" class="text-xs font-medium text-green-700 dark:text-green-400 hover:underline min-h-[32px] disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">Mark release done</button>
+                                            <button x-show="rel.github_sha" class="text-xs font-medium text-slate-500 dark:text-slate-400 min-h-[32px]" :title="'Pushed ' + (rel.github_pushed_at || '') + ' — further updates need a new release'" x-text="'On GitHub ✓'"></button>
+                                            <button x-show="!rel.github_sha && rel.status === 'done'" @click="pushRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline min-h-[32px] disabled:opacity-50" title="Push this release's build output to the instance GitHub repo">Push to GitHub</button>
                                             <button @click="deleteRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline min-h-[32px] disabled:opacity-50">Delete</button>
                                         </span>
                                     </div>
@@ -2020,6 +2022,22 @@ function ideasApp() {
                 await this.loadScaleFamily();
             } catch (e) {
                 alert('Failed to delete: ' + e.message);
+            } finally {
+                this.releaseBusy = false;
+            }
+        },
+
+        async pushRelease(releaseId) {
+            if (!confirm('Push this release to GitHub? It can only be pushed once — further updates need a new release.')) return;
+            this.releaseBusy = true;
+            try {
+                const res = await authFetch(`/api/v1/releases/${releaseId}/github-push`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Failed to start push');
+                alert('Push started — this card shows the commit when it lands. Reload the Scale tab in a minute to check.');
+                await this.loadScaleFamily();
+            } catch (e) {
+                alert('Push failed to start: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }

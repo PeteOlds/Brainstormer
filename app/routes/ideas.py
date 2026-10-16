@@ -83,10 +83,31 @@ def list_ideas(user):
         query = query.order_by(desc(Idea.net_score), desc(Idea.created_at))
     elif sort_by == "-votes":
         query = query.order_by(asc(Idea.net_score), desc(Idea.created_at))
+    elif sort_by == "comments":
+        query = query.order_by(desc(Idea.comments_count), desc(Idea.created_at))
     elif sort_by == "-created_at":
         query = query.order_by(asc(Idea.created_at))
     else:
         query = query.order_by(desc(Idea.created_at))
+
+    if (request.args.get("mine") or "").strip().lower() in ("1", "true", "yes"):
+        # My ideas: created, voted, or commented by me.
+        from app.models import Comment as _Comment
+        from app.models import Vote as _Vote
+
+        query = query.filter(
+            or_(
+                Idea.created_by_id == user.id,
+                Idea.id.in_(
+                    db.session.query(_Vote.idea_id).filter(_Vote.user_id == user.id)
+                ),
+                Idea.id.in_(
+                    db.session.query(_Comment.idea_id).filter(
+                        _Comment.user_id == user.id
+                    )
+                ),
+            )
+        )
 
     pagination = query.paginate(page=page, per_page=limit, error_out=False)
 
@@ -388,7 +409,44 @@ def update_idea_status(user, idea_id):
     db.session.add(history)
     db.session.commit()
 
+    # A5: an idea entering Scale with a confirmed build and GitHub
+    # configured pushes itself — best effort, never blocks the move.
+    if new_status_enum == IdeaStatus.SCALE and old_status != IdeaStatus.SCALE:
+        _maybe_push_on_scale(idea)
+
     return api_ok(idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)))
+
+
+def _maybe_push_on_scale(idea):
+    """Enqueue a GitHub push for an idea entering Scale, when there is
+    something to push and somewhere to push it. Silent no-op otherwise."""
+    from app.models import (
+        InstanceBuildTarget,
+        InstanceGitHubConfig,
+        SecondaryActionResult,
+    )
+
+    config = InstanceGitHubConfig.query.filter_by(instance_id=idea.instance_id).first()
+    if config is None or not config.pat:
+        return
+    has_build = (
+        SecondaryActionResult.query.filter_by(idea_id=idea.id, action_type="BUILD_CODE")
+        .filter(SecondaryActionResult.target_id.isnot(None))
+        .first()
+        is not None
+    )
+    if not has_build:
+        return
+    try:
+        from app.tasks import enqueue_generation
+        from app.tasks.github_tasks import push_release_to_github
+
+        # Reuse the release push task via a synthetic single-idea path:
+        # push the idea's own build target directly.
+        job = enqueue_generation(push_release_to_github, [f"idea:{idea.id}"], {}, None)
+        return job
+    except Exception:
+        return None
 
 
 @bp.route("/ideas/bulk-status", methods=["PATCH"])
@@ -458,6 +516,21 @@ def _release_counts(parent_id):
         .all()
     )
     return {str(rid) if rid else None: n for rid, n in rows}
+
+
+@bp.route("/ideas/phase-counts", methods=["GET"])
+@token_required
+def phase_counts(user):
+    """Ideas per lifecycle phase (homepage pie + admin analytics)."""
+    from sqlalchemy import func
+
+    rows = (
+        apply_scope(db.session.query(Idea.status, func.count(Idea.id)), Idea)
+        .group_by(Idea.status)
+        .all()
+    )
+    counts = {(s.value if hasattr(s, "value") else s): n for s, n in rows}
+    return api_ok({"counts": counts, "total": sum(counts.values())})
 
 
 @bp.route("/ideas/<uuid:idea_id>/children", methods=["GET"])
@@ -1040,6 +1113,83 @@ def delete_release_ai_config(user, release_id):
     ReleaseAIConfig.query.filter_by(release_id=release.id).delete()
     db.session.commit()
     return api_ok({"cleared": str(release_id)})
+
+
+@bp.route("/releases/<uuid:release_id>/github-push", methods=["POST"])
+@require_permission("change_status")
+def push_release_to_github_route(user, release_id):
+    """Push a release's build output to the instance's GitHub repo.
+
+    Guards: release must be done, must have a confirmed build to push,
+    must not already be pushed (further updates need a new release), and
+    the instance must have GitHub configured. The push itself runs on a
+    worker; the row records the SHA when it lands.
+    """
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    if release.github_sha:
+        return api_error(
+            "This release is already on GitHub — "
+            "further updates need a new release.",
+            status_code=400,
+        )
+    if release.status != "done":
+        return api_error(
+            "Finish the release first (Mark release done), then push it.",
+            status_code=400,
+        )
+    from app.models import (
+        Idea,
+        InstanceBuildTarget,
+        InstanceGitHubConfig,
+        SecondaryActionResult,
+    )
+
+    config = InstanceGitHubConfig.query.filter_by(
+        instance_id=release.instance_id
+    ).first()
+    if config is None or not config.pat:
+        return api_error(
+            "GitHub is not set up for this instance yet — "
+            "an admin can add it in the instance settings.",
+            status_code=400,
+        )
+    parent = Idea.query.get(release.parent_idea_id) if release.parent_idea_id else None
+    has_build = False
+    if parent is not None:
+        has_build = (
+            SecondaryActionResult.query.filter_by(
+                idea_id=parent.id, action_type="BUILD_CODE"
+            )
+            .filter(SecondaryActionResult.target_id.isnot(None))
+            .first()
+            is not None
+        )
+    if not has_build:
+        targets = InstanceBuildTarget.query.filter_by(
+            instance_id=release.instance_id
+        ).count()
+        has_build = targets == 1
+    if not has_build:
+        return api_error(
+            "Nothing built to push yet — write the builds first.",
+            status_code=400,
+        )
+    from app.tasks import enqueue_generation
+    from app.tasks.github_tasks import push_release_to_github
+
+    job = enqueue_generation(push_release_to_github, [str(release.id)], {}, None)
+    return api_ok(
+        {
+            "release_id": str(release.id),
+            "job_id": job.id if job else None,
+            "status": "PENDING",
+            "message": "Push started — the release card shows the commit when it lands.",
+        },
+        status_code=202,
+    )
 
 
 @bp.route("/releases/<uuid:release_id>/run-action", methods=["POST"])

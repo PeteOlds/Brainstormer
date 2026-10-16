@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block content %}
+<div x-data="homeApp()" x-init="init()" class="max-w-5xl mx-auto space-y-4">
+    <div class="flex flex-wrap items-center gap-3">
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Home</h1>
+        <a href="/ideas" class="px-4 py-2 min-h-[44px] inline-flex items-center text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">All ideas</a>
+        <button @click="loadAll()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg">Refresh</button>
+    </div>
+
+    <div x-show="unread > 0" class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
+        <p class="text-sm font-medium text-amber-800 dark:text-amber-200">You have <span x-text="unread"></span> unread message<span x-show="unread !== 1">s</span>.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">My ideas</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Created, voted or commented by you.</p>
+            <ul class="space-y-1.5" x-show="mine.length">
+                <template x-for="i in mine" :key="i.id">
+                    <li class="flex items-center gap-2 text-sm">
+                        <a :href="'/ideas?idea=' + i.id" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline" x-text="i.reference_code"></a>
+                        <span class="text-slate-700 dark:text-slate-300 truncate" x-text="i.prompt_title"></span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(i.status)" x-text="i.status"></span>
+                    </li>
+                </template>
+            </ul>
+            <p x-show="!mine.length" class="text-sm text-slate-500 dark:text-slate-400">Nothing yet — explore the ideas list.</p>
+        </div>
+
+        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Most popular</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Highest voted right now.</p>
+            <ul class="space-y-1.5" x-show="popular.length">
+                <template x-for="i in popular" :key="i.id">
+                    <li class="flex items-center gap-2 text-sm">
+                        <a :href="'/ideas?idea=' + i.id" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline" x-text="i.reference_code"></a>
+                        <span class="text-slate-700 dark:text-slate-300 truncate" x-text="i.prompt_title"></span>
+                        <span class="text-xs font-bold text-slate-900 dark:text-white" x-text="i.net_votes"></span>
+                    </li>
+                </template>
+            </ul>
+            <p x-show="!popular.length" class="text-sm text-slate-500 dark:text-slate-400">No votes yet.</p>
+        </div>
+
+        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Most discussed</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Where the conversation is.</p>
+            <ul class="space-y-1.5" x-show="discussed.length">
+                <template x-for="i in discussed" :key="i.id">
+                    <li class="flex items-center gap-2 text-sm">
+                        <a :href="'/ideas?idea=' + i.id" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline" x-text="i.reference_code"></a>
+                        <span class="text-slate-700 dark:text-slate-300 truncate" x-text="i.prompt_title"></span>
+                        <span class="text-xs text-slate-500" x-text="'💬 ' + (i.comments_count || 0)"></span>
+                    </li>
+                </template>
+            </ul>
+            <p x-show="!discussed.length" class="text-sm text-slate-500 dark:text-slate-400">No comments yet.</p>
+        </div>
+
+        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Messages</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Latest first. Click a linked idea to open it.</p>
+            <ul class="space-y-2" x-show="messages.length">
+                <template x-for="m in messages.slice(0, 5)" :key="m.id">
+                    <li class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2 text-sm">
+                        <p class="text-xs text-slate-500 dark:text-slate-400"><span class="font-medium text-slate-700 dark:text-slate-300" x-text="m.sender"></span> · <span x-text="m.created_at ? m.created_at.slice(0, 10) : ''"></span> <span x-show="!m.read_at" class="ml-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">new</span></p>
+                        <p class="text-slate-700 dark:text-slate-300" x-text="m.body"></p>
+                        <p class="mt-1 flex gap-3">
+                            <a x-show="m.link" :href="m.link" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Open linked idea</a>
+                            <button x-show="!m.read_at && m.recipient_id === currentUserId" @click="markRead(m.id)" class="text-xs font-medium text-slate-500 hover:underline">Mark read</button>
+                        </p>
+                    </li>
+                </template>
+            </ul>
+            <p x-show="!messages.length" class="text-sm text-slate-500 dark:text-slate-400">No messages.</p>
+            <div class="mt-3 space-y-2">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Message an admin</p>
+                <select x-model="msgAdmin" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                    <option value="">Choose an admin…</option>
+                    <template x-for="a in admins" :key="a.id">
+                        <option :value="a.id" x-text="a.name || a.email"></option>
+                    </template>
+                </select>
+                <textarea x-model="msgBody" rows="2" maxlength="2000" placeholder="Write feedback for the admin…" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></textarea>
+                <button @click="sendMessage()" :disabled="sending || !msgAdmin || !msgBody.trim()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="isAdmin" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas in each phase</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Live counts across this instance.</p>
+        <div class="space-y-1.5">
+            <template x-for="s in phaseOrder" :key="s">
+                <div class="flex items-center gap-2 text-sm" x-show="(phases[s] || 0) > 0">
+                    <span class="w-24 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(s)" x-text="s"></span>
+                    <div class="flex-1 h-3 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                        <div class="h-3 rounded bg-primary-500" :style="'width: ' + phasePct(s) + '%'"></div>
+                    </div>
+                    <span class="w-10 text-right tabular-nums text-slate-700 dark:text-slate-300" x-text="phases[s] || 0"></span>
+                </div>
+            </template>
+        </div>
+        <p x-show="!phaseTotal" class="text-sm text-slate-500 dark:text-slate-400">No ideas yet.</p>
+    </div>
+</div>
+
+<script>
+function homeApp() {
+    return {
+        mine: [], popular: [], discussed: [], messages: [],
+        unread: 0, admins: [], msgAdmin: '', msgBody: '', sending: false,
+        phases: {}, phaseTotal: 0, isAdmin: false, currentUserId: null,
+        phaseOrder: ['SPARK', 'SCOPE', 'MAP', 'SHIP', 'SCALE', 'DROP', 'FREEZE', 'ARCHIVE'],
+
+        async init() {
+            try {
+                const me = await authFetch('/api/v1/me');
+                if (me.ok) {
+                    const data = await me.json();
+                    const u = (data.data || data).user || {};
+                    this.currentUserId = u.id || null;
+                }
+                const probe = await authFetch('/api/v1/admin/stats');
+                this.isAdmin = probe.ok;
+            } catch (e) { /* logged out: sections stay empty */ }
+            await this.loadAll();
+        },
+
+        statusClass(s) {
+            const map = { SPARK: 'bg-slate-100 text-slate-700', SCOPE: 'bg-blue-50 text-blue-700', MAP: 'bg-violet-50 text-violet-700', SHIP: 'bg-indigo-50 text-indigo-700', SCALE: 'bg-emerald-50 text-emerald-700', DROP: 'bg-red-50 text-red-700', FREEZE: 'bg-amber-50 text-amber-700', ARCHIVE: 'bg-slate-200 text-slate-500' };
+            return 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + (map[s] || map.SPARK);
+        },
+
+        phasePct(s) {
+            if (!this.phaseTotal) return 0;
+            return Math.round(((this.phases[s] || 0) / this.phaseTotal) * 100);
+        },
+
+        async loadAll() {
+            const get = async (url) => {
+                try {
+                    const r = await authFetch(url);
+                    if (!r.ok) return null;
+                    const d = await r.json();
+                    return d.data || d;
+                } catch (e) { return null; }
+            };
+            const [mine, pop, dis, msg, unread, phases] = await Promise.all([
+                get('/api/v1/ideas?mine=true&limit=5'),
+                get('/api/v1/ideas?sort_by=votes&limit=5'),
+                get('/api/v1/ideas?sort_by=comments&limit=5'),
+                get('/api/v1/messages?limit=20'),
+                get('/api/v1/messages/unread-count'),
+                get('/api/v1/ideas/phase-counts'),
+            ]);
+            if (mine) this.mine = mine.ideas || [];
+            if (pop) this.popular = pop.ideas || [];
+            if (dis) this.discussed = dis.ideas || [];
+            if (msg) this.messages = msg.messages || [];
+            if (unread) this.unread = unread.unread || 0;
+            if (phases) {
+                this.phases = phases.counts || {};
+                this.phaseTotal = phases.total || 0;
+            }
+            // Admin picker for the message form: instance admins.
+            try {
+                const r = await authFetch('/api/v1/messages/admins');
+                if (r.ok) {
+                    const d = await r.json();
+                    this.admins = ((d.data || d).admins || []).filter((u) => u.id !== this.currentUserId);
+                }
+            } catch (e) { /* admin list optional */ }
+        },
+
+        async markRead(id) {
+            try {
+                await authFetch(`/api/v1/messages/${id}/read`, { method: 'PATCH' });
+                await this.loadAll();
+            } catch (e) { /* retry on next load */ }
+        },
+
+        async sendMessage() {
+            const body = (this.msgBody || '').trim();
+            if (!body || !this.msgAdmin) return;
+            this.sending = true;
+            try {
+                const res = await authFetch('/api/v1/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recipient_id: this.msgAdmin, body }),
+                });
+                if (!res.ok) {
+                    const d = await res.json().catch(() => ({}));
+                    throw new Error(d.message || 'Failed to send');
+                }
+                this.msgBody = '';
+                await this.loadAll();
+            } catch (e) {
+                alert('Failed to send: ' + e.message);
+            } finally {
+                this.sending = false;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

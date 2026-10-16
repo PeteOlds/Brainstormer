@@ -8,6 +8,7 @@ from .ai_config import (
 from .build_target import InstanceBuildTarget
 from .release import CHILD_KINDS, RELEASE_STATUSES, Release
 from .release_config import ReleaseAIConfig, resolve_release
+from .github_config import InstanceGitHubConfig
 from .managed_app import ManagedApp
 from .chat import CHAT_KINDS, CHAT_ROLES, ChatSession, ChatTurn, content_hash
 from .comment import Comment
@@ -43,6 +44,7 @@ from .roles import (
 )
 from .secondary_action import ActionType, SecondaryActionResult
 from .slack import SlackEvent, SlackPost
+from .message import Message
 from .stage_config import STAGES, StageAIConfig, resolve_stage
 from .stripe_event import StripeEvent, mark_stripe_event_seen
 from .status_history import IdeaStatusHistory
@@ -62,6 +64,7 @@ __all__ = [
     "IdeaEdit",
     "SlackPost",
     "SlackEvent",
+    "Message",
     "SecondaryActionResult",
     "ActionType",
     "IdeaStatusHistory",
@@ -86,6 +89,7 @@ __all__ = [
     "CHILD_KINDS",
     "ReleaseAIConfig",
     "resolve_release",
+    "InstanceGitHubConfig",
     "ManagedApp",
     "ChatSession",
     "ChatTurn",
