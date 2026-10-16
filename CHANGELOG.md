@@ -4,6 +4,138 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.62.1] - 2026-10-16
+### Added
+- Release Date beside the release name on the Scale tab (`SR1 15-Oct-26`): the completion date when the release has been finished (new `completed_at` column), else the planned target, else creation date. The same date heads the Release Notes ("Finished 16-Oct-26: …").
+- Releases now list newest first; "No release yet" stays at the bottom.
+
+## [0.62.0] - 2026-10-16
+### Added
+- Release notes are now written to the docs directory as markdown: `docs/release-notes/<app-ref>-<release>.md` (override with RELEASE_NOTES_DIR), synced on completion, Rebuild, and hand-edit. The Scale tab shows the saved path and offers Download .md alongside Copy.
+
+## [0.61.4] - 2026-10-16
+### Fixed
+- "Mark release done" on a release whose children are already at the target status said "Finished: 0 shipped" — now it says "Everything in this release is already shipped" (or dropped), and an empty release says to move ideas in first.
+
+## [0.61.3] - 2026-10-16
+### Fixed
+- Scale-tab child rows restructured so they wrap: identity (ref, kind, title, status, comments, Move-to) on line one, the PRD/Design/Built/Written readiness pills on line two — no more horizontal overflow as tags accumulate.
+
+## [0.61.2] - 2026-10-16
+### Added
+- Write Builds completion is now visible: each Scale-tab child row shows a build pill (No build / Queued / Building… / ✓ Written / ✗ Failed) fed by the latest BUILD_CODE run, auto-refreshing every 4s while anything is queued or building and stopping by itself when every build settles. Failed pills carry the run error on hover. Same state rides along in the children list payload.
+
+## [0.61.1] - 2026-10-16
+### Added
+- Scale tab child rows now show PRD / Design / Built readiness pills (green tick when done, grey when not), so crews can see at a glance what each idea still needs.
+### Fixed
+- Release-notes block was invisible for releases finished before notes existed (no notes → no Rebuild button): it now shows with a "Rebuild writes them" hint. Build panel tells admins plainly to Stop then Start the app on the Build tab after writing builds.
+
+## [0.61.0] - 2026-10-15
+### Added
+- Release crews move together: per-release "Move all to…" (Scope/Map/Ship/Drop via bulk rules), "Write PRDs" / "Write designs" (skips ideas that already have one), "Preview builds" then "Write builds" — one admin click each, with per-idea skip reasons in plain language. New `POST /releases/<id>/run-action` shares the exact single-run gates (refactored, behaviour preserved).
+- No more manual repo-picking for fixes: child BUILD_CODE runs default to the parent app's repo (else the only registered repo); "Write builds" writes every ready preview with no file-picking, and the panel says so.
+- Release notes: auto-written on completion (deterministic template — shipped/rejected counts plus per-item lists, no AI to hallucinate), shown on the release card with Copy, Rebuild, and admin hand-edit.
+
+## [0.60.0] - 2026-10-15
+### Added
+- Child ideas are now identifiable in the ideas list: child rows show an "Improvement/Problem for IDEA-XXXX" link (desktop + mobile) that opens the parent; list payloads carry the parent reference in one batched lookup.
+- New Scale tab on live (top-level SCALE) ideas holding the full Improve section (suggest/report, release boards, New release); the Idea tab is back to content, voting, admin and comments. Children never get the tab — their breadcrumb links home.
+
+## [0.59.1] - 2026-10-15
+### Removed
+- "Why this was asked for" parent-comment box from child idea views (reported as noise on real child ideas); the "Improvement/Problem report for …" breadcrumb stays, and parent context is still prepended to child AI runs.
+
+## [0.59.0] - 2026-10-15
+### Added
+- Scale-phase collaboration: child ideas linked to live SCALE apps (`parent_id` + `enhancement`/`bugfix` kind, set once at creation), grouped into releases (create, assign/unassign, finish together to SHIP/DROP via existing transition rules, delete-when-empty), and an "Improve this app" section with plain-language Suggest-an-improvement / Report-a-problem buttons, release boards, child breadcrumb + "Why this was asked for" parent context, and parent context prepended to child AI context. Comment moderation finished end-to-end: admin Hide/Show toggle wired to the existing ignore flag, ignored comments now hidden from normal users in idea and document threads (admins still see them labelled). Includes a comment race fix (detail reload re-fetches comments so fast comment loads are never wiped).
+
+## [0.58.0] - 2026-10-15
+### Changed
+- Build tab restructured for low technical literacy: renamed "Build Code" to "Build", with sections in fixed order — Build Code (what it contains), How to run (with Copy buttons), Run on this machine (one-click), Write report (what the builder did), Files (path + size), Discussion — each with a one-line plain-language subtitle. The duplicated raw document dump is gone from this tab.
+
+## [0.57.4] - 2026-10-15
+### Fixed
+- The correct UI URL is now recorded at confirm time, not dependent on supervision state: the extractor detects compose frontend services (name, build context, or nginx image) into new `frontend_url`/`frontend_port` fields, the browser line names the dashboard, busy dashboard ports allocate just like API ports (compose rewrite + plain-language note), supervision Open prefers the frontend URL while health stays on the API, and the How-to-run Open row prefers supervised dashboard → recorded frontend → API. Backfilled onto the live build.
+
+## [0.57.3] - 2026-10-15
+### Fixed
+- Supervision status is health-first: pid checks are container-local, so the web container could neither see worker-spawned processes (stale "Stopped") nor safely signal them (Stop could have hit an unrelated pid). New `poll_health()` is the cross-container source of truth — it adopts orphaned-but-healthy processes instead of misreporting them, and Stop now runs as a worker task in the spawner's PID namespace with post-stop verification. Start's twin-check consults both signals. UI polls after Stop and shows a Stopping state.
+- How-to-run Open row (and browser lines in Notes) prefer the supervised dashboard URL over the raw API URL when they differ, so readers land on the app UI instead of backend JSON.
+
+## [0.57.2] - 2026-10-14
+### Fixed
+- Supervision path/context split: runbook argv is now container-native (host paths do not exist inside workers) while display strings stay host-native; new `container_path()` inverse mapping. Supervised specs record both worlds.
+- Venv handling that survives reality: health is proven by executing the interpreter (name/stat checks lie about dangling cross-machine symlinks); broken venvs are wiped and recreated with `--clear` (upgrade fails on corpses); healthy ones are reused with no reinstall churn; bare `python3` resolves against the runner-controlled PATH (slim containers have no `/usr/bin/python3`).
+- Setup-step launch failures (e.g. bad-shebang executables) report plainly instead of leaking tracebacks; the pinned dependency set was proven installable on the worker Python.
+
+## [0.57.1] - 2026-10-14
+### Fixed
+- Port check no longer false-positives on a just-stopped server: the probe bind sets SO_REUSEADDR so lingering TIME_WAIT sockets read as free (a real listener still fails the bind — and supervised servers set the same option, so the verdict matches what a fresh start can do). Stale failure banner only clears on the next Start press, as designed.
+
+## [0.57.0] - 2026-10-14
+### Added
+- One-click start/stop for generated builds (Build Code tab, "Run on this machine"): supervised subprocesses on this host behind a Runner ABC (LocalRunner now, remote later). No shell on model output (structured argv only), scrubbed child env, process-group stop, stdout/stderr log files with an in-app tail viewer, status dot + Open button gated on health. New `managed_apps` table + migration, instance-admin API (configure/start/stop/logs), idempotent Start (no twin launches), lazy reconcile of dead pids. Runbooks now carry argv (pip fallback included) so supervision never shells out.
+### Fixed
+- Testing is actually eager now: `init_celery` maps the Flask eager flags into Celery config (previously declared but never wired, so route-level `apply_async` tests reached for a real broker).
+
+## [0.56.1] - 2026-10-13
+### Fixed
+- Runbook gains an "If setup fails" row (same packages unpinned, parsed from the manifest's requirements) for newer Pythons the old pins no longer build on — the exact failure seen live with pydantic-core on Python 3.14.
+
+## [0.56.0] - 2026-10-13
+### Fixed
+- Run instructions are server-verified, not model prose: new `_derive_runbook` resolves the entry point (`python -m`, `python x.py`, `uvicorn mod:app` incl. runner form) against the manifest to find the real working directory, and emits venv Setup + `python3` Run commands with absolute host paths. Stored as `runbook` on confirm rows; the panel, document and export prefer it with legacy fallback. Model `python` vs host `python3` handled in both layers.
+- Declared `pyyaml` in requirements (was silently absent in worker images).
+
+## [0.55.0] - 2026-10-13
+### Fixed
+- Run instructions use host paths: new `OPENCODE_SERVER_BUILD_ROOTS` mapping (container→host, parallel to build roots; ships via repo `.env`, real env wins) with `server_path()` longest-prefix translation stored as `target_host_path` on preview/confirm rows. The panel's `cd` lines failed on any host shell before this (`/app/...` is container-only).
+- Instruction order for non-technical readers: Run → Docker (alternative, labelled as such) → Open → Notes; extractor emits the browser step last. Same order in the document and `.md` export (shared helper).
+- Also filled the `OPENCODE_BUILD_ROOTS` gap on the default worker via `.env` so all workers resolve targets identically.
+
+## [0.54.2] - 2026-10-12
+### Fixed
+- Build writes no longer die with Permission denied: registration-time target dirs were root-owned while the opencode worker runs as appuser. `ensure_target_path` now hands created levels to the parent dir's owner (pre-existing dirs untouched, chown failure never blocks registration); repaired `projects/IDEA-9603` ownership live and confirmed v4 (20 files, port 8000→8001).
+- Port allocator actually rewrites now: compose published ports, JSON-array `--port` (`"--port", "8000"`) in start commands, and localhost URLs in notes. Root cause of the silent no-op was a missing PyYAML in the worker image (compose parsing degraded silently) — recreated the worker properly, snapshotted `local/brainstormer-worker-opencode:live`, and declared `pyyaml` in requirements. Never recreate from the generic `brainstormer-web` tag (see AGENTS.md topology notes).
+
+## [0.54.1] - 2026-10-12
+### Fixed
+- Build Code document is a readable instructions page, not a field dump: How to run first (Open link, prettified copyable Run/Compose commands, deduped Notes, preview caveat when unwritten), then write report, target, and a file path+size listing instead of the full-content wall. Copy MD/`.md` export mirrors the same shape. How-to-run panel is scoped to the viewed version's target, so a different target's older build can no longer pose as the current one's instructions.
+
+## [0.54.0] - 2026-10-12
+### Added
+- Skill discovery works with no configuration: `skill_dirs()` defaults to the container mount points (`/opencode-skills/opencode`, `/opencode-skills/agents`) when `SKILLS_DIRS` is unset; `SKILLS_DIRS` still overrides. Recreated `brainstormer-worker-opencode` with the two read-only skill mounts (snapshot `brainstormer-worker-opencode-backup-20261012` kept) so opencode-provider runs can inject skills too.
+### Fixed
+- Run dialog empty-skills message is plain language ("No skills available — none are installed in the server's skill folders yet") instead of mount/env jargon.
+
+## [0.53.2] - 2026-10-12
+### Fixed
+- Opencode model dropdown shows server display names ("Muse Spark 1.3 Free · opencode/muse-spark-1.3-contributor-free") instead of bare slugs; catalog entries carry `{id, name}` and the submitted value stays the slug. (Deploy note: web needed a restart to serve it — hypercorn `--reload` did not pick up the route/service change.)
+
+## [0.53.1] - 2026-10-12
+### Fixed
+- Provider-mismatch preflight now says so plainly: a hosted model id (e.g. `opencode/…`) run against local Ollama fails with a pointer to re-run with that provider selected, instead of a bare "not installed" (stale-tab Recreate sent model without provider).
+
+## [0.53.0] - 2026-10-12
+### Added
+- Self-contained run instructions: How-to-run Run/Compose rows are now paste-and-run one-liners with the target directory baked in (`cd "<target_path>" && …`); `target_path` is stored on preview and confirm rows.
+- Build port allocation: the confirm run checks the build's host port and, when busy, takes the next free port — rewriting the app URL, explicit `--port` flags, and compose published ports (container side untouched), with a plain-language note on the row and write report. Compose host-vs-container ports are now distinguished (URL/ports use the host side).
+
+## [0.52.2] - 2026-10-12
+### Fixed
+- How-to-run panel cleanup: Notes no longer repeat the Run command / URL rows (lines duplicating a shown value are stripped, prefix-aware and stringified-list-aware); Port row dropped when the Open URL already carries it; Compose row gains a Copy button; labels get a fixed min-width so they no longer jam against values.
+
+## [0.52.1] - 2026-10-12
+### Fixed
+- Build Code tab panels never showed the preview / How-to-run / Discussion blocks: the `x-if` wrapping them had five top-level children and only the first (version row) stamped, so the blocks stayed inert despite truthy conditions. Wrapped them in a single container div; How-to-run now renders (Open/Run/Port/Compose/Notes lines with copy buttons) with a command prettifier for stringified-list `start_command` values from small models. Verified live headless on Site 90 (IDEA-9603).
+
+## [0.52.0] - 2026-10-11
+### Added
+- BUILD_CODE action: implement the Design doc as code files in a registered instance target repo. SHIP/SCALE-gated with existing-Design-doc prerequisite; manifest preview saved first (nothing written), files written on explicit confirm as a new version with a write report. Repos are chosen/created inline in the run dialog (name/path defaulted from the idea ref and the System Settings default projects folder); repo `projects/` is a default build root and missing target dirs are created on registration. AI Settings lists targets for review/removal. Ideas expose `instance_id` for target lookup.
+### Fixed
+- Overrides silently dropped for prompt-less ideas: a duplicated model/provider resolution block re-derived defaults after the (correct) first resolution, and a legacy guard forced provider back to ollama. Explicit `model_override`/`provider_override` now always win; the duplicate block now reuses the canonical values. Unreachable Ollama in preflight fails the run visibly instead of orphaning it RUNNING.
+
 ## [0.51.0] - 2026-10-10
 ### Added
 - Run dialog engine-first: Provider dropdown defaulting to the idea's prompt engine, model list per engine (tags/badges, allowlist, or free-text when unrestricted), cross-provider overrides via new `provider_override` (validated against the allowlist), and Recreate pre-filling provider/model/skills/guidelines from the latest run (persisted as `provider_used`/`skills_used`/`guidelines_used` on each result version).

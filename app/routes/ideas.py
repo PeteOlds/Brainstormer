@@ -593,7 +593,18 @@ def list_releases(user, parent_id):
         .all()
     )
     counts = _release_counts(parent.id)
+    from app.models import ReleaseAIConfig
+
+    ai_rows = {
+        str(r.release_id): r
+        for r in ReleaseAIConfig.query.filter(
+            ReleaseAIConfig.release_id.in_([r.id for r in releases])
+        ).all()
+    }
     data = [r.to_dict(child_count=counts.get(str(r.id), 0)) for r in releases]
+    for row in data:
+        ai = ai_rows.get(row["id"])
+        row["ai_config"] = ai.to_dict() if ai else None
     data.append(
         {
             "id": None,
@@ -932,6 +943,103 @@ def regenerate_release_notes(user, release_id):
     return api_ok(
         {"release": release.to_dict(child_count=counts.get(str(release.id), 0))}
     )
+
+
+@bp.route("/releases/<uuid:release_id>/ai-config", methods=["GET"])
+@token_required
+def get_release_ai_config(user, release_id):
+    """Current AI overrides for one release (empty = use stage defaults)."""
+    from app.models import ReleaseAIConfig
+
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    row = ReleaseAIConfig.query.filter_by(release_id=release.id).first()
+    return api_ok({"ai_config": row.to_dict() if row else None})
+
+
+@bp.route("/releases/<uuid:release_id>/ai-config", methods=["PUT"])
+@require_permission("change_status")
+def update_release_ai_config(user, release_id):
+    """Create/update the AI overrides for one release (admin)."""
+    from app.models import ReleaseAIConfig
+
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    data = request.get_json(silent=True) or {}
+    row = ReleaseAIConfig.query.filter_by(release_id=release.id).first()
+    if row is None:
+        row = ReleaseAIConfig(release_id=release.id)
+        db.session.add(row)
+    if "provider" in data:
+        provider = data["provider"]
+        if provider is not None:
+            provider = str(provider).strip().lower() or None
+            from app.models import PROVIDERS
+
+            if provider not in PROVIDERS:
+                return api_error(
+                    f"Invalid provider: must be one of {', '.join(PROVIDERS)}.",
+                    status_code=400,
+                )
+        row.provider = provider
+    if "model_name" in data:
+        row.model_name = str(data["model_name"]).strip() or None
+    if "temperature" in data:
+        try:
+            row.temperature = (
+                float(data["temperature"]) if data["temperature"] is not None else None
+            )
+        except (TypeError, ValueError):
+            return api_error("temperature must be a number.", status_code=400)
+    if "top_p" in data:
+        try:
+            row.top_p = float(data["top_p"]) if data["top_p"] is not None else None
+        except (TypeError, ValueError):
+            return api_error("top_p must be a number.", status_code=400)
+    if "num_predict" in data:
+        try:
+            row.num_predict = (
+                int(data["num_predict"]) if data["num_predict"] is not None else None
+            )
+        except (TypeError, ValueError):
+            return api_error("num_predict must be an integer.", status_code=400)
+    if "skills" in data:
+        skills = data["skills"]
+        if skills is None:
+            row.skills = []
+        elif isinstance(skills, list):
+            row.skills = [str(s) for s in skills if str(s).strip()][:20]
+        else:
+            return api_error("skills must be a list of names.", status_code=400)
+    if "guidelines" in data:
+        guidelines = data["guidelines"]
+        if guidelines is None:
+            row.guidelines = []
+        elif isinstance(guidelines, list):
+            row.guidelines = [str(g) for g in guidelines if str(g).strip()][:20]
+        else:
+            return api_error("guidelines must be a list of names.", status_code=400)
+    db.session.commit()
+    return api_ok({"ai_config": row.to_dict()})
+
+
+@bp.route("/releases/<uuid:release_id>/ai-config", methods=["DELETE"])
+@require_permission("change_status")
+def delete_release_ai_config(user, release_id):
+    """Clear the release's AI overrides (fall back to stage defaults)."""
+    from app.models import ReleaseAIConfig
+
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    ReleaseAIConfig.query.filter_by(release_id=release.id).delete()
+    db.session.commit()
+    return api_ok({"cleared": str(release_id)})
 
 
 @bp.route("/releases/<uuid:release_id>/run-action", methods=["POST"])

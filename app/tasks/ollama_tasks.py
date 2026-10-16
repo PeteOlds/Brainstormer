@@ -1402,14 +1402,20 @@ def run_secondary_action(
     provider_cfg = idea.prompt_config
     provider = (provider_cfg.provider or "ollama").lower() if provider_cfg else "ollama"
     # Stage config wins over the prompt (explicit run args already won
-    # above via model_override); absent rows change nothing.
-    from app.models import resolve_stage
+    # above via model_override); absent rows change nothing. Release
+    # config (Scale-phase releases) wins over stage config.
+    from app.models import resolve_release, resolve_stage
 
     stage_cfg = resolve_stage(idea.instance_id, idea.status.value)
-    if not model_override and stage_cfg.get("model_name"):
-        model = stage_cfg["model_name"]
-    if stage_cfg.get("provider"):
-        provider = stage_cfg["provider"].lower()
+    release_cfg = resolve_release(idea)
+    merged_cfg = {
+        **stage_cfg,
+        **{k: v for k, v in release_cfg.items() if v is not None},
+    }
+    if not model_override and merged_cfg.get("model_name"):
+        model = merged_cfg["model_name"]
+    if merged_cfg.get("provider"):
+        provider = merged_cfg["provider"].lower()
     if provider_override:
         # Explicit run choice wins over stage and prompt config.
         provider = provider_override.lower()

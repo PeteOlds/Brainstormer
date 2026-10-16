@@ -406,11 +406,15 @@ Allow each Idea moved to commit to Github when it moves to Scale
 **Scale decisions logged 2026-10-16:**
 - A1 per-idea work in a release: inline status select per row + per-row
   "+ Doc" (PRD/Design/Build) opening the run dialog for that child.
+  **DONE 2026-10-17** (committed `85f8907`, live on Site 90).
 - A2: "Mark release done" shows **disabled** once the release is done.
+  **DONE 2026-10-17** (committed `85f8907`).
 - A3/A5 GitHub: per-instance PAT, direct push of the build target
   directory (only when a confirmed build exists); once committed, no
-  re-commit — updates need a new release.
-- A4/B4 per-release AI/skills/guides overrides: Phase 2.
+  re-commit — updates need a new release. **Phase 3, not started.**
+- A4/B4 per-release AI/skills/guides overrides: **DONE 2026-10-17**
+  (`ReleaseAIConfig`, migration `4d5e6f708192`, Scale-tab editor, verified
+  live on SR3). Pending commit + full suite.
 
 
 # Documentation

@@ -328,6 +328,75 @@ class TestReleases:
         assert names[:3] == ["R3", "R2", "R1"]
         assert names[3] == "No release yet"
 
+
+class TestReleaseAIConfig:
+    def _release(self, admin_client, app, tag):
+        with app.app_context():
+            parent = _idea(f"IDEA-AI{tag}A", status="SCALE")
+            pid = str(parent.id)
+        rid = admin_client.post(
+            f"/api/v1/ideas/{pid}/releases", json={"name": "R"}
+        ).get_json()["data"]["release"]["id"]
+        return rid
+
+    def test_crud(self, admin_client, app):
+        rid = self._release(admin_client, app, "1")
+        res = admin_client.get(f"/api/v1/releases/{rid}/ai-config")
+        assert res.get_json()["data"]["ai_config"] is None
+        res = admin_client.put(
+            f"/api/v1/releases/{rid}/ai-config",
+            json={"provider": "openai", "model_name": "gpt-4o", "temperature": 0.7},
+        )
+        assert res.status_code == 200, res.get_json()
+        cfg = res.get_json()["data"]["ai_config"]
+        assert cfg["provider"] == "openai"
+        assert cfg["model_name"] == "gpt-4o"
+        assert cfg["temperature"] == 0.7
+        res = admin_client.get(f"/api/v1/releases/{rid}/ai-config")
+        assert res.get_json()["data"]["ai_config"]["provider"] == "openai"
+        res = admin_client.delete(f"/api/v1/releases/{rid}/ai-config")
+        assert res.status_code == 200
+        res = admin_client.get(f"/api/v1/releases/{rid}/ai-config")
+        assert res.get_json()["data"]["ai_config"] is None
+
+    def test_resolve_release_applies(self, app):
+        with app.app_context():
+            from app.models import Release, ReleaseAIConfig, resolve_release
+
+            parent = _idea("IDEA-AI2A", status="SCALE")
+            child = _idea(
+                "IDEA-AI2B",
+                status="SPARK",
+                parent_id=parent.id,
+                child_kind="bugfix",
+            )
+            rel = Release(parent_idea_id=parent.id, name="R")
+            db.session.add(rel)
+            db.session.flush()
+            child.release_id = rel.id
+            db.session.add(
+                ReleaseAIConfig(
+                    release_id=rel.id,
+                    provider="anthropic",
+                    model_name="claude-sonnet-4-5",
+                    skills=["db"],
+                )
+            )
+            db.session.commit()
+            cfg = resolve_release(child)
+            assert cfg["provider"] == "anthropic"
+            assert cfg["model_name"] == "claude-sonnet-4-5"
+            assert cfg["skills"] == ["db"]
+            # Top-level idea: no release config
+            assert resolve_release(parent) == {}
+
+    def test_invalid_provider_rejected(self, admin_client, app):
+        rid = self._release(admin_client, app, "3")
+        res = admin_client.put(
+            f"/api/v1/releases/{rid}/ai-config", json={"provider": "not-a-provider"}
+        )
+        assert res.status_code == 400
+
     def test_complete_stamps_completed_at(self, admin_client, app):
         from datetime import datetime, timezone
 

@@ -7,6 +7,7 @@ from .ai_config import (
 )
 from .build_target import InstanceBuildTarget
 from .release import CHILD_KINDS, RELEASE_STATUSES, Release
+from .release_config import ReleaseAIConfig, resolve_release
 from .managed_app import ManagedApp
 from .chat import CHAT_KINDS, CHAT_ROLES, ChatSession, ChatTurn, content_hash
 from .comment import Comment
@@ -83,6 +84,8 @@ __all__ = [
     "Release",
     "RELEASE_STATUSES",
     "CHILD_KINDS",
+    "ReleaseAIConfig",
+    "resolve_release",
     "ManagedApp",
     "ChatSession",
     "ChatTurn",
