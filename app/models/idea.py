@@ -60,6 +60,8 @@ class Idea(db.Model):
         nullable=True,
         index=True,
     )
+    # GitHub repository this idea's build was pushed to (Scale-phase).
+    repository = db.Column(db.String(200), nullable=True)
 
     created_at = db.Column(
         db.DateTime(timezone=True),
@@ -146,6 +148,7 @@ class Idea(db.Model):
             "parent_id": str(self.parent_id) if self.parent_id else None,
             "child_kind": self.child_kind,
             "release_id": str(self.release_id) if self.release_id else None,
+            "repository": self.repository,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "actions_run": [a.action_type for a in self.actions],

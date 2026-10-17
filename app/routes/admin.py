@@ -781,3 +781,19 @@ def update_builds_settings(user):
     settings.update_builds(data)
     db.session.commit()
     return api_ok(settings.to_dict())
+
+
+@admin_api_bp.route("/admin/settings/account", methods=["PATCH"])
+@admin_required
+def update_account_settings(user):
+    """The account this instance belongs to (plain text label)."""
+    from app.models import SystemSettings
+
+    data = request.get_json() or {}
+    name = data.get("account")
+    if name is not None and not isinstance(name, str):
+        return api_error("account must be a string.", status_code=400)
+    settings = SystemSettings.get_instance()
+    settings.update_account(name or None)
+    db.session.commit()
+    return api_ok(settings.to_dict())

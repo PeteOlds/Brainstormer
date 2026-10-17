@@ -56,29 +56,76 @@ def _can_message(sender, recipient_id) -> str | None:
 @bp.route("/messages/admins", methods=["GET"])
 @token_required
 def list_admins(user):
-    """Instance admins the caller may message (picker for the form)."""
+    """Recipients the caller may message: admins for everyone, all members for admins."""
     from app.models import Membership
 
     instance_id = current_instance_id()
     admins = []
     seen = set()
-    if instance_id is not None:
-        for m in Membership.query.filter_by(instance_id=instance_id).all():
-            if m.role in ("INSTANCE_ADMIN", "SITE_ADMIN") and m.user_id not in seen:
-                u = User.query.get(m.user_id)
-                if u is not None and u.is_active and u.id != user.id:
-                    seen.add(u.id)
-                    admins.append(
-                        {
-                            "id": str(u.id),
-                            "name": u.name,
-                            "email": u.email,
-                        }
-                    )
-    for u in User.query.filter_by(role="ADMIN", is_active=True).all():
-        if u.id != user.id and u.id not in seen:
-            seen.add(u.id)
-            admins.append({"id": str(u.id), "name": u.name, "email": u.email})
+    # Is the caller an admin (site, instance, legacy, or manage_members)?
+    caller_is_admin = (
+        user.role.value == "ADMIN"
+        or Membership.is_site_admin(user.id)
+        or current_instance_role() in ("INSTANCE_ADMIN", "SITE_ADMIN")
+    )
+    if caller_is_admin:
+        # Admins may message any active member (and site admins).
+        if instance_id is not None:
+            for m in Membership.query.filter_by(instance_id=instance_id).all():
+                if m.user_id not in seen:
+                    u = User.query.get(m.user_id)
+                    if u is not None and u.is_active and u.id != user.id:
+                        seen.add(u.id)
+                        admins.append(
+                            {
+                                "id": str(u.id),
+                                "name": u.name,
+                                "email": u.email,
+                                "role": m.role,
+                                "is_admin": m.role in ("INSTANCE_ADMIN", "SITE_ADMIN"),
+                            }
+                        )
+        for u in User.query.filter_by(role="ADMIN", is_active=True).all():
+            if u.id != user.id and u.id not in seen:
+                seen.add(u.id)
+                admins.append(
+                    {
+                        "id": str(u.id),
+                        "name": u.name,
+                        "email": u.email,
+                        "role": "ADMIN",
+                        "is_admin": True,
+                    }
+                )
+    else:
+        # Normal users may only message instance admins.
+        if instance_id is not None:
+            for m in Membership.query.filter_by(instance_id=instance_id).all():
+                if m.role in ("INSTANCE_ADMIN", "SITE_ADMIN") and m.user_id not in seen:
+                    u = User.query.get(m.user_id)
+                    if u is not None and u.is_active and u.id != user.id:
+                        seen.add(u.id)
+                        admins.append(
+                            {
+                                "id": str(u.id),
+                                "name": u.name,
+                                "email": u.email,
+                                "role": m.role,
+                                "is_admin": True,
+                            }
+                        )
+        for u in User.query.filter_by(role="ADMIN", is_active=True).all():
+            if u.id != user.id and u.id not in seen:
+                seen.add(u.id)
+                admins.append(
+                    {
+                        "id": str(u.id),
+                        "name": u.name,
+                        "email": u.email,
+                        "role": "ADMIN",
+                        "is_admin": True,
+                    }
+                )
     return api_ok({"admins": admins})
 
 

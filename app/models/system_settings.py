@@ -18,6 +18,7 @@ class SystemSettings(db.Model):
     location = db.Column(db.JSON, default={})
     ai_connections = db.Column(db.JSON, default={})
     builds = db.Column(db.JSON, default={})
+    account = db.Column(db.String(200), nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -66,6 +67,7 @@ class SystemSettings(db.Model):
             "location": self.location or {},
             "ai_connections": self.ai_connections or {},
             "builds": self.builds or {},
+            "account": self.account,
         }
 
     def update_platform(self, data: dict):
@@ -79,6 +81,9 @@ class SystemSettings(db.Model):
 
     def update_builds(self, data: dict):
         self.builds = data
+
+    def update_account(self, name: str | None):
+        self.account = name
 
     def __repr__(self):
         return "<SystemSettings>"

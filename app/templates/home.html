@@ -11,6 +11,41 @@
         <p class="text-sm font-medium text-amber-800 dark:text-amber-200">You have <span x-text="unread"></span> unread message<span x-show="unread !== 1">s</span>.</p>
     </div>
 
+    <!-- Ideas in each phase moved to the top (above other tiles) -->
+    <div x-show="isAdmin" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas in each phase</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Click a phase to see its ideas.</p>
+        <div class="space-y-1.5">
+            <template x-for="s in phaseOrder" :key="s">
+                <div class="flex items-center gap-2 text-sm" x-show="(phases[s] || 0) > 0" @click="showPhase(s)">
+                    <span class="w-24 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:underline" :class="statusClass(s)" x-text="s"></span>
+                    <div class="flex-1 h-3 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                        <div class="h-3 rounded bg-primary-500" :style="'width: ' + phasePct(s) + '%'"></div>
+                    </div>
+                    <span class="w-10 text-right tabular-nums text-slate-700 dark:text-slate-300" x-text="phases[s] || 0"></span>
+                    <span class="ml-auto text-xs text-slate-400">▸</span>
+                </div>
+            </template>
+        </div>
+        <div class="mt-2" x-show="phaseFilter">
+            <button @click="phaseFilter = null" class="text-xs font-medium text-slate-500 hover:underline">← Clear phase filter</button>
+            <div class="mt-2 space-y-1" x-show="phaseIdeas.length">
+                <template x-for="i in phaseIdeas" :key="i.id">
+                    <div class="flex items-center gap-2 text-sm">
+                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
+                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(i.status)" x-text="i.status"></span>
+                        <template x-if="i.parent_id">
+                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <p x-show="!phaseIdeas.length" class="text-sm text-slate-500 dark:text-slate-400">No ideas in this phase.</p>
+        </div>
+        <p x-show="!phaseTotal" class="text-sm text-slate-500 dark:text-slate-400">No ideas yet.</p>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">My ideas</h2>
@@ -18,9 +53,12 @@
             <ul class="space-y-1.5" x-show="mine.length">
                 <template x-for="i in mine" :key="i.id">
                     <li class="flex items-center gap-2 text-sm">
-                        <a :href="'/ideas?idea=' + i.id" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline" x-text="i.reference_code"></a>
-                        <span class="text-slate-700 dark:text-slate-300 truncate" x-text="i.prompt_title"></span>
+                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
+                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(i.status)" x-text="i.status"></span>
+                        <template x-if="i.parent_id">
+                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
+                        </template>
                     </li>
                 </template>
             </ul>
@@ -33,9 +71,12 @@
             <ul class="space-y-1.5" x-show="popular.length">
                 <template x-for="i in popular" :key="i.id">
                     <li class="flex items-center gap-2 text-sm">
-                        <a :href="'/ideas?idea=' + i.id" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline" x-text="i.reference_code"></a>
-                        <span class="text-slate-700 dark:text-slate-300 truncate" x-text="i.prompt_title"></span>
+                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
+                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
                         <span class="text-xs font-bold text-slate-900 dark:text-white" x-text="i.net_votes"></span>
+                        <template x-if="i.parent_id">
+                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
+                        </template>
                     </li>
                 </template>
             </ul>
@@ -48,13 +89,34 @@
             <ul class="space-y-1.5" x-show="discussed.length">
                 <template x-for="i in discussed" :key="i.id">
                     <li class="flex items-center gap-2 text-sm">
-                        <a :href="'/ideas?idea=' + i.id" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline" x-text="i.reference_code"></a>
-                        <span class="text-slate-700 dark:text-slate-300 truncate" x-text="i.prompt_title"></span>
+                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
+                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
                         <span class="text-xs text-slate-500" x-text="'💬 ' + (i.comments_count || 0)"></span>
+                        <template x-if="i.parent_id">
+                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
+                        </template>
                     </li>
                 </template>
             </ul>
             <p x-show="!discussed.length" class="text-sm text-slate-500 dark:text-slate-400">No comments yet.</p>
+        </div>
+
+        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas not voted on</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Ideas with no votes yet — ready for your feedback.</p>
+            <ul class="space-y-1.5" x-show="unvoted.length">
+                <template x-for="i in unvoted" :key="i.id">
+                    <li class="flex items-center gap-2 text-sm">
+                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
+                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(i.status)" x-text="i.status"></span>
+                        <template x-if="i.parent_id">
+                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
+                        </template>
+                    </li>
+                </template>
+            </ul>
+            <p x-show="!unvoted.length" class="text-sm text-slate-500 dark:text-slate-400">Every idea has at least one vote.</p>
         </div>
 
         <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
@@ -74,43 +136,52 @@
             </ul>
             <p x-show="!messages.length" class="text-sm text-slate-500 dark:text-slate-400">No messages.</p>
             <div class="mt-3 space-y-2">
-                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Message an admin</p>
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Message <span x-show="canMessageAnyone">anyone</span> <span x-show="!canMessageAnyone">an admin</span></p>
                 <select x-model="msgAdmin" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
-                    <option value="">Choose an admin…</option>
+                    <option value="">Choose a recipient…</option>
                     <template x-for="a in admins" :key="a.id">
-                        <option :value="a.id" x-text="a.name || a.email"></option>
+                        <option :value="a.id" x-text="(a.is_admin ? '(admin) ' : '') + (a.name || a.email) + ' (' + (a.role || 'user') + ')'"></option>
                     </template>
                 </select>
-                <textarea x-model="msgBody" rows="2" maxlength="2000" placeholder="Write feedback for the admin…" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></textarea>
+                <textarea x-model="msgBody" rows="2" maxlength="2000" placeholder="Write your message…" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></textarea>
                 <button @click="sendMessage()" :disabled="sending || !msgAdmin || !msgBody.trim()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Send</button>
             </div>
         </div>
     </div>
 
-    <div x-show="isAdmin" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas in each phase</h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Live counts across this instance.</p>
-        <div class="space-y-1.5">
-            <template x-for="s in phaseOrder" :key="s">
-                <div class="flex items-center gap-2 text-sm" x-show="(phases[s] || 0) > 0">
-                    <span class="w-24 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(s)" x-text="s"></span>
-                    <div class="flex-1 h-3 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden">
-                        <div class="h-3 rounded bg-primary-500" :style="'width: ' + phasePct(s) + '%'"></div>
-                    </div>
-                    <span class="w-10 text-right tabular-nums text-slate-700 dark:text-slate-300" x-text="phases[s] || 0"></span>
+    <!-- Phase idea detail modal (simple overlay) -->
+    <div x-show="phaseFilter" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" @click="phaseFilter = null">
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4" @click.stop>
+            <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="phaseFilter + ' ideas'"></h2>
+                    <button @click="phaseFilter = null" class="text-sm font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white">Close</button>
                 </div>
-            </template>
+                <div class="space-y-1" x-show="phaseIdeas.length">
+                    <template x-for="i in phaseIdeas" :key="i.id">
+                        <div class="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-700/30 rounded-lg cursor-pointer" @click="openIdea(i)">
+                            <span class="font-mono text-indigo-600 dark:text-indigo-400" x-text="i.reference_code"></span>
+                            <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(i.status)" x-text="i.status"></span>
+                            <template x-if="i.parent_id">
+                                <span class="text-xs text-slate-500 ml-2" x-text="'child of ' + i.parent_ref"></span>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+                <p x-show="!phaseIdeas.length" class="text-sm text-slate-500 dark:text-slate-400">No ideas in this phase.</p>
+            </div>
         </div>
-        <p x-show="!phaseTotal" class="text-sm text-slate-500 dark:text-slate-400">No ideas yet.</p>
     </div>
 </div>
 
 <script>
 function homeApp() {
     return {
-        mine: [], popular: [], discussed: [], messages: [],
+        mine: [], popular: [], discussed: [], unvoted: [], messages: [],
         unread: 0, admins: [], msgAdmin: '', msgBody: '', sending: false,
         phases: {}, phaseTotal: 0, isAdmin: false, currentUserId: null,
+        phaseFilter: null, phaseIdeas: [],
         phaseOrder: ['SPARK', 'SCOPE', 'MAP', 'SHIP', 'SCALE', 'DROP', 'FREEZE', 'ARCHIVE'],
 
         async init() {
@@ -137,6 +208,10 @@ function homeApp() {
             return Math.round(((this.phases[s] || 0) / this.phaseTotal) * 100);
         },
 
+        ideaUrl(i) {
+            return '/ideas?idea=' + i.id + (i.parent_id ? '&parent=' + i.parent_id : '');
+        },
+
         async loadAll() {
             const get = async (url) => {
                 try {
@@ -146,10 +221,11 @@ function homeApp() {
                     return d.data || d;
                 } catch (e) { return null; }
             };
-            const [mine, pop, dis, msg, unread, phases] = await Promise.all([
+            const [mine, pop, dis, unv, msg, unread, phases] = await Promise.all([
                 get('/api/v1/ideas?mine=true&limit=5'),
-                get('/api/v1/ideas?sort_by=votes&limit=5'),
+                get('/api/v1/ideas?sort_by=-votes&limit=5'),
                 get('/api/v1/ideas?sort_by=comments&limit=5'),
+                get('/api/v1/ideas?sort_by=votes&limit=20'),
                 get('/api/v1/messages?limit=20'),
                 get('/api/v1/messages/unread-count'),
                 get('/api/v1/ideas/phase-counts'),
@@ -157,20 +233,50 @@ function homeApp() {
             if (mine) this.mine = mine.ideas || [];
             if (pop) this.popular = pop.ideas || [];
             if (dis) this.discussed = dis.ideas || [];
+            if (unv) this.unvoted = (unv.ideas || []).filter((i) => (i.net_votes || 0) === 0);
             if (msg) this.messages = msg.messages || [];
             if (unread) this.unread = unread.unread || 0;
             if (phases) {
                 this.phases = phases.counts || {};
                 this.phaseTotal = phases.total || 0;
             }
-            // Admin picker for the message form: instance admins.
+            // Recipient picker: admins for everyone, all members for admins.
             try {
                 const r = await authFetch('/api/v1/messages/admins');
                 if (r.ok) {
                     const d = await r.json();
                     this.admins = ((d.data || d).admins || []).filter((u) => u.id !== this.currentUserId);
+                    this.canMessageAnyone = this.admins.some((a) => !a.is_admin);
                 }
             } catch (e) { /* admin list optional */ }
+        },
+
+        showPhase(stage) {
+            this.phaseFilter = stage;
+            this.phaseIdeas = [];
+            authFetch(`/api/v1/ideas?status=${stage}&limit=20`).then(async (r) => {
+                if (r.ok) {
+                    const d = await r.json();
+                    this.phaseIdeas = d.ideas || [];
+                    // Enrich with parent ref codes for child ideas.
+                    for (const i of this.phaseIdeas) {
+                        if (i.parent_id) {
+                            try {
+                                const pr = await authFetch(`/api/v1/ideas/${i.parent_id}`);
+                                if (pr.ok) {
+                                    const pd = await pr.json();
+                                    const p = (pd.data || pd).idea || {};
+                                    i.parent_ref = p.reference_code || '?';
+                                }
+                            } catch (e) { i.parent_ref = '?'; }
+                        }
+                    }
+                }
+            });
+        },
+
+        openIdea(i) {
+            window.location.href = this.ideaUrl(i);
         },
 
         async markRead(id) {
@@ -195,6 +301,7 @@ function homeApp() {
                     throw new Error(d.message || 'Failed to send');
                 }
                 this.msgBody = '';
+                this.msgAdmin = '';
                 await this.loadAll();
             } catch (e) {
                 alert('Failed to send: ' + e.message);
