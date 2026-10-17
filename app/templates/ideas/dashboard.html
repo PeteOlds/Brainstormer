@@ -1120,11 +1120,55 @@
                     <p class="text-xs text-slate-500 dark:text-slate-400" x-text="confirmModalDetail"></p>
                 </div>
                 <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
-                    <button @click="$event.stopPropagation(); closeConfirmModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                    <button @click="$event.stopPropagation(); rejectConfirmModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
                     <button @click="$event.stopPropagation(); executeConfirmedAction()" :disabled="confirmModalLoading" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-3">
                         <span x-show="!confirmModalLoading" x-text="confirmModalActionLabel"></span>
                         <span x-show="confirmModalLoading">Processing…</span>
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert modal -->
+    <div x-show="alertModalOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeAlertModal()" aria-labelledby="alert-modal-title" role="dialog" aria-modal="true" style="display: none;">
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+        <div class="relative flex min-h-full items-center justify-center p-4">
+            <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-red-200 dark:border-red-700">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
+                    <h2 id="alert-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Alert</h2>
+                    <button @click="$event.stopPropagation(); closeAlertModal()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <p class="text-sm text-slate-700 dark:text-slate-300" x-text="alertModalMessage"></p>
+                </div>
+                <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
+                    <button @click="$event.stopPropagation(); closeAlertModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt modal -->
+    <div x-show="promptModalOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closePromptModal()" aria-labelledby="prompt-modal-title" role="dialog" aria-modal="true" style="display: none;">
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+        <div class="relative flex min-h-full items-center justify-center p-4">
+            <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-slate-300 dark:border-slate-500">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
+                    <h2 id="prompt-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Enter a value</h2>
+                    <button @click="$event.stopPropagation(); closePromptModal()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <p class="text-sm text-slate-700 dark:text-slate-300" x-text="promptModalMessage"></p>
+                    <input x-model="promptModalValue" :placeholder="promptModalPlaceholder" type="text" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" @keyup.enter="$event.stopPropagation(); submitPromptModal()">
+                </div>
+                <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
+                    <button @click="$event.stopPropagation(); closePromptModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                    <button @click="$event.stopPropagation(); submitPromptModal()" :disabled="!promptModalValue.trim()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-3">OK</button>
                 </div>
             </div>
         </div>
@@ -1222,6 +1266,22 @@ function ideasApp() {
         confirmModalActionType: '',
         confirmModalIdeaId: null,
         confirmModalAnswers: [],
+        confirmModalResolve: null,
+        confirmModalReject: null,
+
+        // Alert modal state
+        alertModalOpen: false,
+        alertModalMessage: '',
+        alertModalResolve: null,
+
+        // Prompt modal state
+        promptModalOpen: false,
+        promptModalMessage: '',
+        promptModalValue: '',
+        promptModalPlaceholder: '',
+        promptModalResolve: null,
+        promptModalReject: null,
+
         pendingRunExtra: null,
 
         // Run dialog state (provider + model + skills + guidelines per run)
@@ -1645,7 +1705,7 @@ function ideasApp() {
                 this.replyTo = null;
                 await this.loadComments(this.selectedIdea.id);
             } catch (e) {
-                alert('Failed to post comment: ' + e.message);
+                this.showAlertModal('Failed to post comment: ' + e.message);
             } finally {
                 this.commentPosting = false;
             }
@@ -1664,7 +1724,7 @@ function ideasApp() {
                 this.editingCommentId = null;
                 await this.loadComments(this.selectedIdea.id);
             } catch (e) {
-                alert('Failed to save edit: ' + e.message);
+                this.showAlertModal('Failed to save edit: ' + e.message);
             }
         },
 
@@ -1693,7 +1753,7 @@ function ideasApp() {
             if (!this.selectedIdea) return;
             const title = (this.editTitle || '').trim();
             if (!title) {
-                alert('Title must not be empty.');
+                await this.showAlertModal('Title must not be empty.');
                 return;
             }
             const payload = { prompt_title: title };
@@ -1702,11 +1762,11 @@ function ideasApp() {
                 for (const f of this.editFieldDefs) {
                     const val = (this.editFields[f.key] || '').trim();
                     if (!val) {
-                        alert(f.label + ' must not be empty.');
+                        await this.showAlertModal(f.label + ' must not be empty.');
                         return;
                     }
                     if (val.length > f.max) {
-                        alert(f.label + ` must be ${f.max} characters or fewer.`);
+                        await this.showAlertModal(f.label + ` must be ${f.max} characters or fewer.`);
                         return;
                     }
                     sc[f.key] = val;
@@ -1715,7 +1775,7 @@ function ideasApp() {
             } else {
                 const body = (this.editBody || '').trim();
                 if (!body) {
-                    alert('Body must not be empty.');
+                    await this.showAlertModal('Body must not be empty.');
                     return;
                 }
                 payload.raw_content = body;
@@ -1735,20 +1795,20 @@ function ideasApp() {
                 await this.loadIdeaDetail(this.selectedIdea.id);
                 await this.loadIdeas();
             } catch (e) {
-                alert('Failed to save edit: ' + e.message);
+                this.showAlertModal('Failed to save edit: ' + e.message);
             } finally {
                 this.editSaving = false;
             }
         },
 
         async deleteComment(id) {
-            if (!confirm('Delete this comment? Replies will be kept.')) return;
+            if (!(await this.showConfirmModal('Delete this comment? Replies will be kept.', '', 'Delete'))) return;
             try {
                 const res = await authFetch(`/api/v1/comments/${id}`, { method: 'DELETE' });
                 if (!res.ok) throw new Error('Failed to delete comment');
                 await this.loadComments(this.selectedIdea.id);
             } catch (e) {
-                alert('Failed to delete comment: ' + e.message);
+                this.showAlertModal('Failed to delete comment: ' + e.message);
             }
         },
 
@@ -1765,7 +1825,7 @@ function ideasApp() {
                 if (!res.ok) throw new Error('Failed to update comment');
                 await this.loadComments(this.selectedIdea.id);
             } catch (e) {
-                alert('Failed to update comment: ' + e.message);
+                this.showAlertModal('Failed to update comment: ' + e.message);
             }
         },
 
@@ -1926,7 +1986,7 @@ function ideasApp() {
         },
 
         async createRelease() {
-            const name = prompt('Release name (for example: Release 1.1):');
+            const name = await this.showPromptModal('Release name', 'for example: Release 1.1');
             if (!name || !name.trim()) return;
             this.releaseBusy = true;
             try {
@@ -1938,7 +1998,7 @@ function ideasApp() {
                 if (!res.ok) throw new Error('Failed to create release');
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to create release: ' + e.message);
+                this.showAlertModal('Failed to create release: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
@@ -1959,7 +2019,7 @@ function ideasApp() {
                 if (!res.ok) throw new Error('Failed to move');
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to move: ' + e.message);
+                this.showAlertModal('Failed to move: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
@@ -1977,14 +2037,14 @@ function ideasApp() {
                 if (!res.ok) throw new Error('Failed to move');
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to move: ' + e.message);
+                this.showAlertModal('Failed to move: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
         },
 
         async completeRelease(releaseId) {
-            const target = confirm('Mark every item in this release as shipped? OK = shipped, Cancel = stop here.') ? 'SHIP' : null;
+            const target = (await this.showConfirmModal('Mark every item in this release as shipped? OK = shipped, Cancel = stop here.', '', 'Ship all')) ? 'SHIP' : null;
             if (!target) return;
             this.releaseBusy = true;
             try {
@@ -1997,23 +2057,23 @@ function ideasApp() {
                 if (!res.ok) throw new Error(data.message || 'Failed to finish release');
                 const d = data.data || data;
                 if (!d.total) {
-                    alert('Nothing in this release yet — move ideas into it first.');
+                    await this.showAlertModal('Nothing in this release yet — move ideas into it first.');
                 } else if (!d.updated_count && !d.skipped_illegal) {
                     const done = d.status === 'DROP' ? 'dropped' : 'shipped';
-                    alert(`Everything in this release is already ${done}.`);
+                    await this.showAlertModal(`Everything in this release is already ${done}.`);
                 } else {
-                    alert(`Finished: ${d.updated_count} shipped${d.skipped_illegal ? `, ${d.skipped_illegal} not ready yet` : ''}.`);
+                    await this.showAlertModal(`Finished: ${d.updated_count} shipped${d.skipped_illegal ? `, ${d.skipped_illegal} not ready yet` : ''}.`);
                 }
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to finish release: ' + e.message);
+                this.showAlertModal('Failed to finish release: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
         },
 
         async deleteRelease(releaseId) {
-            if (!confirm('Delete this release? Items move back to “No release yet”.')) return;
+            if (!(await this.showConfirmModal('Delete this release? Items move back to “No release yet”.', '', 'Delete release'))) return;
             this.releaseBusy = true;
             try {
                 const res = await authFetch(`/api/v1/releases/${releaseId}`, { method: 'DELETE' });
@@ -2021,23 +2081,23 @@ function ideasApp() {
                 if (!res.ok) throw new Error(data.message || 'Failed to delete');
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to delete: ' + e.message);
+                this.showAlertModal('Failed to delete: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
         },
 
         async pushRelease(releaseId) {
-            if (!confirm('Push this release to GitHub? It can only be pushed once — further updates need a new release.')) return;
+            if (!(await this.showConfirmModal('Push this release to GitHub? It can only be pushed once — further updates need a new release.', '', 'Push to GitHub'))) return;
             this.releaseBusy = true;
             try {
                 const res = await authFetch(`/api/v1/releases/${releaseId}/github-push`, { method: 'POST' });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message || 'Failed to start push');
-                alert('Push started — this card shows the commit when it lands. Reload the Scale tab in a minute to check.');
+                await this.showAlertModal('Push started — this card shows the commit when it lands. Reload the Scale tab in a minute to check.');
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Push failed to start: ' + e.message);
+                this.showAlertModal('Push failed to start: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
@@ -2048,7 +2108,7 @@ function ideasApp() {
             if (!actionType) return;
             const targetId = this.buildTargetId();
             if (actionType === 'BUILD_CODE' && !targetId) {
-                alert('No build target for this app — an admin needs to register one.');
+                await this.showAlertModal('No build target for this app — an admin needs to register one.');
                 return;
             }
             this.actionLoading = actionType;
@@ -2063,7 +2123,7 @@ function ideasApp() {
                 if (!res.ok) throw new Error((data && data.message) || 'Failed to start');
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to start: ' + e.message);
+                this.showAlertModal('Failed to start: ' + e.message);
             } finally {
                 this.actionLoading = null;
             }
@@ -2092,7 +2152,7 @@ function ideasApp() {
             const status = this.releaseMove[releaseId];
             const ids = this.releaseKidIds(releaseId);
             if (!status || !ids.length) return;
-            if (!confirm(`Move ${ids.length} idea(s) to ${status}? Skipped ones stay where they are.`)) return;
+            if (!(await this.showConfirmModal(`Move ${ids.length} idea(s) to ${status}? Skipped ones stay where they are.`, '', 'Move all'))) return;
             this.releaseBusy = true;
             try {
                 const res = await authFetch('/api/v1/ideas/bulk-status', {
@@ -2103,10 +2163,10 @@ function ideasApp() {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message || 'Failed to move');
                 const d = data.data || data;
-                alert(`Moved: ${d.updated_count} of ${ids.length}${d.skipped_illegal ? `, ${d.skipped_illegal} not ready for ${status}` : ''}.`);
+                await this.showAlertModal(`Moved: ${d.updated_count} of ${ids.length}${d.skipped_illegal ? `, ${d.skipped_illegal} not ready for ${status}` : ''}.`);
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to move: ' + e.message);
+                this.showAlertModal('Failed to move: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
@@ -2118,7 +2178,7 @@ function ideasApp() {
             const ids = this.releaseKidIds(releaseId);
             if (!ids.length) return;
             const what = actionType === 'BUILD_CODE' ? (confirmBuild ? 'write all previews into the app repo' : 'preview builds for all') : `start ${actionType} for all`;
-            if (!confirm(`This will ${what} (${ids.length} idea(s)). Continue?`)) return;
+            if (!(await this.showConfirmModal(`This will ${what} (${ids.length} idea(s)). Continue?`, '', 'Continue'))) return;
             this.releaseBusy = true;
             try {
                 const res = await authFetch(`/api/v1/releases/${releaseId}/run-action`, {
@@ -2132,12 +2192,12 @@ function ideasApp() {
                 let msg = d.summary || 'Done.';
                 for (const s of (d.skipped || []).slice(0, 5)) msg += `\n• ${s.reference_code}: ${s.reason}`;
                 if ((d.skipped || []).length > 5) msg += `\n… and ${(d.skipped || []).length - 5} more.`;
-                alert(msg);
+                await this.showAlertModal(msg);
                 await this.loadScaleFamily();
                 // Builds settle async: watch until every started one finishes.
                 if (d.started && d.started.length) await this.refreshBuildStatus();
             } catch (e) {
-                alert('Failed to start: ' + e.message);
+                this.showAlertModal('Failed to start: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
@@ -2159,7 +2219,7 @@ function ideasApp() {
                 if (!res.ok) throw new Error(data.message || 'Failed to rebuild notes');
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to rebuild notes: ' + e.message);
+                this.showAlertModal('Failed to rebuild notes: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
@@ -2192,7 +2252,7 @@ function ideasApp() {
                 if (!res.ok) throw new Error(data.message || 'Failed to save');
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to save AI settings: ' + e.message);
+                this.showAlertModal('Failed to save AI settings: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
@@ -2206,7 +2266,7 @@ function ideasApp() {
                 if (!res.ok) throw new Error(data.message || 'Failed to clear');
                 await this.loadScaleFamily();
             } catch (e) {
-                alert('Failed to clear AI settings: ' + e.message);
+                this.showAlertModal('Failed to clear AI settings: ' + e.message);
             } finally {
                 this.releaseBusy = false;
             }
@@ -2247,7 +2307,7 @@ function ideasApp() {
                     if (payload.downvotes_count !== undefined) this.selectedIdea.downvotes_count = payload.downvotes_count;
                 }
             } catch (error) {
-                alert('Failed to vote: ' + error.message);
+                this.showAlertModal('Failed to vote: ' + error.message);
             } finally {
                 this.voteLoading = null;
             }
@@ -2280,7 +2340,7 @@ function ideasApp() {
         },
 
         async confirmDiscard(idea, close) {
-            if (!confirm('Drop this idea? It will be hidden by the default filter.')) return;
+            if (!(await this.showConfirmModal('Drop this idea? It will be hidden by the default filter.', '', 'Drop idea'))) return;
             await this.changeStatus('DROP', idea.id, true);
             if (close) close();
         },
@@ -2288,7 +2348,7 @@ function ideasApp() {
         async changeStatus(status, ideaId, confirmed) {
             if (!status) return;
             // Contract: the UI always prompts the admin on a status change.
-            if (!confirmed && !confirm(`Change status to ${status}?`)) {
+            if (!confirmed && !(await this.showConfirmModal(`Change status to ${status}?`, '', 'Change status'))) {
                 await this.loadIdeas();
                 return;
             }
@@ -2307,7 +2367,7 @@ function ideasApp() {
                     if (!this.showScaleTab() && this.activeTab === 'scale') this.activeTab = 'overview';
                 }
             } catch (error) {
-                alert('Failed to update status: ' + error.message);
+                this.showAlertModal('Failed to update status: ' + error.message);
                 await this.loadIdeas();
             }
         },
@@ -2319,19 +2379,19 @@ function ideasApp() {
                 : (this.ideas || []).find(i => i.id === ideaId);
             const st = target ? target.status : null;
             if (st === 'DROP' || st === 'ARCHIVE') {
-                alert('No actions can run on dropped or archived ideas.');
+                await this.showAlertModal('No actions can run on dropped or archived ideas.');
                 return false;
             }
             if (actionType === 'PRD_DOC' && (!st || st === 'SPARK')) {
-                alert('PRD creation requires the idea to reach Scope stage.');
+                await this.showAlertModal('PRD creation requires the idea to reach Scope stage.');
                 return false;
             }
             if (actionType === 'DESIGN_DOC' && !['MAP', 'SHIP', 'SCALE', 'FREEZE'].includes(st)) {
-                alert('Design documents require the idea to reach Map stage.');
+                await this.showAlertModal('Design documents require the idea to reach Map stage.');
                 return false;
             }
             if (actionType === 'BUILD_CODE' && !['SHIP', 'SCALE'].includes(st)) {
-                alert('Building code requires the idea to reach Ship stage.');
+                await this.showAlertModal('Building code requires the idea to reach Ship stage.');
                 return false;
             }
             // Check if this action requires confirmation (Refine or PRD)
@@ -2374,6 +2434,79 @@ function ideasApp() {
             this.confirmModalIdeaId = null;
             this.confirmModalAnswers = [];
             this.pendingRunExtra = null;
+        },
+
+        // Alert modal (replaces alert())
+        async showAlertModal(message) {
+            this.alertModalMessage = message;
+            this.alertModalOpen = true;
+            return new Promise(resolve => {
+                this.alertModalResolve = resolve;
+            });
+        },
+        closeAlertModal() {
+            this.alertModalOpen = false;
+            this.alertModalMessage = '';
+            if (this.alertModalResolve) {
+                this.alertModalResolve();
+                this.alertModalResolve = null;
+            }
+        },
+
+        // Confirm modal with promise (replaces confirm())
+        async showConfirmModal(message, detail, actionLabel) {
+            this.confirmModalMessage = message;
+            this.confirmModalDetail = detail || '';
+            this.confirmModalActionLabel = actionLabel || 'OK';
+            this.confirmModalOpen = true;
+            return new Promise((resolve, reject) => {
+                this.confirmModalResolve = resolve;
+                this.confirmModalReject = reject;
+            });
+        },
+        resolveConfirmModal() {
+            if (this.confirmModalResolve) {
+                this.confirmModalResolve(true);
+                this.confirmModalResolve = null;
+            }
+            this.closeConfirmModal();
+        },
+        rejectConfirmModal() {
+            if (this.confirmModalReject) {
+                this.confirmModalReject(false);
+                this.confirmModalReject = null;
+            }
+            this.closeConfirmModal();
+        },
+
+        // Prompt modal (replaces prompt())
+        async showPromptModal(message, placeholder) {
+            this.promptModalMessage = message;
+            this.promptModalPlaceholder = placeholder || '';
+            this.promptModalValue = '';
+            this.promptModalOpen = true;
+            return new Promise((resolve, reject) => {
+                this.promptModalResolve = resolve;
+                this.promptModalReject = reject;
+            });
+        },
+        submitPromptModal() {
+            if (!this.promptModalValue.trim()) return;
+            if (this.promptModalResolve) {
+                this.promptModalResolve(this.promptModalValue.trim());
+                this.promptModalResolve = null;
+            }
+            this.closePromptModal();
+        },
+        closePromptModal() {
+            this.promptModalOpen = false;
+            this.promptModalMessage = '';
+            this.promptModalPlaceholder = '';
+            this.promptModalValue = '';
+            if (this.promptModalReject) {
+                this.promptModalReject(null);
+                this.promptModalReject = null;
+            }
         },
 
         async openRunDialog(ideaId, actionType, ref, instanceId) {
@@ -2541,8 +2674,8 @@ function ideasApp() {
             const instanceId = (idea && idea.instance_id) || this.runDialogInstanceId;
             const name = (this.runDialogNewRepoName || '').trim();
             const path = (this.runDialogNewRepoPath || '').trim();
-            if (!instanceId) { alert('Cannot determine the idea’s instance.'); return; }
-            if (!name || !path) { alert('Repo name and folder are both required.'); return; }
+            if (!instanceId) { await this.showAlertModal('Cannot determine the idea’s instance.'); return; }
+            if (!name || !path) { await this.showAlertModal('Repo name and folder are both required.'); return; }
             this.creatingRepo = true;
             try {
                 const res = await authFetch(`/api/v1/instances/${instanceId}/build-targets`, {
@@ -2557,7 +2690,7 @@ function ideasApp() {
                 if (created.id) this.runDialogTarget = created.id;
                 this.runDialogNewRepo = false;
             } catch (e) {
-                alert('Failed to register repo: ' + (e.message || e));
+                this.showAlertModal('Failed to register repo: ' + (e.message || e));
             } finally {
                 this.creatingRepo = false;
             }
@@ -2597,7 +2730,7 @@ function ideasApp() {
             const actionType = this.runDialogActionType;
             if (actionType === 'BUILD_CODE') {
                 if (!this.runDialogTarget) {
-                    alert('Select a build target first (manage repos in Admin → AI Settings).');
+                    await this.showAlertModal('Select a build target first (manage repos in Admin → AI Settings).');
                     return;
                 }
                 extra.target_id = this.runDialogTarget;
@@ -2667,7 +2800,7 @@ function ideasApp() {
                 await this.loadIdeas();
                 await this.loadTotalIdeas();
             } catch (error) {
-                alert('Failed to update status: ' + error.message);
+                this.showAlertModal('Failed to update status: ' + error.message);
             } finally {
                 this.bulkUpdating = false;
             }
@@ -2679,7 +2812,7 @@ function ideasApp() {
             const actionType = this.confirmModalActionType;
             const extra = { ...(this.pendingRunExtra || {}), ...(this.confirmModalAnswers ? { answers: this.confirmModalAnswers } : {}) };
             this.pendingRunExtra = null;
-            this.closeConfirmModal();
+            this.resolveConfirmModal();
             await this.executeAction(ideaId, actionType, extra);
         },
 
@@ -2749,7 +2882,7 @@ function ideasApp() {
                 }
                 return true;
             } catch (error) {
-                alert('Failed to run action: ' + error.message);
+                this.showAlertModal('Failed to run action: ' + error.message);
                 return false;
             } finally {
                 this.actionLoading = null;
@@ -2881,7 +3014,7 @@ function ideasApp() {
                 this.managedApp = (data.data || data).app || null;
                 await this.loadAppLogs();
             } catch (e) {
-                alert('Could not enable one-click run: ' + (e.message || e));
+                this.showAlertModal('Could not enable one-click run: ' + (e.message || e));
             } finally {
                 this.appBusy = false;
             }
@@ -2898,7 +3031,7 @@ function ideasApp() {
                 this.managedApp = (data.data || data).app || this.managedApp;
                 this.pollManagedApp(36);
             } catch (e) {
-                alert('Could not start the app: ' + (e.message || e));
+                this.showAlertModal('Could not start the app: ' + (e.message || e));
             } finally {
                 this.appBusy = false;
             }
@@ -2915,7 +3048,7 @@ function ideasApp() {
                 this.managedApp = (data.data || data).app || this.managedApp;
                 this.pollManagedApp(12);
             } catch (e) {
-                alert('Could not stop the app: ' + (e.message || e));
+                this.showAlertModal('Could not stop the app: ' + (e.message || e));
             } finally {
                 this.appBusy = false;
             }
@@ -3364,7 +3497,7 @@ function ideasApp() {
                 this.docDrafts[resultId] = '';
                 await this.loadDocComments(resultId, true);
             } catch (e) {
-                alert('Failed to post comment: ' + e.message);
+                this.showAlertModal('Failed to post comment: ' + e.message);
             }
         },
 
@@ -3372,7 +3505,7 @@ function ideasApp() {
             try {
                 const cur = this.docCurrentResult(key) || this.actionTabResult(key);
                 if (!cur || !cur.id) {
-                    alert('Could not load this document for editing. Try closing and reopening the details.');
+                    await this.showAlertModal('Could not load this document for editing. Try closing and reopening the details.');
                     return;
                 }
                 const data = cur.output || cur.result_data || {};
@@ -3398,7 +3531,7 @@ function ideasApp() {
                 }
                 this.docEditError = '';
             } catch (e) {
-                alert('Could not open the editor: ' + (e && e.message ? e.message : e));
+                this.showAlertModal('Could not open the editor: ' + (e && e.message ? e.message : e));
             }
         },
 
