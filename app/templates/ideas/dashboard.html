@@ -30,8 +30,8 @@
             <div class="flex-1 sm:w-64">
                 <label for="status-filter" class="sr-only">Filter by status</label>
                 <select id="status-filter" x-model="filters.status" class="block w-full pl-3 pr-10 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors appearance-none">
-                    <option value="ACTIVE_ONLY">Active Only (default)</option>
-                    <option value="">All Statuses</option>
+                    <option value="active">Active ideas only</option>
+                    <option value="">All statuses</option>
                     <option value="SPARK">Spark</option>
                     <option value="SCOPE">Scope</option>
                     <option value="MAP">Map</option>
@@ -554,7 +554,7 @@
                                     <div class="flex flex-wrap items-center gap-2 mb-2">
                                         <span class="text-sm font-semibold text-slate-900 dark:text-white" x-text="rel.name"></span>
                                         <span x-show="releaseDate(rel)" class="text-xs text-slate-500 dark:text-slate-400" x-text="releaseDate(rel)"></span>
-                                        <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" x-text="rel.status.replace('_', ' ')"></span>
+                                        <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" x-text="releaseStageLabel(rel.status)"></span>
                                         <span class="flex gap-2 ml-auto" x-show="isAdmin && rel.id">
                                             <button @click="completeRelease(rel.id)" :disabled="releaseBusy || rel.status === 'done'" :title="rel.status === 'done' ? 'Release finished ' + releaseDate(rel) : 'Move every item in this release to shipped'" class="text-xs font-medium text-green-700 dark:text-green-400 hover:underline min-h-[32px] disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">Mark release done</button>
                                             <button x-show="rel.github_sha" class="text-xs font-medium text-slate-500 dark:text-slate-400 min-h-[32px]" :title="'Pushed ' + (rel.github_pushed_at || '') + ' — further updates need a new release'" x-text="'On GitHub ✓'"></button>
@@ -1242,7 +1242,7 @@ function ideasApp() {
         docEditList: [],
         docEditError: '',
         docEditSaving: false,
-        filters: { status: 'ACTIVE_ONLY', sort: 'created_at', search: '', prompt_id: '', model: '' },
+        filters: { status: 'active', sort: 'created_at', search: '', prompt_id: '', model: '' },
         canCreateIdeas: true,
         createIdeaModalOpen: false,
         createIdeaTitle: '',
@@ -1348,13 +1348,13 @@ function ideasApp() {
 
         async init() {
             // Deep links (e.g. from /admin/activity): ?status=&prompt=&model=
-            // status=ALL selects "All Statuses" (needed by health links).
+            // status=all selects "All statuses" (needed by health links).
             const query = new URLSearchParams(window.location.search);
             const qStatus = query.get('status');
-            if (qStatus === 'ALL') {
+            if (qStatus === 'all') {
                 this.filters.status = '';
             } else if (qStatus) {
-                this.filters.status = qStatus.toUpperCase();
+                this.filters.status = qStatus;
             }
             const qPrompt = query.get('prompt');
             if (qPrompt) this.filters.prompt_id = qPrompt;
@@ -1393,7 +1393,7 @@ function ideasApp() {
                     limit: this.pageSize,
                     sort_by: this.filters.sort,
                 });
-                // ACTIVE_ONLY is understood by the API (excludes DROP/ARCHIVE).
+                // 'active' is understood by the API (excludes dropped/archived).
                 if (this.filters.status) {
                     params.append('status', this.filters.status);
                 }
@@ -3647,6 +3647,14 @@ function ideasApp() {
         },
         stageLabel(status) {
             return this.stageLabels[status] || status;
+        },
+        releaseStageLabels: {
+            'planned': 'Planned',
+            'in_progress': 'In progress',
+            'done': 'Done',
+        },
+        releaseStageLabel(status) {
+            return this.releaseStageLabels[status] || status.replace('_', ' ');
         },
 
         getStatusClass(status) {
