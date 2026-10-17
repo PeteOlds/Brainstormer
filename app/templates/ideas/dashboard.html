@@ -2043,6 +2043,32 @@ function ideasApp() {
             }
         },
 
+        // Start a secondary action for one release child (dropdown).
+        async openChildDoc(k, actionType) {
+            if (!actionType) return;
+            const targetId = this.buildTargetId();
+            if (actionType === 'BUILD_CODE' && !targetId) {
+                alert('No build target for this app — an admin needs to register one.');
+                return;
+            }
+            this.actionLoading = actionType;
+            try {
+                const extra = { target_id: targetId };
+                const res = await authFetch(`/api/v1/ideas/${k.id}/actions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action_type: actionType, extra }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error((data && data.message) || 'Failed to start');
+                await this.loadScaleFamily();
+            } catch (e) {
+                alert('Failed to start: ' + e.message);
+            } finally {
+                this.actionLoading = null;
+            }
+        },
+
         releaseKidIds(releaseId) {
             return this.scaleKids(releaseId).map((k) => k.id);
         },
