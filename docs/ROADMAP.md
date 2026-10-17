@@ -1,9 +1,9 @@
 # Brainstormer — Roadmap: completed vs outstanding
 
 **Single source of truth for build status. Update on every build.**
-**Version:** 0.47.0 · **Date:** 2026-10-01 · **Branch:** `feat/phase-0-backup` (pushed, PR #1 open)
-**Health:** backend 324 passed / 81% coverage · Flutter 24 passed, analyze clean ·
-bandit 0 high/medium · safety 0 vulns · prod healthy, migrated to head.
+**Version:** 0.65.0 · **Date:** 2026-10-17 · **Branch:** `main`
+**Health:** backend 448 passed · Flutter 24 passed · bandit 0 high/medium ·
+safety 0 vulns · prod healthy, migrated to head.
 
 Spec baselines: `PRD_V2.md` (V2 scope), `docs/Design.md` (system design),
 `Guardrail.md` (security rules). Guide statuses: `Guides/README.md`.
@@ -134,8 +134,44 @@ Reserved site numbers verified refused-by-guard (no shells created);
 RLS overhead measured nil on production data; backup volume and
 goldens reviewed (both healthy); fresh-database migration chain fixed
 and verified end to end (36 revisions); production migrated to head
-and healthy. **Single PR #1 opened** (mergeable, Guardrail checklist
-in body) — review + merge outstanding.
+and healthy. PR #1 retired (branch 68+ commits behind main; main is
+the commit target).
+
+### A.19 Phase 14 — Scale-phase collaboration (v0.48.0–v0.65.0)
+- Child ideas linked to live SCALE apps (enhancement/bugfix, one
+  parent per child, immutable after creation).
+- Releases: create, assign/unassign, bulk-complete to SHIP/DROP,
+  delete-when-empty, deterministic release notes auto-written to
+  `docs/release-notes/`.
+- Release Date beside name (completion date), releases list newest
+  first.
+- Per-idea work inside release: inline status select per row, + Doc
+  dropdown (PRD/Design/Build) opening run dialog per child.
+- Readiness pills (PRD/Design/Built/No build) with build status
+  polling (Queued/Building/Written/Failed, 4s auto-refresh).
+- "Mark release done" disabled with tooltip once release is done.
+- Build instructions derived at confirm time (extractor, port
+  allocation, runbook); frontend dashboard URL recorded for Open.
+- Supervision refactor: Start idempotent, Stop as worker task,
+  health-first status, container-local pids, no-shell runner.
+- Build tab restructured: Build Code → How to run → Run on this
+  machine → Write report → Files → Discussion.
+- Per-release AI settings (override stage config: provider, model,
+  temperature, top_p, num_predict, skills, guidelines).
+- Per-instance GitHub config (encrypted PAT, repo, branch); Push to
+  GitHub on finished release (no re-commit), auto-push on Scale entry.
+- In-app messaging: users→admins, admins→members, read receipts,
+  unread badge, idea/comment share links, admin picker.
+- User homepage (`/home`): My ideas, Most popular, Most discussed,
+  Messages, admin phase analytics. `mine=true` and comments sort on
+  ideas API; phase-counts endpoint.
+- Slack bridge: outbound message mirroring, inbound thread replies
+  → in-app messages.
+
+### A.20 V1-to-V2 cutover
+All V1→V2 migration map applied (NEW→SPARK, CONSIDERATION→SCOPE,
+HOLD→FREEZE, DESIGN→MAP/SHIP per PRD presence, BUILD→SHIP,
+COMPLETE→ARCHIVE, DISCARDED→DROP). `IdeaStatusHistory` backfilled.
 
 ---
 
@@ -176,10 +212,11 @@ left:
    restored.)
 7. Coverage ratchet: 81% today — hold the line on every build, aim 85%+.
 
-### Decisions logged 2026-10-16
-- **G1 Start/End/Free enforcement: CLOSED** — decision (b) block writes but
-  allow reads + (c) pause scheduler is exactly what the code already does
-  (`expiry_gate_rejection` + scheduler skip). No work needed.
+---
+
+## D. Decisions Log
+
+### D1. Scale-phase decisions (2026-10-16)
 - **GitHub**: per-instance PAT (repo scope), direct push to the instance's
   own repo (no PR). Build target directory pushed only when there is a
   confirmed build to push.
@@ -189,6 +226,11 @@ left:
   Ideas-first.
 - **Release completion UI**: "Mark release done" shows disabled with a
   tooltip once a release is done.
+- **G1 Start/End/Free enforcement**: CLOSED — decision (b) block writes
+  but allow reads + (c) pause scheduler is exactly what the code already
+  does (`expiry_gate_rejection` + scheduler skip). No work needed.
+- **FCM**: ON HOLD — no Firebase project will be provisioned. Local
+  notifications stay.
 
 ---
 
@@ -356,73 +398,49 @@ Recommendation: **keep** until the mobile release cadence diverges
 from the backend (e.g. app-store review trains) — then split with a
 versioned API compatibility matrix, not before.
 
-
 ---
-# ROADMAP
 
-# Recommendations
+## E. Recommendations
+
 Make recommendations on
-- Implementing SSL (see /mnt/General/OpenCode/brainstormer/Guides/Guide_SecuringWithSSL.md for a potential approach)
+- Implementing SSL (see `Guides/Guide_SecuringWithSSL.md` for a potential approach)
 - A complete review of the UI to make the flow more logical
-# General Changes
-Move the Refine Idea tab to beside the Ideda tab
 
-Under System Settings
-- Allow each Instance Admin to configure use of Github (keeping it seperate for each instance)
+### General Changes
+- Move the Refine Idea tab to beside the Ideas tab (done).
+- Under System Settings: Allow each Instance Admin to configure use of Github (keeping it separate for each instance) (done — GitHub config endpoint + admin UI).
+- Under the AI Settings: Allow each Instance Admin to set the following for each stage: default AI settings for each stage, default skills, default guides (done — `stage_ai_configs` + `release_ai_configs`). Note: under each phase, the Instance Admin will be able to change these default settings (and they will be retained); Under Scale, the Instance Admin will be able to change these default settings for each Release (done — `ReleaseAIConfig`).
 
-Under the AI Settings
-- Allow each Instance Admin to set the following for each stage:
-	 - default AI settings for each stage
-	- the default skills
-	- the default guides
-Note:
-- that under each phase, the Instance Admin will be able to change these default settings (and they till be retained)
-- Under Scale, the Instance Admin will be able to change these default settings for each Release
+### Messages and Feedback
+- Allow all users in an instance to send feedback to the Instance Admin (done — messages API).
+- Allow the Instance Admin to send feedback (or forward User Feedback) to the overall Admin (including screengrabs and shortcuts) (done — messages API).
+- Allow Admins to message users (or forward User Feedback) to the overall Admin (including screengrabs and shortcuts) (done — messages API).
+- Record the Read timestamp on messages (done — `read_at` column).
+- Allow users to share links to comments (shortcut link or Message to existing user) (done — `comment_id` link on messages).
+- Allow users to share links to Ideas (shortcut link or Message to existing user) (done — `idea_id` link on messages).
 
-# Messages and Feedback
-Allow all users in an instance to send feedback to the Instance Admin
-Allow the Instance Admin to send feedback (or forward User Feedback) to the overall Admin (including screengrabs and shortcuts)
-Allow Admins to message users (or forward User Feedback) to the overall Admin (including screengrabs and shortcuts) 
-Record the Read timestamp on messages
-Allow users to share links to comments (shortcut link or Message to existing user)
-Allow users to share links to Ideas (shortcut link or Message to existing user)
-
-# Dashboard
+### Dashboard
 Create a Dashboard including
-Ideas: In Each Phase (pie graph)
-Ideas Not Voted on (list)
-Most Popular Ideas
-Most Commented on Ideas
-Comments: new / all / responses 
-Any messages: Unread / All 
+- Ideas: In Each Phase (pie graph) (done — `/home` admin phase analytics).
+- Ideas Not Voted on (list) (not yet — add `?sort=votes` filter UI).
+- Most Popular Ideas (done — `/home`).
+- Most Commented on Ideas (done — `/home`).
+- Comments: new / all / responses (done — messages + comments thread).
+- Any messages: Unread / All (done — unread badge + inbox).
 
-# Scale
-When creating a creating a Release, it should be possible to deal with Ideas individually. Currently, when an Idea is added to a Release, it is not possible to move that new Idea through phases or create a PRD / Design etc
-Once a Release has been marked as Mark Release Done, do not show that option again.  
-Allow a Instance Administrator to commit each subsequent release to GitHub (if they are using Github). Once a Release has been committed to GitHub, don't allow it to be re-committed.  Any subsequent updates will require a new Release
-Allow the Instance Admin to change AI, skills and guides settings for each Release
-Allow each Idea moved to commit to Github when it moves to Scale
+### Scale
+- When creating a Release, it should be possible to deal with Ideas individually. Currently, when an Idea is added to a Release, it is not possible to move that new Idea through phases or create a PRD / Design etc (done — inline status select per row, + Doc dropdown).
+- Once a Release has been marked as Mark Release Done, do not show that option again (done — disabled with tooltip).
+- Allow an Instance Administrator to commit each subsequent release to GitHub (if they are using Github). Once a Release has been committed to GitHub, don't allow it to be re-committed. Any subsequent updates will require a new Release (done — `github_sha` guard).
+- Allow the Instance Admin to change AI, skills and guides settings for each Release (done — `ReleaseAIConfig`).
+- Allow each Idea moved to commit to Github when it moves to Scale (done — auto-push on Scale entry).
 
-**Scale decisions logged 2026-10-16:**
-- A1 per-idea work in a release: inline status select per row + per-row
-  "+ Doc" (PRD/Design/Build) opening the run dialog for that child.
-  **DONE 2026-10-17** (committed `85f8907`, live on Site 90).
-- A2: "Mark release done" shows **disabled** once the release is done.
-  **DONE 2026-10-17** (committed `85f8907`).
-- A3/A5 GitHub: per-instance PAT, direct push of the build target
-  directory (only when a confirmed build exists); once committed, no
-  re-commit — updates need a new release. **Phase 3, not started.**
-- A4/B4 per-release AI/skills/guides overrides: **DONE 2026-10-17**
-  (`ReleaseAIConfig`, migration `4d5e6f708192`, Scale-tab editor, verified
-  live on SR3). Pending commit + full suite.
+### Documentation
+- a full readme for github (done — README restructured).
+- a "getting started" (not yet — `docs/getting-started.md`).
+- a casual users guide (done — `docs/user-guide.md`, refresh for new UI).
+- release notes (done — auto-generated to `docs/release-notes/`).
+- architecture overview (done — `docs/architecture.md`).
 
-
-# Documentation
-- a full readme for github
-- a "getting started"
-- a casual users guide
-- release notes
-- architecture overview
-
-# Testing
-Full and complete testing, including the UI
+### Testing
+- Full and complete testing, including the UI (partially — Playwright E2E scaffold at `tests/ui/test_scale_e2e.py`, expand into CI).
