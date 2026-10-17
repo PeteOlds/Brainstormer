@@ -116,6 +116,9 @@ def list_messages(user):
 @token_required
 def unread_count(user):
     """Unread inbox count for the homepage badge."""
+    from app.utils.tenancy import current_instance_id
+
+    iid = current_instance_id()
     query = apply_scope(Message.query, Message).filter(
         Message.recipient_id == user.id, Message.read_at.is_(None)
     )
@@ -182,6 +185,13 @@ def send_message(user):
             msg.instance_id = idea.instance_id
     db.session.add(msg)
     db.session.commit()
+    # Slack bridge (two-way): mirror outbound and let replies come back.
+    try:
+        from app.services.message_slack import mirror_message_to_slack
+
+        mirror_message_to_slack(msg, app_base_url=_base_url())
+    except Exception:
+        pass  # Slack is optional; never break messaging.
     return api_created({"message": msg.to_dict(base_url=_base_url())})
 
 

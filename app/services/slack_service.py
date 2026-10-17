@@ -405,6 +405,17 @@ def process_slack_event(client, event, event_id=None):
         )
 
     if event_type == "message":
+        # Message-thread replies come back as in-app messages.
+        thread_ts = event.get("thread_ts")
+        if thread_ts:
+            # Try message thread first, then idea thread.
+            from app.services.message_slack import handle_message_thread_reply
+
+            outcome = handle_message_thread_reply(
+                None, event, event_id=event.get("event_ts")
+            )
+            if outcome == "mirrored":
+                return outcome
         # Skip bot messages and our own
         if event.get("bot_id") or is_own_message(event):
             return "bot-message-ignored"
