@@ -174,6 +174,28 @@
             </div>
         </div>
     </div>
+
+    <!-- Alert modal -->
+    <div x-show="alertModalOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeAlertModal()" aria-labelledby="alert-modal-title" role="dialog" aria-modal="true" style="display: none;">
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+        <div class="relative flex min-h-full items-center justify-center p-4">
+            <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-red-200 dark:border-red-700">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
+                    <h2 id="alert-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Alert</h2>
+                    <button @click="$event.stopPropagation(); closeAlertModal()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <p class="text-sm text-slate-700 dark:text-slate-300" x-text="alertModalMessage"></p>
+                </div>
+                <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
+                    <button @click="$event.stopPropagation(); closeAlertModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -183,6 +205,9 @@ function homeApp() {
         unread: 0, admins: [], msgAdmin: '', msgBody: '', sending: false,
         phases: {}, phaseTotal: 0, isAdmin: false, currentUserId: null,
         phaseFilter: null, phaseIdeas: [],
+        alertModalOpen: false,
+        alertModalMessage: '',
+        alertModalResolve: null,
         phaseOrder: ['SPARK', 'SCOPE', 'MAP', 'SHIP', 'SCALE', 'DROP', 'FREEZE', 'ARCHIVE'],
         stageLabels: {
             SPARK: 'Spark',
@@ -329,9 +354,25 @@ function homeApp() {
                 this.msgAdmin = '';
                 await this.loadAll();
             } catch (e) {
-                alert('Failed to send: ' + e.message);
+                await this.showAlertModal('Failed to send: ' + e.message);
             } finally {
                 this.sending = false;
+            }
+        },
+
+        async showAlertModal(message) {
+            this.alertModalMessage = message;
+            this.alertModalOpen = true;
+            return new Promise(resolve => {
+                this.alertModalResolve = resolve;
+            });
+        },
+        closeAlertModal() {
+            this.alertModalOpen = false;
+            this.alertModalMessage = '';
+            if (this.alertModalResolve) {
+                this.alertModalResolve();
+                this.alertModalResolve = null;
             }
         },
     };

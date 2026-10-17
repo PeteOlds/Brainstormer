@@ -263,6 +263,12 @@ function aiSettingsApp() {
         ghSaving: false,
         ghMsg: '',
         ghErr: '',
+        confirmModalOpen: false,
+        confirmModalLoading: false,
+        confirmModalMessage: '',
+        confirmModalDetail: '',
+        confirmModalActionLabel: '',
+        confirmModalAction: null,
 
         tokenInstanceId() {
             try {
@@ -406,35 +412,37 @@ function aiSettingsApp() {
         },
 
         async clearGithub() {
-            if (!confirm('Remove GitHub settings? Finished releases can no longer be pushed.')) return;
-            this.ghSaving = true;
-            try {
-                const res = await authFetch(`/api/v1/instances/${this.instanceId}/github-config`, { method: 'DELETE' });
-                if (!res.ok) throw new Error('Remove failed');
-                await this.loadGithub();
-            } catch (e) {
-                this.ghErr = e.message || e;
-            } finally {
-                this.ghSaving = false;
-            }
+            if (!(await this.showConfirmModal('Remove GitHub settings? Finished releases can no longer be pushed.', '', 'Remove', async () => {
+                this.ghSaving = true;
+                try {
+                    const res = await authFetch(`/api/v1/instances/${this.instanceId}/github-config`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('Remove failed');
+                    await this.loadGithub();
+                } catch (e) {
+                    this.ghErr = e.message || e;
+                } finally {
+                    this.ghSaving = false;
+                }
+            }))) return;
         },
 
         async deleteTarget(id) {
-            if (!confirm('Remove this build repo? Pending previews for it will no longer write.')) return;
-            this.saveMsg = '';
-            this.saveErr = '';
-            try {
-                const res = await authFetch(`/api/v1/instances/${this.instanceId}/build-targets/${id}`, {
-                    method: 'DELETE',
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error((data && (data.message || data.msg)) || 'Delete failed');
-                this.saveMsg = 'Repo removed.';
-                setTimeout(() => { this.saveMsg = ''; }, 3000);
-                await this.loadAll();
-            } catch (e) {
-                this.saveErr = e.message || 'Delete failed.';
-            }
+            if (!(await this.showConfirmModal('Remove this build repo? Pending previews for it will no longer write.', '', 'Remove', async () => {
+                this.saveMsg = '';
+                this.saveErr = '';
+                try {
+                    const res = await authFetch(`/api/v1/instances/${this.instanceId}/build-targets/${id}`, {
+                        method: 'DELETE',
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error((data && (data.message || data.msg)) || 'Delete failed');
+                    this.saveMsg = 'Repo removed.';
+                    setTimeout(() => { this.saveMsg = ''; }, 3000);
+                    await this.loadAll();
+                } catch (e) {
+                    this.saveErr = e.message || 'Delete failed.';
+                }
+            }))) return;
         },
 
         startEdit(provider) {
@@ -560,7 +568,70 @@ function aiSettingsApp() {
                 this.stageSaving = false;
             }
         },
+
+        async showConfirmModal(message, detail, actionLabel, action) {
+            this.confirmModalMessage = message;
+            this.confirmModalDetail = detail || '';
+            this.confirmModalActionLabel = actionLabel || 'OK';
+            this.confirmModalAction = action;
+            this.confirmModalOpen = true;
+            return new Promise((resolve, reject) => {
+                this.confirmModalResolve = resolve;
+                this.confirmModalReject = reject;
+            });
+        },
+        async executeConfirmedModal() {
+            if (this.confirmModalAction) {
+                await this.confirmModalAction();
+            }
+            this.closeConfirmModal();
+        },
+        closeConfirmModal() {
+            this.confirmModalOpen = false;
+            this.confirmModalMessage = '';
+            this.confirmModalDetail = '';
+            this.confirmModalActionLabel = '';
+            this.confirmModalAction = null;
+            if (this.confirmModalResolve) {
+                this.confirmModalResolve();
+                this.confirmModalResolve = null;
+            }
+            if (this.confirmModalReject) {
+                this.confirmModalReject();
+                this.confirmModalReject = null;
+            }
+        },
+        closeConfirmModalRejected() {
+            this.closeConfirmModal();
+        },
     };
 }
 </script>
+
+    <!-- Confirm modal -->
+    <div x-show="confirmModalOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeConfirmModal()" aria-labelledby="confirm-modal-title" role="dialog" aria-modal="true" style="display: none;">
+        <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
+        <div class="relative flex min-h-full items-center justify-center p-4">
+            <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-slate-300 dark:border-slate-500">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
+                    <h2 id="confirm-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Confirm Action</h2>
+                    <button @click="$event.stopPropagation(); closeConfirmModal()" class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <p class="text-sm text-slate-700 dark:text-slate-300" x-text="confirmModalMessage"></p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400" x-text="confirmModalDetail"></p>
+                </div>
+                <div class="flex items-center justify-end p-4 border-t border-slate-200 dark:border-slate-700 sticky bottom-0 bg-white dark:bg-slate-800 rounded-b-xl">
+                    <button @click="$event.stopPropagation(); closeConfirmModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                    <button @click="$event.stopPropagation(); executeConfirmedModal()" :disabled="confirmModalLoading" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-3">
+                        <span x-show="!confirmModalLoading" x-text="confirmModalActionLabel"></span>
+                        <span x-show="confirmModalLoading">Processing…</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 {% endblock %}
