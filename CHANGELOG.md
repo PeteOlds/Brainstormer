@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.67.0] - 2026-10-18
+### Fixed
+- Plain-language stage labels: lifecycle stages now show as "Spark", "Scope", "Map", "Ship", "Scale", "Dropped", "Frozen", "Archived" instead of all-caps enum text (SPARK, SCOPE, MAP, SHIP, SCALE, DROP, FREEZE, ARCHIVE) across homepage and dashboard
+- Stage descriptions added to the "Ideas in each phase" section so users understand what each stage means
+- Contrast fixes: darken light-gray text on tinted backgrounds (status badges, readiness pills, inactive tabs) across home, dashboard, and AI Settings pages
+- AI Settings page already admin-only at route level — casual users cannot reach it
+
+## [0.66.0] - 2026-10-18
+### Added
+- Per-stage AI defaults UI on the AI Settings page (Spark/Scope/Map/Ship/Scale: provider, model, temperature, top P, max tokens, skills, guidelines) — previously API-only, now configurable per instance.
+- "Ideas not voted on" tile on the user homepage.
+- `docs/getting-started.md` — new user onboarding guide.
+- `system_settings.account` — instance-to-account link (System Settings).
+- `ideas.repository` — GitHub repository an idea's build was pushed to.
+- Admins can now message any member (not just other admins) from the homepage.
+- "Ideas in each phase" moved above other tiles on the homepage; phase rows are clickable to list ideas in that phase; child ideas show "child of <parent ref>".
+
+### Fixed
+- GitHub push unit tests: proper mocking of `InstanceGitHubConfig`/`InstanceBuildTarget` queries.
+- Missing `openChildDoc` JS function for the + Doc dropdown on release child rows.
+
+## [0.65.1] - 2026-10-18
+### Fixed
+- GitHub push task tests and `openChildDoc` JS function.
+
 ## [0.65.0] - 2026-10-17
 ### Added
 - In-app messaging (Phase 4 Talk): users message instance admins, admins message any member, read receipts, unread badge, idea/comment share links, admin picker endpoint. New user homepage (`/home`, in nav): My ideas, Most popular, Most discussed, Messages with send form, and admin-only phase analytics.

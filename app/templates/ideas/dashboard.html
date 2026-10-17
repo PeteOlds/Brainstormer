@@ -130,7 +130,7 @@
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="idea.status"></span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="stageLabel(idea.status)"></span>
                             </td>
                             <td class="px-6 py-4 text-center">
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="idea.comments_count"></span>
@@ -213,7 +213,7 @@
                 <article class="p-4 space-y-3">
                     <div class="flex items-center justify-between gap-2">
                         <span class="font-mono text-xs text-slate-500 dark:text-slate-400" x-text="idea.reference_code"></span>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="idea.status"></span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="stageLabel(idea.status)"></span>
                         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="'💬 ' + idea.comments_count"></span>
                     </div>
                     <button x-show="idea.parent_id" @click="openIdeaById(idea.parent_id)" class="text-left text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="(idea.child_kind === 'bugfix' ? 'Problem for ' : 'Improvement for ') + (idea.parent_reference_code || 'main app')"></button>
@@ -336,7 +336,7 @@
                 <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10 rounded-t-xl">
                     <div class="flex items-center space-x-3">
                         <span class="font-mono text-lg font-semibold text-slate-900 dark:text-white" x-text="selectedIdea?.reference_code"></span>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(selectedIdea?.status)" x-text="selectedIdea?.status"></span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(selectedIdea?.status)" x-text="stageLabel(selectedIdea?.status)"></span>
                     </div>
                     <button @click="closeDetailModal()"  class="p-1 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close modal">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
@@ -375,14 +375,14 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                             <span>Prompt</span>
                         </a>
-                        <button @click="activeTab = 'overview'" role="tab" :aria-selected="activeTab === 'overview'" :aria-label="'View original idea content'" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'overview' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
+                        <button @click="activeTab = 'overview'" role="tab" :aria-selected="activeTab === 'overview'" :aria-label="'View original idea content'" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'overview' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">
                             Idea
                         </button>
                         <template x-if="hasRefineTab()">
-                            <button @click="activeTab = 'REFINE'" role="tab" :aria-selected="activeTab === 'REFINE'" aria-label="Refine this idea with AI" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'REFINE' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">Refine Idea</button>
+                            <button @click="activeTab = 'REFINE'" role="tab" :aria-selected="activeTab === 'REFINE'" aria-label="Refine this idea with AI" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'REFINE' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">Refine Idea</button>
                         </template>
                         <template x-for="tab in actionTabs()" :key="tab.key">
-                            <button @click="activeTab = tab.key; if (tab.key === 'BUILD_CODE') loadManagedApp()" role="tab" :aria-selected="activeTab === tab.key" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === tab.key ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'">
+                            <button @click="activeTab = tab.key; if (tab.key === 'BUILD_CODE') loadManagedApp()" role="tab" :aria-selected="activeTab === tab.key" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === tab.key ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">
                                 <span x-text="tab.label"></span>
                                 <span x-show="actionLoading === tab.key" class="ml-1 inline-block align-middle"><svg class="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span>
                             </button>
@@ -570,8 +570,8 @@
                                                     <a href="#" @click.prevent="openIdeaById(k.id)" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="k.reference_code"></a>
                                                     <span class="text-xs px-2 py-0.5 rounded-full" :class="k.child_kind === 'bugfix' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'" x-text="k.child_kind === 'bugfix' ? 'Problem' : 'Improvement'"></span>
                                                     <span class="text-slate-700 dark:text-slate-300" x-text="k.prompt_title"></span>
-                                                    <span x-show="!isAdmin" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(k.status)" x-text="k.status"></span>
-                                                    <select x-show="isAdmin" @change="changeStatus($event.target.value, k.id); $event.target.value = k.status" :disabled="releaseBusy" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500" :class="getStatusClass(k.status)" :title="'Move ' + k.reference_code + ' to a new stage'" x-text="k.status"></select>
+                                                    <span x-show="!isAdmin" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(k.status)" x-text="stageLabel(k.status)"></span>
+                                                    <select x-show="isAdmin" @change="changeStatus($event.target.value, k.id); $event.target.value = k.status" :disabled="releaseBusy" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500" :class="getStatusClass(k.status)" :title="'Move ' + k.reference_code + ' to a new stage'" x-text="stageLabel(k.status)"></select>
                                                     <span class="text-xs text-slate-500" x-text="'💬 ' + (k.comments_count || 0)"></span>
                                                     <span x-show="isAdmin" class="flex items-center gap-1 ml-auto">
                                                         <select @change="moveChildToRelease(k.id, $event.target.value)" :disabled="releaseBusy" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-1 py-1" aria-label="Move to release">
@@ -584,10 +584,10 @@
                                                     </span>
                                                 </div>
                                                 <div class="mt-1.5 flex flex-wrap items-center gap-1">
-                                                    <span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 mr-0.5">Ready:</span>
-                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="(k.actions_run || []).includes('PRD_DOC') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500'" x-text="((k.actions_run || []).includes('PRD_DOC') ? '✓ ' : '') + 'PRD'"></span>
-                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="(k.actions_run || []).includes('DESIGN_DOC') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500'" x-text="((k.actions_run || []).includes('DESIGN_DOC') ? '✓ ' : '') + 'Design'"></span>
-                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="(k.actions_run || []).includes('BUILD_CODE') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500'" x-text="((k.actions_run || []).includes('BUILD_CODE') ? '✓ ' : '') + 'Built'"></span>
+                                                    <span class="text-[11px] font-medium text-slate-600 dark:text-slate-400 mr-0.5">Ready:</span>
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="(k.actions_run || []).includes('PRD_DOC') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'" x-text="((k.actions_run || []).includes('PRD_DOC') ? '✓ ' : '') + 'PRD'"></span>
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="(k.actions_run || []).includes('DESIGN_DOC') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'" x-text="((k.actions_run || []).includes('DESIGN_DOC') ? '✓ ' : '') + 'Design'"></span>
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="(k.actions_run || []).includes('BUILD_CODE') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'" x-text="((k.actions_run || []).includes('BUILD_CODE') ? '✓ ' : '') + 'Built'"></span>
                                                     <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="buildPillClass(k)" x-text="buildPillText(k)" :title="buildPillTitle(k)"></span>
                                                     <span x-show="isAdmin" class="inline-flex items-center gap-1 ml-auto">
                                                         <select @change="openChildDoc(k, $event.target.value); $event.target.value = ''" :disabled="releaseBusy || actionLoading === 'PRD_DOC' || actionLoading === 'DESIGN_DOC' || actionLoading === 'BUILD_CODE'" class="text-[11px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-1 py-0.5" :aria-label="'Start a document for ' + k.reference_code" title="Start a PRD, Design or Build for this idea">
@@ -3500,6 +3500,20 @@ function ideasApp() {
             // so typed answers are never lost to a failed submit.
             if (accepted) this.prdAnswers = {};
             this.activeTab = 'PRD_DOC';
+        },
+
+        stageLabels: {
+            SPARK: 'Spark',
+            SCOPE: 'Scope',
+            MAP: 'Map',
+            SHIP: 'Ship',
+            SCALE: 'Scale',
+            DROP: 'Dropped',
+            FREEZE: 'Frozen',
+            ARCHIVE: 'Archived',
+        },
+        stageLabel(status) {
+            return this.stageLabels[status] || status;
         },
 
         getStatusClass(status) {
