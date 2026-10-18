@@ -73,7 +73,13 @@ def _sync_dir(src, dst):
 
 
 @celery.task(
-    base=BaseTask, bind=True, name="app.tasks.github_tasks.push_release_to_github"
+    base=BaseTask,
+    bind=True,
+    name="app.tasks.github_tasks.push_release_to_github",
+    max_retries=3,
+    default_retry_delay=60,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def push_release_to_github(self, release_id: str):
     """Clone, sync the release's build target dir, commit, push."""

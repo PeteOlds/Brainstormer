@@ -80,7 +80,8 @@ def init_celery(app):
         task_routes={
             "app.tasks.ollama_tasks.*": {"queue": "ollama"},
             "app.tasks.maintenance_tasks.*": {"queue": "default"},
-            "app.tasks.supervision_tasks.*": {"queue": "default"},
+            "app.tasks.supervision_tasks.*": {"queue": "supervision"},
+            "app.tasks.github_tasks.*": {"queue": "github"},
         },
         beat_schedule={
             "check-due-prompts": {
@@ -92,7 +93,22 @@ def init_celery(app):
                 "schedule": 60.0,
             },
         },
-    )
+        task_default_queue="celery",
+        task_default_exchange="celery",
+        task_default_routing_key="celery",
+        task_default_exchange_type="direct",
+        # Dead Letter Exchange: tasks exceeding max_retries are routed here
+        # for inspection instead of being silently lost.
+        task_queues={
+            "celery": {"exchange": "celery", "routing_key": "celery"},
+            "ollama": {"exchange": "ollama", "routing_key": "ollama"},
+            "default": {"exchange": "default", "routing_key": "default"},
+            "supervision": {"exchange": "supervision", "routing_key": "supervision"},
+            "github": {"exchange": "github", "routing_key": "github"},
+            "dlq": {"exchange": "dlq", "routing_key": "dlq"},
+        },
+        task_ignore_result=False,
+    ),
 
     # Import tasks to register them
     from . import ollama_tasks  # noqa: F401

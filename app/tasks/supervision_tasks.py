@@ -24,7 +24,13 @@ def _now():
 
 
 @celery.task(
-    base=BaseTask, bind=True, name="app.tasks.supervision_tasks.start_managed_app"
+    base=BaseTask,
+    bind=True,
+    name="app.tasks.supervision_tasks.start_managed_app",
+    max_retries=3,
+    default_retry_delay=30,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def start_managed_app(self, app_id: str):
     """Bring one managed app up. Slow path (venv+pip+boot): generous
@@ -109,7 +115,13 @@ def start_managed_app(self, app_id: str):
 
 
 @celery.task(
-    base=BaseTask, bind=True, name="app.tasks.supervision_tasks.stop_managed_app"
+    base=BaseTask,
+    bind=True,
+    name="app.tasks.supervision_tasks.stop_managed_app",
+    max_retries=3,
+    default_retry_delay=30,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def stop_managed_app(self, app_id: str):
     """Stop one managed app. Runs on a worker so the pid resolves in the

@@ -54,6 +54,7 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     from .routes.instances import bp as instances_bp
     from .routes.messages import bp as messages_bp
     from .routes.oauth import bp as oauth_bp
+    from .routes.releases import bp as releases_bp
     from .routes.billing import bp as billing_bp
     from .routes.ollama import bp as ollama_bp
 
@@ -73,6 +74,7 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     app.register_blueprint(instances_bp, url_prefix="/api/v1")
     app.register_blueprint(oauth_bp, url_prefix="/api/v1")
     app.register_blueprint(billing_bp, url_prefix="/api/v1")
+    app.register_blueprint(releases_bp, url_prefix="/api/v1")
 
     # API error handlers
     @app.errorhandler(404)
