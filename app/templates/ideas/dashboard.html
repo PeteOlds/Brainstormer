@@ -87,6 +87,17 @@
         </div>
     </div>
 
+    <!-- Stage glossary -->
+    <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Idea stages</h3>
+        <div class="flex flex-wrap gap-2">
+            <template x-for="(description, stage) in stageDescriptions" :key="stage">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(stage)" x-text="stageLabel(stage)"></span>
+                <span class="text-[10px] text-slate-500 dark:text-slate-400" x-text="description"></span>
+            </template>
+        </div>
+    </div>
+
     <!-- Ideas Card List (desktop + mobile, unified) -->
     <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
         <div class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -370,13 +381,13 @@
                         <div class="flex items-center justify-between mb-3">
                             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Voting</h3>
                             <div class="flex items-center space-x-2">
-                                <button @click="vote(selectedIdea.id, 1)" :class="getVoteClass(selectedIdea, 1)" class="p-2 rounded-lg transition-colors" :disabled="voteLoading === selectedIdea?.id" aria-label="Upvote">
+                                <button @click="vote(selectedIdea.id, 1)" :class="getVoteClass(selectedIdea, 1)" class="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === selectedIdea?.id" aria-label="Upvote">
                                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
                                 </button>
                                 <span class="text-xs font-medium tabular-nums text-emerald-600 dark:text-emerald-400" x-text="selectedIdea?.upvotes_count"></span>
                                 <span class="text-sm font-bold tabular-nums text-slate-900 dark:text-white" x-text="selectedIdea?.net_votes"></span>
                                 <span class="text-xs font-medium tabular-nums text-red-600 dark:text-red-400" x-text="selectedIdea?.downvotes_count"></span>
-                                <button @click="vote(selectedIdea.id, -1)" :class="getVoteClass(selectedIdea, -1)" class="p-2 rounded-lg transition-colors" :disabled="voteLoading === selectedIdea?.id" aria-label="Downvote">
+                                <button @click="vote(selectedIdea.id, -1)" :class="getVoteClass(selectedIdea, -1)" class="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === selectedIdea?.id" aria-label="Downvote">
                                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                                 </button>
                             </div>
@@ -461,8 +472,8 @@
                                         <div class="mt-2 space-y-2">
                                             <textarea x-model="editDraft" rows="2" maxlength="2000" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
                                             <div class="flex gap-2">
-                                                <button @click="saveEdit(c.id)" class="px-3 py-1.5 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">Save</button>
-                                                <button @click="editingCommentId = null" class="px-3 py-1.5 min-h-[44px] text-sm text-slate-600 dark:text-slate-300">Cancel</button>
+                                                <button @click="saveEdit(c.id)" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">Save</button>
+                                                <button @click="editingCommentId = null" class="px-4 py-2 min-h-[44px] text-sm text-slate-600 dark:text-slate-300">Cancel</button>
                                             </div>
                                         </div>
                                     </template>
@@ -470,11 +481,11 @@
                                         <div>
                                             <p class="mt-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap" x-text="c.body"></p>
                                             <div class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                                                <button x-show="!c.is_deleted" @click="startReply(c.id)" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline min-h-[32px]">Reply</button>
-                                                <button x-show="canModerate(c)" @click="startEdit(c)" class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline min-h-[32px]">Edit</button>
-                                                <button x-show="isAdmin && !c.is_deleted" @click="toggleIgnore(c)" class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline min-h-[32px]" x-text="c.is_ignored ? 'Show' : 'Hide'"></button>
+                                                <button x-show="!c.is_deleted" @click="startReply(c.id)" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-4 py-2 min-h-[44px]">Reply</button>
+                                                <button x-show="canModerate(c)" @click="startEdit(c)" class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline px-4 py-2 min-h-[44px]">Edit</button>
+                                                <button x-show="isAdmin && !c.is_deleted" @click="toggleIgnore(c)" class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline px-4 py-2 min-h-[44px]" x-text="c.is_ignored ? 'Show' : 'Hide'"></button>
                                                 <span x-show="c.is_ignored" class="text-xs text-amber-600 dark:text-amber-400">Hidden from users</span>
-                                                <button x-show="canModerate(c) && !c.is_deleted" @click="deleteComment(c.id)" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline min-h-[32px]">Delete</button>
+                                                <button x-show="canModerate(c) && !c.is_deleted" @click="deleteComment(c.id)" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline px-4 py-2 min-h-[44px]">Delete</button>
                                             </div>
                                         </div>
                                     </template>
@@ -506,10 +517,10 @@
                                         <span x-show="releaseDate(rel)" class="text-xs text-slate-500 dark:text-slate-400" x-text="releaseDate(rel)"></span>
                                         <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" x-text="releaseStageLabel(rel.status)"></span>
                                         <span class="flex gap-2 ml-auto" x-show="isAdmin && rel.id">
-                                            <button @click="completeRelease(rel.id)" :disabled="releaseBusy || rel.status === 'done'" :title="rel.status === 'done' ? 'Release finished ' + releaseDate(rel) : 'Move every item in this release to shipped'" class="text-xs font-medium text-green-700 dark:text-green-400 hover:underline min-h-[32px] disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">Mark release done</button>
-                                            <button x-show="rel.github_sha" class="text-xs font-medium text-slate-500 dark:text-slate-400 min-h-[32px]" :title="'Pushed ' + (rel.github_pushed_at || '') + ' — further updates need a new release'" x-text="'On GitHub ✓'"></button>
-                                            <button x-show="!rel.github_sha && rel.status === 'done'" @click="pushRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline min-h-[32px] disabled:opacity-50" title="Push this release's build output to the instance GitHub repo">Push to GitHub</button>
-                                            <button @click="deleteRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline min-h-[32px] disabled:opacity-50">Delete</button>
+                                            <button @click="completeRelease(rel.id)" :disabled="releaseBusy || rel.status === 'done'" :title="rel.status === 'done' ? 'Release finished ' + releaseDate(rel) : 'Move every item in this release to shipped'" class="text-xs font-medium text-green-700 dark:text-green-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">Mark release done</button>
+                                            <button x-show="rel.github_sha" class="text-xs font-medium text-slate-500 dark:text-slate-400 px-4 py-2 min-h-[44px]" :title="'Pushed ' + (rel.github_pushed_at || '') + ' — further updates need a new release'" x-text="'On GitHub ✓'"></button>
+                                            <button x-show="!rel.github_sha && rel.status === 'done'" @click="pushRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50" title="Push this release's build output to the instance GitHub repo">Push to GitHub</button>
+                                            <button @click="deleteRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50">Delete</button>
                                         </span>
                                     </div>
                                     <div x-show="!scaleKids(rel.id).length" class="text-xs text-slate-500 dark:text-slate-400">Nothing here yet.</div>
@@ -554,20 +565,20 @@
                                     <div x-show="isAdmin && rel.id && scaleKids(rel.id).length" class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
                                         <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Move everything together:</p>
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <select x-model="releaseMove[rel.id]" :disabled="releaseBusy" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-2 py-1.5 min-h-[36px]" aria-label="Move all to stage">
+                                            <select x-model="releaseMove[rel.id]" :disabled="releaseBusy" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-4 py-2 min-h-[44px]" aria-label="Move all to stage">
                                                 <option value="">Move all to…</option>
                                                 <option value="SCOPE">Scope</option>
                                                 <option value="MAP">Map</option>
                                                 <option value="SHIP">Ship</option>
                                                 <option value="DROP">Drop</option>
                                             </select>
-                                            <button @click="moveReleaseAll(rel.id)" :disabled="releaseBusy || !releaseMove[rel.id]" class="px-2 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">Move</button>
+                                            <button @click="moveReleaseAll(rel.id)" :disabled="releaseBusy || !releaseMove[rel.id]" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">Move</button>
                                         </div>
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <button @click="bulkReleaseAction(rel.id, 'PRD_DOC', false)" :disabled="releaseBusy" class="px-2 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" title="Write a PRD for every idea missing one">Write PRDs</button>
-                                            <button @click="bulkReleaseAction(rel.id, 'DESIGN_DOC', false)" :disabled="releaseBusy" class="px-2 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" title="Write a design for every idea missing one">Write designs</button>
-                                            <button @click="bulkReleaseAction(rel.id, 'BUILD_CODE', false)" :disabled="releaseBusy" class="px-2 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" title="Preview code builds for every idea (nothing written yet)">Preview builds</button>
-                                            <button @click="bulkReleaseAction(rel.id, 'BUILD_CODE', true)" :disabled="releaseBusy" class="px-2 py-1.5 min-h-[36px] text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50" title="Write every ready preview into the app repo — no file picking needed">Write builds</button>
+                                            <button @click="bulkReleaseAction(rel.id, 'PRD_DOC', false)" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" title="Write a PRD for every idea missing one">Write PRDs</button>
+                                            <button @click="bulkReleaseAction(rel.id, 'DESIGN_DOC', false)" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" title="Write a design for every idea missing one">Write designs</button>
+                                            <button @click="bulkReleaseAction(rel.id, 'BUILD_CODE', false)" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" title="Preview code builds for every idea (nothing written yet)">Preview builds</button>
+                                            <button @click="bulkReleaseAction(rel.id, 'BUILD_CODE', true)" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50" title="Write every ready preview into the app repo — no file picking needed">Write builds</button>
                                         </div>
                                         <p class="text-xs text-slate-500 dark:text-slate-400">Builds go straight into the app's own repo — nobody needs to move files by hand. Afterwards restart the app to see the changes: open the Build tab, press Stop, then Start.</p>
                                     </div>
@@ -577,9 +588,9 @@
                                         <p x-show="!rel.notes" class="text-xs text-slate-500 dark:text-slate-400 mb-1">No notes yet — Rebuild writes them from the ideas above.</p>
                                         <p x-show="rel.notes_path" class="text-[11px] text-slate-400 dark:text-slate-500 mb-1">Saved to <span class="font-mono" x-text="rel.notes_path"></span></p>
                                         <div class="mt-1 flex flex-wrap gap-2">
-                                            <button x-show="rel.notes" @click="copyText(rel.notes, 'Copied')" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline min-h-[32px]">Copy</button>
-                                            <button x-show="rel.notes" @click="downloadReleaseNotes(rel)" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline min-h-[32px]">Download .md</button>
-                                            <button x-show="isAdmin && rel.id" @click="regenReleaseNotes(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline min-h-[32px] disabled:opacity-50">Rebuild</button>
+                                            <button x-show="rel.notes" @click="copyText(rel.notes, 'Copied')" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-4 py-2 min-h-[44px]">Copy</button>
+                                            <button x-show="rel.notes" @click="downloadReleaseNotes(rel)" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-4 py-2 min-h-[44px]">Download .md</button>
+                                            <button x-show="isAdmin && rel.id" @click="regenReleaseNotes(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50">Rebuild</button>
                                         </div>
                                     </div>
                                     <div x-show="isAdmin && rel.id" class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
@@ -622,15 +633,15 @@
                                             <input x-model="relAiDraft[rel.id].guidelines" type="text" placeholder="—" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                                         </div>
                                         <div class="mt-2 flex gap-2">
-                                            <button @click="saveReleaseAi(rel.id)" :disabled="releaseBusy" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save</button>
-                                            <button @click="clearReleaseAi(rel.id)" :disabled="releaseBusy || !rel.ai_config" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-50">Use stage defaults</button>
+                                            <button @click="saveReleaseAi(rel.id)" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save</button>
+                                            <button @click="clearReleaseAi(rel.id)" :disabled="releaseBusy || !rel.ai_config" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-600 dark:text-slate-300 disabled:opacity-50">Use stage defaults</button>
                                         </div>
                                     </div>
                                 </div>
                             </template>
                         </div>
                         <div x-show="isAdmin" class="mt-3">
-                            <button @click="createRelease()" :disabled="releaseBusy" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 disabled:opacity-50">New release</button>
+                            <button @click="createRelease()" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 disabled:opacity-50">New release</button>
                         </div>
                     </div>
 
@@ -657,8 +668,8 @@
                                 <span class="flex items-center gap-2">
                                     <span class="text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(docViewResult(tab.key)?.executed_at)"></span>
                                     <span class="flex items-center gap-1" x-show="docViewResult(tab.key)">
-                                        <button @click="copyDocMarkdown(tab.key)" title="Copy this document as Markdown" class="px-2 py-1 min-h-[32px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Copy MD</button>
-                                        <button @click="downloadDocMarkdown(tab.key)" title="Download this document as a .md file" class="px-2 py-1 min-h-[32px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">.md</button>
+                                        <button @click="copyDocMarkdown(tab.key)" title="Copy this document as Markdown" class="px-3 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Copy MD</button>
+                                        <button @click="downloadDocMarkdown(tab.key)" title="Download this document as a .md file" class="px-3 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">.md</button>
                                         <span class="text-xs text-green-700 dark:text-green-400" x-show="exportMsg" x-text="exportMsg"></span>
                                     </span>
                                 </span>
@@ -669,7 +680,7 @@
                                 <div class="mt-3 flex flex-wrap items-center gap-2">
                                     <span class="text-xs text-slate-500 dark:text-slate-400" x-text="docVersionLabel(tab.key)"></span>
                                     <template x-if="docVersions(tab.key).length > 1">
-                                        <select @change="setDocVersion(tab.key, $event.target.value)" aria-label="View version" class="px-2 py-1 min-h-[32px] text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                        <select @change="setDocVersion(tab.key, $event.target.value)" aria-label="View version" class="px-3 py-1.5 min-h-[44px] text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
                                             <template x-for="r in docVersions(tab.key)" :key="r.id">
                                                 <option :value="r.version" :selected="isDocVersionSelected(tab.key, r)" x-text="'v' + r.version + (r.is_current ? ' · current' : '') + (r.edited_by_id ? ' · edited' : '')"></option>
                                             </template>
@@ -677,9 +688,9 @@
                                     </template>
                                     <template x-if="isAdmin">
                                         <span class="flex gap-2">
-                                            <button @click="openRunDialog(selectedIdea.id, tab.key)" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Recreate</button>
-                                            <button @click="startDocEdit(tab.key)" x-show="tab.key !== 'BUILD_CODE'" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Edit</button>
-                                            <button @click="writeBuildFiles(tab.key)" x-show="tab.key === 'BUILD_CODE' && buildPreview(tab.key)" :disabled="actionLoading === 'BUILD_CODE'" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Write files</button>
+                                            <button @click="openRunDialog(selectedIdea.id, tab.key)" class="px-4 py-2 min-h-[44px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Recreate</button>
+                                            <button @click="startDocEdit(tab.key)" x-show="tab.key !== 'BUILD_CODE'" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Edit</button>
+                                            <button @click="writeBuildFiles(tab.key)" x-show="tab.key === 'BUILD_CODE' && buildPreview(tab.key)" :disabled="actionLoading === 'BUILD_CODE'" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Write files</button>
                                         </span>
                                     </template>
                                 </div>
@@ -741,7 +752,7 @@
                                     <div class="mt-3 flex flex-wrap items-center gap-2">
                                         <span class="text-xs text-slate-500 dark:text-slate-400" x-text="docVersionLabel(tab.key)"></span>
                                         <template x-if="docVersions(tab.key).length > 1">
-                                            <select @change="setDocVersion(tab.key, $event.target.value)" aria-label="View version" class="px-2 py-1 min-h-[32px] text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                            <select @change="setDocVersion(tab.key, $event.target.value)" aria-label="View version" class="px-3 py-1.5 min-h-[44px] text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
                                                 <template x-for="r in docVersions(tab.key)" :key="r.id">
                                                     <option :value="r.version" :selected="isDocVersionSelected(tab.key, r)" x-text="'v' + r.version + (r.is_current ? ' · current' : '') + (r.edited_by_id ? ' · edited' : '')"></option>
                                                 </template>
@@ -749,8 +760,8 @@
                                         </template>
                                         <template x-if="isAdmin">
                                             <span class="flex gap-2">
-                                                <button @click="openRunDialog(selectedIdea.id, tab.key)" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Recreate</button>
-                                                <button @click="writeBuildFiles(tab.key)" x-show="tab.key === 'BUILD_CODE' && buildPreview(tab.key)" :disabled="actionLoading === 'BUILD_CODE'" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Write files</button>
+                                                <button @click="openRunDialog(selectedIdea.id, tab.key)" class="px-4 py-2 min-h-[44px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Recreate</button>
+                                                <button @click="writeBuildFiles(tab.key)" x-show="tab.key === 'BUILD_CODE' && buildPreview(tab.key)" :disabled="actionLoading === 'BUILD_CODE'" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Write files</button>
                                             </span>
                                         </template>
                                     </div>
@@ -794,11 +805,11 @@
                                                 <span class="inline-block w-2.5 h-2.5 rounded-full" :class="managedAppDotClass()"></span>
                                                 <span class="text-xs text-slate-600 dark:text-slate-400" x-text="managedAppStatusText()"></span>
                                                 <span class="flex flex-wrap items-center gap-2 ml-auto">
-                                                    <button @click="configureManagedApp()" :disabled="appBusy" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 disabled:opacity-50" x-text="managedApp ? 'Update supervised setup' : 'Enable one-click run'"></button>
-                                                    <button @click="startManagedApp()" x-show="managedApp && !managedAppLive()" :disabled="appBusy" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Start</button>
-                                                    <button @click="stopManagedApp()" x-show="managedAppLive()" :disabled="appBusy" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Stop</button>
-                                                    <a :href="managedAppOpenUrl()" x-show="managedAppHealthy()" target="_blank" rel="noopener" class="px-3 py-1.5 min-h-[36px] inline-flex items-center text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Open</a>
-                                                    <button @click="loadAppLogs()" x-show="managedApp" class="px-2 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Refresh logs</button>
+                                                    <button @click="configureManagedApp()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 disabled:opacity-50" x-text="managedApp ? 'Update supervised setup' : 'Enable one-click run'"></button>
+                                                    <button @click="startManagedApp()" x-show="managedApp && !managedAppLive()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Start</button>
+                                                    <button @click="stopManagedApp()" x-show="managedAppLive()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Stop</button>
+                                                    <a :href="managedAppOpenUrl()" x-show="managedAppHealthy()" target="_blank" rel="noopener" class="px-4 py-2 min-h-[44px] inline-flex items-center text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Open</a>
+                                                    <button @click="loadAppLogs()" x-show="managedApp" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Refresh logs</button>
                                                 </span>
                                             </div>
                                             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Start launches this build here on the server and watches it — no terminal needed. Stop shuts it down again.</p>
@@ -898,8 +909,8 @@
                             </template>
                             <p x-show="docEditError" class="mt-2 text-xs text-red-600 dark:text-red-400" x-text="docEditError"></p>
                             <div class="mt-2 flex gap-2">
-                                <button @click="saveDocEdit()" :disabled="docEditSaving" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save as new version</button>
-                                <button @click="cancelDocEdit()" class="px-3 py-1.5 min-h-[36px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                                <button @click="saveDocEdit()" :disabled="docEditSaving" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save as new version</button>
+                                <button @click="cancelDocEdit()" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
                             </div>
                         </div>
                     </template>
@@ -1035,24 +1046,32 @@
                 </div>
                 
                 <div class="flex-1 overflow-y-auto p-4 space-y-4">
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Enter your idea manually. The format matches generated ideas.</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Tell us your idea in your own words. You can add details later.</p>
                     
                     <div class="space-y-2">
                         <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Title <span class="text-red-500">*</span></label>
                         <input x-model="createIdeaTitle" type="text" maxlength="200" placeholder="e.g., AI-powered meal planning app" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Max 200 characters</p>
                     </div>
                     
                     <div class="space-y-2">
-                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Content <span class="text-red-500">*</span></label>
-                        <textarea x-model="createIdeaContent" rows="6" placeholder="Describe your idea in detail..." class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"></textarea>
+                        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Describe your idea <span class="text-red-500">*</span></label>
+                        <textarea x-model="createIdeaContent" rows="6" placeholder="What problem does it solve? Who is it for?" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"></textarea>
                     </div>
                     
-                    <template x-for="f in createIdeaFieldDefs" :key="f.key">
-                        <div class="space-y-2">
-                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400" x-text="f.label + ' (optional)'"></label>
-                            <textarea x-model="createIdeaStructured[f.key]" rows="2" :maxlength="f.max" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
-                            <p class="text-xs text-slate-500 dark:text-slate-400" x-text="'Max ' + f.max + ' characters'"></p>
+                    <button @click="showCreateDetails = !showCreateDetails" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1" :x-text="showCreateDetails ? 'Add more detail' : 'Keep it simple'">
+                        <span class="text-[10px]" x-text="showCreateDetails ? '▼' : '▶'"></span>
+                        <span x-text="showCreateDetails ? 'Add more detail' : 'Keep it simple'"></span>
+                    </button>
+                    
+                    <template x-if="showCreateDetails">
+                        <div class="border-t border-slate-200 dark:border-slate-700 pt-4 space-y-4">
+                            <template x-for="f in createIdeaFieldDefs" :key="f.key">
+                                <div class="space-y-2">
+                                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400" x-text="f.label + ' (optional)'"></label>
+                                    <textarea x-model="createIdeaStructured[f.key]" rows="2" :maxlength="f.max" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400" x-text="'Max ' + f.max + ' characters'"></p>
+                                </div>
+                            </template>
                         </div>
                     </template>
                     
@@ -1224,6 +1243,7 @@ function ideasApp() {
             { key: 'core_value_proposition', label: 'Core Value Proposition', max: 500 },
             { key: 'monetization_strategy', label: 'Monetization Strategy', max: 300 },
         ],
+        showCreateDetails: false,
 
         // Confirmation modal state (reusable for Refine/PRD)
         confirmModalOpen: false,
@@ -1256,6 +1276,7 @@ function ideasApp() {
         // shift mid-tap / mid-read.
         refreshPaused: false,
         justUpdated: false,
+        initialized: false,
 
         // Run dialog state (provider + model + skills + guidelines per run)
         runDialogOpen: false,
@@ -1411,7 +1432,8 @@ function ideasApp() {
             } finally {
                 this.loading = false;
                 this.lastUpdated = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                this.justUpdated = true;
+                this.justUpdated = !this.initialized ? false : true;
+                this.initialized = true;
                 setTimeout(() => { this.justUpdated = false; }, 3000);
             }
         },
@@ -1566,6 +1588,7 @@ function ideasApp() {
             this.createIdeaContent = '';
             this.createIdeaStructured = {};
             this.createIdeaError = '';
+            this.showCreateDetails = false;
             this.createIdeaModalOpen = true;
         },
 
@@ -1575,6 +1598,7 @@ function ideasApp() {
             this.createIdeaContent = '';
             this.createIdeaStructured = {};
             this.createIdeaError = '';
+            this.showCreateDetails = false;
         },
 
         async createIdea() {
@@ -3640,6 +3664,16 @@ function ideasApp() {
             DROP: 'Dropped',
             FREEZE: 'Frozen',
             ARCHIVE: 'Archived',
+        },
+        stageDescriptions: {
+            SPARK: 'A new idea waiting to be explored.',
+            SCOPE: 'The idea is being shaped and defined.',
+            MAP: 'A plan is being created for the idea.',
+            SHIP: 'The idea is ready to be built.',
+            SCALE: 'The idea is live as a working app.',
+            DROP: 'The idea was not taken forward.',
+            FREEZE: 'The idea is paused for now.',
+            ARCHIVE: 'The idea is stored away and closed.',
         },
         stageLabel(status) {
             return this.stageLabels[status] || status;
