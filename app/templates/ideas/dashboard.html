@@ -991,77 +991,94 @@
                     </button>
                 </div>
                 <div class="p-4 space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">AI Engine</label>
-                        <select x-model="runDialogProvider" @change="loadRunDialogModels(true)" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                            <template x-for="p in runDialogProviders" :key="p">
-                                <option :value="p" x-text="p"></option>
-                            </template>
-                        </select>
+                    <!-- Simple mode: run with defaults -->
+                    <div x-show="!runDialogAdvanced" class="text-center">
+                        <p class="text-slate-600 dark:text-slate-400 mb-4">
+                            Run with recommended settings. The idea's own stage and AI defaults will be used.
+                        </p>
+                        <button @click="$event.stopPropagation(); confirmRunDialog()" class="px-6 py-3 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-md w-full sm:w-auto">Run with recommended settings</button>
+                        <p class="mt-3 text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:underline" @click="runDialogAdvanced = true">
+                            Advanced settings →
+                        </p>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">AI Model <span class="font-normal text-slate-500 dark:text-slate-400">(blank = idea default)</span></label>
-                        <template x-if="!runDialogUnrestricted">
-                            <select x-model="runDialogModel" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                <option value="">Idea default</option>
-                                <template x-for="m in ollamaModels" :key="runDialogModelValue(m)">
-                                    <option :value="runDialogModelValue(m)" x-text="runDialogModelLabel(m)"></option>
+
+                    <!-- Advanced mode: full configuration -->
+                    <div x-show="runDialogAdvanced" class="space-y-4">
+                        <button @click="runDialogAdvanced = false" class="text-xs font-medium text-slate-500 hover:underline w-fit">
+                            ← Back to simple run
+                        </button>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">AI Engine</label>
+                            <select x-model="runDialogProvider" @change="loadRunDialogModels(true)" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                <template x-for="p in runDialogProviders" :key="p">
+                                    <option :value="p" x-text="p"></option>
                                 </template>
                             </select>
-                        </template>
-                        <template x-if="runDialogUnrestricted">
-                            <div>
-                                <input type="text" x-model="runDialogFreeModel" placeholder="Type any model id for this engine" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">No allowlist configured — any model id is accepted (opencode ids come from <span class="font-mono">opencode models</span> on the server host).</p>
-                            </div>
-                        </template>
-                    </div>
-                    <div x-show="runDialogActionType === 'BUILD_CODE'">
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Target repo <span class="text-red-500">*</span></label>
-                        <select x-model="runDialogTarget" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                            <option value="">Select repo…</option>
-                            <template x-for="t in runDialogTargets" :key="t.id">
-                                <option :value="t.id" x-text="t.name + ' — ' + t.path"></option>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">AI Model <span class="font-normal text-slate-500 dark:text-slate-400">(blank = idea default)</span></label>
+                            <template x-if="!runDialogUnrestricted">
+                                <select x-model="runDialogModel" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    <option value="">Idea default</option>
+                                    <template x-for="m in ollamaModels" :key="runDialogModelValue(m)">
+                                        <option :value="runDialogModelValue(m)" x-text="runDialogModelLabel(m)"></option>
+                                    </template>
+                                </select>
                             </template>
-                        </select>
-                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="!runDialogTargets.length">No repos registered yet — create the first one below.</p>
-                        <div class="mt-2">
-                            <button type="button" @click="runDialogNewRepo = !runDialogNewRepo" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="runDialogNewRepo ? 'Hide new repo form' : '+ New repo'"></button>
-                        </div>
-                        <div x-show="runDialogNewRepo" class="mt-2 space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Repo name</label>
-                                <input type="text" x-model="runDialogNewRepoName" maxlength="100" placeholder="e.g. IDEA-9603" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Project folder <span class="font-normal text-slate-500">(created automatically)</span></label>
-                                <input type="text" x-model="runDialogNewRepoPath" placeholder="e.g. /app/projects/IDEA-9603" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                            </div>
-                            <button type="button" @click="createBuildRepo()" :disabled="creatingRepo" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Register repo</button>
-                        </div>
-                    </div>
-                    <div>
-                        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Skills</span>
-                        <p x-show="!discoverySkills.length" class="text-xs text-slate-500 dark:text-slate-400">No skills available — none are installed in the server's skill folders yet.</p>
-                        <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
-                            <template x-for="s in discoverySkills" :key="s.name">
-                                <label class="flex items-start gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
-                                    <input type="checkbox" :checked="runDialogSkills.includes(s.name)" @change="toggleRunList(runDialogSkills, s.name)" class="mt-1 w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
-                                    <span><span class="block text-sm font-medium text-slate-700 dark:text-slate-300" x-text="s.name"></span><span class="block text-xs text-slate-500 dark:text-slate-400" x-text="s.description"></span></span>
-                                </label>
+                            <template x-if="runDialogUnrestricted">
+                                <div>
+                                    <input type="text" x-model="runDialogFreeModel" placeholder="Type any model id for this engine" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">No allowlist configured — any model id is accepted (opencode ids come from <span class="font-mono">opencode models</span> on the server host).</p>
+                                </div>
                             </template>
                         </div>
-                    </div>
-                    <div>
-                        <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Guidelines</span>
-                        <p x-show="!discoveryGuidelines.length" class="text-xs text-slate-500 dark:text-slate-400">No guideline files in <span class="font-mono">guidelines/</span> yet.</p>
-                        <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
-                            <template x-for="g in discoveryGuidelines" :key="g.name">
-                                <label class="flex items-center gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
-                                    <input type="checkbox" :checked="runDialogGuidelines.includes(g.name)" @change="toggleRunList(runDialogGuidelines, g.name)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
-                                    <span class="text-sm text-slate-700 dark:text-slate-300" x-text="g.name"></span>
-                                </label>
-                            </template>
+                        <div x-show="runDialogActionType === 'BUILD_CODE'">
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Target repo <span class="text-red-500">*</span></label>
+                            <select x-model="runDialogTarget" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                <option value="">Select repo…</option>
+                                <template x-for="t in runDialogTargets" :key="t.id">
+                                    <option :value="t.id" x-text="t.name + ' — ' + t.path"></option>
+                                </template>
+                            </select>
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="!runDialogTargets.length">No repos registered yet — create the first one below.</p>
+                            <div class="mt-2">
+                                <button type="button" @click="runDialogNewRepo = !runDialogNewRepo" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="runDialogNewRepo ? 'Hide new repo form' : '+ New repo'"></button>
+                            </div>
+                            <div x-show="runDialogNewRepo" class="mt-2 space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Repo name</label>
+                                    <input type="text" x-model="runDialogNewRepoName" maxlength="100" placeholder="e.g. IDEA-9603" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Project folder <span class="font-normal text-slate-500">(created automatically)</span></label>
+                                    <input type="text" x-model="runDialogNewRepoPath" placeholder="e.g. /app/projects/IDEA-9603" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                </div>
+                                <button type="button" @click="createBuildRepo()" :disabled="creatingRepo" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Register repo</button>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Skills</span>
+                            <p x-show="!discoverySkills.length" class="text-xs text-slate-500 dark:text-slate-400">No skills available — none are installed in the server's skill folders yet.</p>
+                            <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
+                                <template x-for="s in discoverySkills" :key="s.name">
+                                    <label class="flex items-start gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                                        <input type="checkbox" :checked="runDialogSkills.includes(s.name)" @change="toggleRunList(runDialogSkills, s.name)" class="mt-1 w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                                        <span><span class="block text-sm font-medium text-slate-700 dark:text-slate-300" x-text="s.name"></span><span class="block text-xs text-slate-500 dark:text-slate-400" x-text="s.description"></span></span>
+                                    </label>
+                                </template>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Guidelines</span>
+                            <p x-show="!discoveryGuidelines.length" class="text-xs text-slate-500 dark:text-slate-400">No guideline files in <span class="font-mono">guidelines/</span> yet.</p>
+                            <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
+                                <template x-for="g in discoveryGuidelines" :key="g.name">
+                                    <label class="flex items-center gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
+                                        <input type="checkbox" :checked="runDialogGuidelines.includes(g.name)" @change="toggleRunList(runDialogGuidelines, g.name)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+                                        <span class="text-sm text-slate-700 dark:text-slate-300" x-text="g.name"></span>
+                                    </label>
+                                </template>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1324,6 +1341,7 @@ function ideasApp() {
         creatingRepo: false,
         runDialogSkills: [],
         runDialogGuidelines: [],
+        runDialogAdvanced: false,
         ollamaModels: [],
         discoverySkills: [],
         discoveryGuidelines: [],
@@ -2570,6 +2588,7 @@ function ideasApp() {
             this.runDialogNewRepoName = '';
             this.runDialogNewRepoPath = '';
             this.creatingRepo = false;
+            this.runDialogAdvanced = false;
             this.runDialogOpen = true;
             const dialogLoads = [this.loadRunDialogModels(false), this.loadDiscovery()];
             if (actionType === 'BUILD_CODE' && idea && idea.instance_id) {
@@ -2616,6 +2635,7 @@ function ideasApp() {
             this.creatingRepo = false;
             this.runDialogSkills = [];
             this.runDialogGuidelines = [];
+            this.runDialogAdvanced = false;
         },
 
         async loadRunDialogModels(resetModel) {
