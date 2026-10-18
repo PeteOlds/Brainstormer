@@ -7,12 +7,94 @@
         <button @click="loadAll()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg">Refresh</button>
     </div>
 
+    <!-- Unread banner -->
     <div x-show="unread > 0" class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4">
         <p class="text-sm font-medium text-amber-800 dark:text-amber-200">You have <span x-text="unread"></span> unread message<span x-show="unread !== 1">s</span>.</p>
     </div>
 
-    <!-- Ideas in each phase moved to the top (above other tiles) -->
-    <div x-show="isAdmin" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+    <!-- Hero: one clear primary action for new users -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 md:p-8">
+        <div class="text-center md:text-left">
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">What idea do you want to build?</h2>
+            <p class="text-slate-600 dark:text-slate-400 mb-6 max-w-xl mx-auto md:mx-0">
+                An idea is a suggestion for something to build — an app, a feature, a tool, anything. It starts as a "Spark" and moves through stages as it takes shape.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+                <button @click="openCreateIdeaModal()" class="px-6 py-3 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-md">Create your first idea</button>
+                <a href="/ideas" class="px-6 py-3 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Browse all ideas</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Your ideas list -->
+    <div x-show="isAdmin || mine.length || popular.length || discussed.length || unvoted.length" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Your ideas</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Ideas you created, voted on, or commented on.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <template x-for="i in mine" :key="i.id">
+                <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800">
+                    <div class="flex items-start gap-2">
+                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
+                        <span class="ml-auto text-xs text-slate-400">▸</span>
+                    </div>
+                    <h3 class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="i.prompt_title"></h3>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-2" :class="statusClass(i.status)" x-text="stageLabel(i.status)"></span>
+                    <template x-if="i.parent_id">
+                        <span class="text-[10px] text-slate-500 ml-1 mt-1" x-text="'child of ' + i.parent_ref"></span>
+                    </template>
+                </div>
+            </template>
+            <template x-for="i in popular" :key="i.id">
+                <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-800">
+                    <div class="flex items-start gap-2">
+                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
+                        <span class="ml-auto text-xs text-slate-400">▸</span>
+                    </div>
+                    <h3 class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="i.prompt_title"></h3>
+                    <span class="text-xs font-bold text-slate-900 dark:text-white mt-1" x-text="i.net_votes"></span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-2" :class="statusClass(i.status)" x-text="stageLabel(i.status)"></span>
+                    <template x-if="i.parent_id">
+                        <span class="text-[10px] text-slate-500 ml-1 mt-1" x-text="'child of ' + i.parent_ref"></span>
+                    </template>
+                </div>
+            </template>
+        </div>
+        <p x-show="!mine.length && !popular.length && !discussed.length && !unvoted.length" class="text-sm text-slate-500 dark:text-slate-400 mt-3">No ideas yet — create your first one above.</p>
+    </div>
+
+    <!-- Messages (secondary) -->
+    <div x-show="messages.length || admins.length" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Messages</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Latest first. Click a linked idea to open it.</p>
+        <ul class="space-y-2 mb-4" x-show="messages.length">
+            <template x-for="m in messages.slice(0, 5)" :key="m.id">
+                <li class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2 text-sm">
+                    <p class="text-xs text-slate-700 dark:text-slate-300"><span class="font-medium text-slate-700 dark:text-slate-300" x-text="m.sender"></span> · <span x-text="m.created_at ? m.created_at.slice(0, 10) : ''"></span> <span x-show="!m.read_at" class="ml-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">new</span></p>
+                    <p class="text-slate-700 dark:text-slate-300" x-text="m.body"></p>
+                    <p class="mt-1 flex gap-3">
+                        <a x-show="m.link" :href="m.link" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Open linked idea</a>
+                        <button x-show="!m.read_at && m.recipient_id === currentUserId" @click="markRead(m.id)" class="text-xs font-medium text-slate-500 hover:underline">Mark read</button>
+                    </p>
+                </li>
+            </template>
+        </ul>
+        <p x-show="!messages.length" class="text-sm text-slate-500 dark:text-slate-400 mb-3">No messages.</p>
+        <div class="space-y-2">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Message <span x-show="canMessageAnyone">anyone</span> <span x-show="!canMessageAnyone">an admin</span></p>
+            <select x-model="msgAdmin" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                <option value="">Choose a recipient…</option>
+                <template x-for="a in admins" :key="a.id">
+                    <option :value="a.id" x-text="(a.is_admin ? '(admin) ' : '') + (a.name || a.email) + ' (' + (a.role || 'user') + ')'"></option>
+                </template>
+            </select>
+            <textarea x-model="msgBody" rows="2" maxlength="2000" placeholder="Write your message…" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></textarea>
+            <button @click="sendMessage()" :disabled="sending || !msgAdmin || !msgBody.trim()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Send</button>
+        </div>
+    </div>
+
+    <!-- Admin phase overview (admin only, secondary) -->
+    <div x-show="isAdmin && phaseTotal > 0" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas in each phase</h2>
         <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Click a phase to see its ideas.</p>
         <div class="space-y-1.5">
@@ -45,109 +127,6 @@
             <p x-show="!phaseIdeas.length" class="text-sm text-slate-500 dark:text-slate-400">No ideas in this phase.</p>
         </div>
         <p x-show="!phaseTotal" class="text-sm text-slate-500 dark:text-slate-400">No ideas yet.</p>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">My ideas</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Created, voted or commented by you.</p>
-            <ul class="space-y-1.5" x-show="mine.length">
-                <template x-for="i in mine" :key="i.id">
-                    <li class="flex items-center gap-2 text-sm">
-                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
-                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(i.status)" x-text="stageLabel(i.status)"></span>
-                        <template x-if="i.parent_id">
-                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
-                        </template>
-                    </li>
-                </template>
-            </ul>
-            <p x-show="!mine.length" class="text-sm text-slate-500 dark:text-slate-400">Nothing yet — explore the ideas list.</p>
-        </div>
-
-        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Most popular</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Highest voted right now.</p>
-            <ul class="space-y-1.5" x-show="popular.length">
-                <template x-for="i in popular" :key="i.id">
-                    <li class="flex items-center gap-2 text-sm">
-                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
-                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
-                        <span class="text-xs font-bold text-slate-900 dark:text-white" x-text="i.net_votes"></span>
-                        <template x-if="i.parent_id">
-                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
-                        </template>
-                    </li>
-                </template>
-            </ul>
-            <p x-show="!popular.length" class="text-sm text-slate-500 dark:text-slate-400">No votes yet.</p>
-        </div>
-
-        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Most discussed</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Where the conversation is.</p>
-            <ul class="space-y-1.5" x-show="discussed.length">
-                <template x-for="i in discussed" :key="i.id">
-                    <li class="flex items-center gap-2 text-sm">
-                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
-                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
-                        <span class="text-xs text-slate-500" x-text="'💬 ' + (i.comments_count || 0)"></span>
-                        <template x-if="i.parent_id">
-                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
-                        </template>
-                    </li>
-                </template>
-            </ul>
-            <p x-show="!discussed.length" class="text-sm text-slate-500 dark:text-slate-400">No comments yet.</p>
-        </div>
-
-        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas not voted on</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Ideas with no votes yet — ready for your feedback.</p>
-            <ul class="space-y-1.5" x-show="unvoted.length">
-                <template x-for="i in unvoted" :key="i.id">
-                    <li class="flex items-center gap-2 text-sm">
-                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
-                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(i.status)" x-text="stageLabel(i.status)"></span>
-                        <template x-if="i.parent_id">
-                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
-                        </template>
-                    </li>
-                </template>
-            </ul>
-            <p x-show="!unvoted.length" class="text-sm text-slate-500 dark:text-slate-400">Every idea has at least one vote.</p>
-        </div>
-
-        <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Messages</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Latest first. Click a linked idea to open it.</p>
-            <ul class="space-y-2" x-show="messages.length">
-                <template x-for="m in messages.slice(0, 5)" :key="m.id">
-                    <li class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2 text-sm">
-                        <p class="text-xs text-slate-700 dark:text-slate-300"><span class="font-medium text-slate-700 dark:text-slate-300" x-text="m.sender"></span> · <span x-text="m.created_at ? m.created_at.slice(0, 10) : ''"></span> <span x-show="!m.read_at" class="ml-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">new</span></p>
-                        <p class="text-slate-700 dark:text-slate-300" x-text="m.body"></p>
-                        <p class="mt-1 flex gap-3">
-                            <a x-show="m.link" :href="m.link" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Open linked idea</a>
-                            <button x-show="!m.read_at && m.recipient_id === currentUserId" @click="markRead(m.id)" class="text-xs font-medium text-slate-500 hover:underline">Mark read</button>
-                        </p>
-                    </li>
-                </template>
-            </ul>
-            <p x-show="!messages.length" class="text-sm text-slate-500 dark:text-slate-400">No messages.</p>
-            <div class="mt-3 space-y-2">
-                <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Message <span x-show="canMessageAnyone">anyone</span> <span x-show="!canMessageAnyone">an admin</span></p>
-                <select x-model="msgAdmin" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
-                    <option value="">Choose a recipient…</option>
-                    <template x-for="a in admins" :key="a.id">
-                        <option :value="a.id" x-text="(a.is_admin ? '(admin) ' : '') + (a.name || a.email) + ' (' + (a.role || 'user') + ')'"></option>
-                    </template>
-                </select>
-                <textarea x-model="msgBody" rows="2" maxlength="2000" placeholder="Write your message…" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></textarea>
-                <button @click="sendMessage()" :disabled="sending || !msgAdmin || !msgBody.trim()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Send</button>
-            </div>
-        </div>
     </div>
 
     <!-- Phase idea detail modal (simple overlay) -->
@@ -327,6 +306,12 @@ function homeApp() {
 
         openIdea(i) {
             window.location.href = this.ideaUrl(i);
+        },
+
+        openCreateIdeaModal() {
+            // Placeholder — the create-idea modal is on the dashboard page.
+            // Navigate there so the user can create.
+            window.location.href = '/ideas';
         },
 
         async markRead(id) {
