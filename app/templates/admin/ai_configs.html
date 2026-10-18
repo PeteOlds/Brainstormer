@@ -7,7 +7,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">AI Settings</h1>
-            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Provider keys, model allowlists, budgets and spend — per instance</p>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">AI provider, model, budget and spending settings — per instance.</p>
         </div>
         <div class="mt-4 sm:mt-0 flex items-center space-x-3">
             <a href="/admin" class="px-4 py-2 min-h-[44px] inline-flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Admin Dashboard</a>
@@ -40,10 +40,10 @@
                 </div>
                 <template x-if="configs[p]">
                     <dl class="mt-3 space-y-1 text-sm text-slate-600 dark:text-slate-400">
-                        <div class="flex gap-2"><dt class="font-medium">Key:</dt><dd x-text="configs[p].has_key ? 'set (write-only)' : 'none'"></dd></div>
-                        <div class="flex gap-2"><dt class="font-medium">Models:</dt><dd x-text="(configs[p].model_allowlist || []).join(', ') || 'any'"></dd></div>
-                        <div class="flex gap-2"><dt class="font-medium">Endpoint:</dt><dd class="font-mono break-all" x-text="configs[p].endpoint || '—'"></dd></div>
-                        <div class="flex gap-2"><dt class="font-medium">Budget:</dt><dd x-text="configs[p].budget_cents != null ? (configs[p].budget_cents + '¢ / 30d') : 'none'"></dd></div>
+                        <div class="flex gap-2"><dt class="font-medium">API key:</dt><dd x-text="configs[p].has_key ? 'set (hidden after saving)' : 'none'"></dd></div>
+                        <div class="flex gap-2"><dt class="font-medium">Allowed models:</dt><dd x-text="(configs[p].model_allowlist || []).join(', ') || 'any'"></dd></div>
+                        <div class="flex gap-2"><dt class="font-medium">Custom endpoint:</dt><dd class="font-mono break-all" x-text="configs[p].endpoint || '—'"></dd></div>
+                        <div class="flex gap-2"><dt class="font-medium">Monthly cap:</dt><dd x-text="configs[p].budget_cents != null ? (configs[p].budget_cents + '¢ / 30d') : 'none'"></dd></div>
                         <div class="flex gap-2" x-show="p === 'opencode'"><dt class="font-medium">Workspace:</dt><dd x-text="configs[p].opencode_workspace || 'sandbox'"></dd></div>
                     </dl>
                 </template>
@@ -53,50 +53,51 @@
                 <template x-if="editingProvider === p && draft">
                     <div class="mt-4 space-y-3 border-t border-slate-200 dark:border-slate-700 pt-4">
                         <div x-show="p !== 'ollama'">
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API key (write-only — blank keeps current)</label>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">API key (hidden after saving — blank keeps current)</label>
                             <input type="password" x-model="draft.key" autocomplete="off" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="leave blank to keep">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Model allowlist (one per line or comma-separated; empty = unrestricted, any model id accepted)</label>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Allowed models (one per line or comma-separated; empty = any model)</label>
                             <textarea x-model="draft.allowlist" rows="2" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"></textarea>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Endpoint (optional)</label>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Custom endpoint (optional)</label>
                             <input type="text" x-model="draft.endpoint" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="opencode: http://host:4096">
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Budget (cents / 30d)</label>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Monthly spending cap</label>
                                 <input type="number" x-model="draft.budget_cents" min="0" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="none">
                             </div>
                             <div>
-                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">On budget exceeded</label>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">When budget runs out</label>
                                 <select x-model="draft.cutoff_behaviour" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                    <option value="refuse">refuse</option>
-                                    <option value="queue">queue</option>
-                                    <option value="degrade">degrade</option>
+                                    <option value="refuse">Stop new requests</option>
+                                    <option value="queue">Queue requests</option>
+                                    <option value="degrade">Use cheaper fallback model</option>
                                 </select>
                             </div>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Embedding model / degrade model (optional)</label>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Fallback models (optional)</label>
                             <div class="grid grid-cols-2 gap-3">
                                 <input type="text" x-model="draft.embedding_model" placeholder="embedding model" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                <input type="text" x-model="draft.degrade_model" placeholder="degrade model" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                <input type="text" x-model="draft.degrade_model" placeholder="cheaper model" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
                             </div>
                         </div>
                         <div x-show="p === 'opencode'">
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Workspace <span class="font-normal text-slate-500">(repo mode is Site-Admin only)</span></label>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Workspace mode</label>
                             <select x-model="draft.opencode_workspace" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
                                 <option value="sandbox">sandbox</option>
                                 <option value="repo">repo</option>
                             </select>
                         </div>
                         <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                            <input type="checkbox" x-model="draft.chat_enabled" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500"> Chat enabled
+                            <input type="checkbox" x-model="draft.chat_enabled" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500"> Enable chat for this provider
                         </label>
                         <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                            <input type="checkbox" x-model="draft.use_proxy" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500"> Route via proxy <span class="text-xs text-slate-500">(needs a provisioned virtual key — CLI only)</span>
+                            <input type="checkbox" x-model="draft.use_proxy" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500"> Route through proxy
+                            <span class="text-xs text-slate-500">(needs a provisioned virtual key — set up via CLI)</span>
                         </label>
                         <div class="flex gap-2">
                             <button @click="saveEdit()" :disabled="saving" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save</button>
@@ -110,10 +111,10 @@
 
     <div x-show="!fatal && instanceId" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white">GitHub</h2>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Repo this instance pushes finished releases to. Needs a personal access token with repo scope — it is stored encrypted and never shown again.</p>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">GitHub repository this instance pushes finished releases to. Needs a personal access token with repo scope — it is stored encrypted and never shown again.</p>
         <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Repo (owner/name)</label>
+                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">GitHub repository (owner/name)</label>
                 <input x-model="ghDraft.repo" type="text" placeholder="e.g. my-org/my-app" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
             </div>
             <div>
@@ -121,7 +122,7 @@
                 <input x-model="ghDraft.branch" type="text" placeholder="main" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Personal access token <span class="font-normal" x-show="ghHasPat">(saved ✓ — leave blank to keep it)</span></label>
+                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">GitHub access token <span class="font-normal" x-show="ghHasPat">(saved ✓ — leave blank to keep it)</span></label>
                 <input x-model="ghDraft.pat" type="password" autocomplete="new-password" placeholder="ghp_…" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
             </div>
         </div>
@@ -154,7 +155,7 @@
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Provider</label>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">AI provider</label>
                     <select x-model="stageDraft.provider" class="block w-full px-3 py-2 min-h-[36px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                         <option value="">inherit</option>
                         <template x-for="prov in providers" :key="prov">
