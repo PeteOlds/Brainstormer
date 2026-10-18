@@ -11,7 +11,8 @@
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400"><span class="font-semibold tabular-nums text-slate-700 dark:text-slate-300" x-text="total"></span> matching / <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-300" x-text="totalIdeas"></span> total ideas</p>
         </div>
         <div class="mt-4 sm:mt-0 flex items-center space-x-3">
-            <span class="text-xs text-slate-500 dark:text-slate-400" x-show="lastUpdated">Updated <span x-text="lastUpdated"></span> · auto-refreshes</span>
+            <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400" x-show="justUpdated">✓ Just updated</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400" x-show="lastUpdated && !justUpdated">Updated <span x-text="lastUpdated"></span> · auto-refreshes</span>
             <template x-if="canCreateIdeas">
                 <button @click="openCreateIdeaModal()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 border border-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center" aria-label="Create new idea manually">
                     <span>Create Idea</span>
@@ -76,186 +77,109 @@
         </div>
     </div>
 
-    <!-- Ideas Table (desktop) / stacked cards (mobile, §8.6) -->
+    <!-- Ideas Card List (desktop + mobile, unified) -->
     <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div class="overflow-x-auto hidden md:block">
-            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-                <thead class="bg-slate-50 dark:bg-slate-900">
-                    <tr>
-                        <template x-if="isAdmin">
-                            <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-12">
-                                <input type="checkbox" :checked="selectedIdeaIds.length === paginatedIdeas.length && paginatedIdeas.length > 0"
-                                    :indeterminate="selectedIdeaIds.length > 0 && selectedIdeaIds.length < paginatedIdeas.length"
-                                    @click="toggleSelectAll()" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500" aria-label="Select all ideas">
-                            </th>
-                        </template>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ref</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Prompt</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Summary</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Comments</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Votes</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-                    <template x-for="idea in paginatedIdeas" :key="idea.id">
-                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-900/50">
-                            <template x-if="isAdmin">
-                                <td class="px-6 py-4 whitespace-nowrap text-center">
-                                    <input type="checkbox" :checked="selectedIdeaIds.includes(idea.id)"
-                                        @change="toggleIdeaSelection(idea.id)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500" aria-label="Select idea">
-                                </td>
-                            </template>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="font-mono text-sm text-slate-900 dark:text-white" x-text="idea.reference_code"></span>
-                                <button x-show="idea.parent_id" @click="openIdeaById(idea.parent_id)" class="mt-1 block text-left text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" :title="'Part of ' + (idea.parent_title || 'the main app') + ' — open it'" x-text="(idea.child_kind === 'bugfix' ? 'Problem for ' : 'Improvement for ') + (idea.parent_reference_code || 'main app')"></button>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400" x-text="timeAgo(idea.created_at)" :title="formatDate(idea.created_at)"></td>
-                            <td class="px-6 py-4">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200" x-text="idea.prompt_title"></span>
-                            </td>
-                            <td class="px-6 py-4 max-w-md">
-                                <button @click="openDetailModal(idea)" class="block w-full text-left cursor-pointer rounded focus:outline-none focus:ring-2 focus:ring-primary-500" :aria-label="'Read full idea ' + idea.reference_code">
-                                    <span class="block text-sm text-slate-700 dark:text-slate-300 line-clamp-2 [mask-image:linear-gradient(black_60%,transparent)]" x-text="prettySummary(idea)"></span>
-                                </button>
-                                <span class="mt-1 flex flex-wrap items-center gap-1.5">
-                                    <button x-show="hasMoreSummary(idea)" @click="openDetailModal(idea)" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 hover:underline">Read full idea →</button>
-                                    <template x-for="chip in actionChips(idea)" :key="chip.key">
-                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" :title="chip.label + ' available inside'">
-                                            <svg class="mr-0.5 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg><span x-text="chip.label"></span>
-                                        </span>
-                                    </template>
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="stageLabel(idea.status)"></span>
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="idea.comments_count"></span>
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <div class="flex items-center justify-center gap-1">
-                                    <button @click="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Upvote">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                                    </button>
-                                    <span class="text-xs font-medium tabular-nums text-emerald-600 dark:text-emerald-400" x-text="idea.upvotes_count"></span>
-                                    <span class="text-xs font-medium tabular-nums text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
-                                    <span class="text-xs font-medium tabular-nums text-red-600 dark:text-red-400" x-text="idea.downvotes_count"></span>
-                                    <button @click="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Downvote">
-                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                                    </button>
-                                </div>
-                                <div class="flex items-center justify-center gap-1 mt-1">
-                                    <span class="text-[10px] text-emerald-600 dark:text-emerald-400" x-text="idea.upvotes_count > 0 ? idea.upvotes_count + ' like' + (idea.upvotes_count !== 1 ? 's' : '') : ''"></span>
-                                    <span class="text-[10px] text-slate-900 dark:text-white" x-text="idea.net_votes !== 0 ? '·' : ''"></span>
-                                    <span class="text-[10px] text-red-600 dark:text-red-400" x-text="idea.downvotes_count > 0 ? idea.downvotes_count + ' not helpful' + (idea.downvotes_count !== 1 ? 's' : '') : ''"></span>
-                                </div>
-                                <span class="text-xs text-slate-500 dark:text-slate-400" x-show="idea.user_vote === 1 || idea.user_vote === -1" x-text="idea.user_vote === 1 ? 'You upvoted' : 'You downvoted'"></span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <div class="flex items-center justify-end space-x-2 relative">
-                                    <button @click="dropdownOpenId = dropdownOpenId === idea.id ? null : idea.id" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
-                                    </button>
-                                    <div x-show="dropdownOpenId === idea.id" @click.outside="dropdownOpenId = null" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
-                                        <button @click="openDetailModal(idea); dropdownOpenId = null" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">View Details</button>
-                                        <template x-if="isAdmin">
-                                            <div>
-                                            <hr class="border-slate-200 dark:border-slate-700 my-1">
-                                            <div class="px-4 py-1 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Change Status</div>
-                                            <select @change="changeStatus($event.target.value, idea.id); dropdownOpenId = null" class="w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" aria-label="Change status">
-                                                <option value="">Select status...</option>
-                                                <option value="SPARK">Spark</option>
-                                                <option value="SCOPE">Scope</option>
-                                                <option value="MAP">Map</option>
-                                                <option value="SHIP">Ship</option>
-                                                <option value="SCALE">Scale</option>
-                                                <option value="DROP">Drop</option>
-                                                <option value="FREEZE">Freeze</option>
-                                                <option value="ARCHIVE">Archive</option>
-                                            </select>
-                                            <hr class="border-slate-200 dark:border-slate-700 my-1">
-                                            <button @click="confirmDiscard(idea, () => dropdownOpenId = null)" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Discard (hidden by the default filter)">
-                                                <svg class="mr-2 h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                                Discard
-                                            </button>
-                                            <hr class="border-slate-200 dark:border-slate-700 my-1">
-                                            <template x-for="action in refinedActions" :key="action.key">
-                                                <button @click="runAction(idea.id, action.key); dropdownOpenId = null" :title="action.description" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
-                                                    <span class="font-medium" x-text="action.label"></span>
-                                                    <span class="ml-2 text-xs text-slate-500" x-show="idea.actions_run.includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
-                                                </button>
-                                            </template>
-                                            </div>
-                                        </template>
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                    </template>
-                    <tr x-show="filteredIdeas.length === 0 && !loading">
-                        <td :colspan="isAdmin ? 9 : 8" class="px-6 py-12 text-center">
-                            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                            <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No ideas found</h3>
-                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">No ideas match your current filters.</p>
-                        </td>
-                    </tr>
-                    <tr x-show="loading">
-                        <td :colspan="isAdmin ? 9 : 8" class="px-6 py-12 text-center">
-                            <svg class="animate-spin mx-auto h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Loading ideas...</p>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Mobile stacked cards: full summary, no truncation -->
-        <div class="md:hidden divide-y divide-slate-200 dark:divide-slate-700">
+        <div class="divide-y divide-slate-200 dark:divide-slate-700">
             <template x-for="idea in paginatedIdeas" :key="idea.id">
-                <article class="p-4 space-y-3">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="font-mono text-xs text-slate-500 dark:text-slate-400" x-text="idea.reference_code"></span>
+                <article @click="openDetailModal(idea)" class="p-4 space-y-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors" :aria-label="'Open idea ' + idea.reference_code" role="button" tabindex="0" @keydown.enter="openDetailModal(idea)" @keydown.space.prevent="openDetailModal(idea)">
+                    <!-- Header row: reference + status + actions -->
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <template x-if="isAdmin">
+                                <span class="font-mono text-xs text-slate-500 dark:text-slate-400 truncate" x-text="idea.reference_code"></span>
+                                <input type="checkbox" :checked="selectedIdeaIds.includes(idea.id)"
+                                    @change="toggleIdeaSelection(idea.id)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500" aria-label="Select idea">
+                            </template>
+                            <span x-show="!isAdmin || idea.parent_id" class="font-mono text-xs text-slate-500 dark:text-slate-400 truncate" x-text="idea.reference_code"></span>
+                            <button x-show="idea.parent_id" @click.stop="openIdeaById(idea.parent_id)" class="text-left text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" :title="'Part of ' + (idea.parent_title || 'the main app') + ' — open it'" x-text="(idea.child_kind === 'bugfix' ? 'Problem for ' : 'Improvement for ') + (idea.parent_reference_code || 'main app')"></button>
+                        </div>
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="stageLabel(idea.status)"></span>
-                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="'💬 ' + idea.comments_count"></span>
                     </div>
-                    <button x-show="idea.parent_id" @click="openIdeaById(idea.parent_id)" class="text-left text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="(idea.child_kind === 'bugfix' ? 'Problem for ' : 'Improvement for ') + (idea.parent_reference_code || 'main app')"></button>
-                    <p class="text-sm text-slate-700 dark:text-slate-300" x-text="prettySummary(idea)"></p>
-                    <span x-show="actionChips(idea).length" class="flex flex-wrap items-center gap-1.5">
-                        <template x-for="chip in actionChips(idea)" :key="chip.key">
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                                <svg class="mr-0.5 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg><span x-text="chip.label"></span>
-                            </span>
-                        </template>
-                    </span>
+
+                    <!-- Title -->
+                    <h3 class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="idea.prompt_title"></h3>
+
+                    <!-- Prompt chip -->
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200" x-text="idea.prompt_title"></span>
+
+                    <!-- Summary -->
+                    <button @click.stop="openDetailModal(idea)" class="block w-full text-left cursor-pointer rounded focus:outline-none focus:ring-2 focus:ring-primary-500" :aria-label="'Read full idea ' + idea.reference_code">
+                        <span class="block text-sm text-slate-700 dark:text-slate-300 line-clamp-2 [mask-image:linear-gradient(black_60%,transparent)]" x-text="prettySummary(idea)"></span>
+                        <span class="mt-1 flex flex-wrap items-center gap-1.5">
+                            <button x-show="hasMoreSummary(idea)" @click.stop="openDetailModal(idea)" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 hover:underline">Read full idea →</button>
+                            <template x-for="chip in actionChips(idea)" :key="chip.key">
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" :title="chip.label + ' available inside'">
+                                    <svg class="mr-0.5 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg><span x-text="chip.label"></span>
+                                </span>
+                            </template>
+                        </span>
+                    </button>
+
+                    <!-- Meta row: comments + votes -->
                     <div class="flex items-center justify-between gap-2">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 truncate" x-text="idea.prompt_title"></span>
-                        <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400" x-text="timeAgo(idea.created_at)"></span>
-                    </div>
-                    <div class="flex items-center justify-between gap-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="'💬 ' + idea.comments_count"></span>
                         <div class="flex items-center space-x-1">
-                            <button @click="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" :disabled="voteLoading === idea.id" aria-label="Upvote">
+                            <button @click.stop="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Like this idea">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
                             </button>
                             <span class="text-[10px] font-medium tabular-nums text-emerald-600 dark:text-emerald-400" x-text="idea.upvotes_count"></span>
                             <span class="text-xs font-bold tabular-nums text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
                             <span class="text-[10px] font-medium tabular-nums text-red-600 dark:text-red-400" x-text="idea.downvotes_count"></span>
-                            <button @click="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" :disabled="voteLoading === idea.id" aria-label="Downvote">
+                            <button @click.stop="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Not helpful">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
                         </div>
-                        <div class="flex items-center justify-center gap-1 mt-1">
+                        <div class="flex items-center justify-center gap-1 ml-auto">
                             <span class="text-[9px] text-emerald-600 dark:text-emerald-400" x-text="idea.upvotes_count > 0 ? idea.upvotes_count + ' like' + (idea.upvotes_count !== 1 ? 's' : '') : ''"></span>
                             <span class="text-[9px] text-slate-900 dark:text-white" x-text="idea.net_votes !== 0 ? '·' : ''"></span>
                             <span class="text-[9px] text-red-600 dark:text-red-400" x-text="idea.downvotes_count > 0 ? idea.downvotes_count + ' not helpful' + (idea.downvotes_count !== 1 ? 's' : '') : ''"></span>
                         </div>
-                        <button @click="openDetailModal(idea)" class="px-4 py-2 min-h-[44px] text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">Details</button>
                     </div>
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400" x-show="idea.user_vote === 1 || idea.user_vote === -1" x-text="idea.user_vote === 1 ? 'You upvoted' : 'You downvoted'"></span>
+
+                    <!-- Admin actions dropdown -->
+                    <template x-if="isAdmin">
+                        <div class="flex items-center justify-end gap-2 mt-1">
+                            <button @click="dropdownOpenId = dropdownOpenId === idea.id ? null : idea.id" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+                            </button>
+                            <div x-show="dropdownOpenId === idea.id" @click.outside="dropdownOpenId = null" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
+                                <button @click="openDetailModal(idea); dropdownOpenId = null" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">View Details</button>
+                                <hr class="border-slate-200 dark:border-slate-700 my-1">
+                                <div class="px-4 py-1 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Change Status</div>
+                                <select @change="changeStatus($event.target.value, idea.id); dropdownOpenId = null" class="w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500" aria-label="Change status">
+                                    <option value="">Select status...</option>
+                                    <option value="SPARK">Spark</option>
+                                    <option value="SCOPE">Scope</option>
+                                    <option value="MAP">Map</option>
+                                    <option value="SHIP">Ship</option>
+                                    <option value="SCALE">Scale</option>
+                                    <option value="DROP">Drop</option>
+                                    <option value="FREEZE">Freeze</option>
+                                    <option value="ARCHIVE">Archive</option>
+                                </select>
+                                <hr class="border-slate-200 dark:border-slate-700 my-1">
+                                <button @click="confirmDiscard(idea, () => dropdownOpenId = null)" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Discard (hidden by the default filter)">
+                                    <svg class="mr-2 h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                    Discard
+                                </button>
+                                <hr class="border-slate-200 dark:border-slate-700 my-1">
+                                <template x-for="action in refinedActions" :key="action.key">
+                                    <button @click="runAction(idea.id, action.key); dropdownOpenId = null" :title="action.description" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+                                        <span class="font-medium" x-text="action.label"></span>
+                                        <span class="ml-2 text-xs text-slate-500" x-show="idea.actions_run.includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
+                                    </button>
+                                </template>
+                                </div>
+                            </div>
+                        </template>
+                    </template>
                 </article>
             </template>
+
+            <!-- Empty / loading states -->
             <div x-show="filteredIdeas.length === 0 && !loading" class="px-6 py-12 text-center">
+                <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                 <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No ideas found</h3>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">No ideas match your current filters.</p>
             </div>
@@ -263,8 +187,6 @@
                 <svg class="animate-spin mx-auto h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Loading ideas...</p>
             </div>
-        </div>
-
         </div>
 
         <!-- Bulk Actions Bar (Admin only, fixed at bottom when selections exist) -->
@@ -997,13 +919,13 @@
                             Run with recommended settings. The idea's own stage and AI defaults will be used.
                         </p>
                         <button @click="$event.stopPropagation(); confirmRunDialog()" class="px-6 py-3 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-md w-full sm:w-auto">Run with recommended settings</button>
-                        <p class="mt-3 text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:underline" @click="runDialogAdvanced = true">
+                        <p x-show="isAdmin" class="mt-3 text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:underline" @click="runDialogAdvanced = true">
                             Advanced settings →
                         </p>
                     </div>
 
-                    <!-- Advanced mode: full configuration -->
-                    <div x-show="runDialogAdvanced" class="space-y-4">
+                    <!-- Advanced mode: full configuration (admin only) -->
+                    <div x-show="isAdmin && runDialogAdvanced" class="space-y-4">
                         <button @click="runDialogAdvanced = false" class="text-xs font-medium text-slate-500 hover:underline w-fit">
                             ← Back to simple run
                         </button>
@@ -1319,6 +1241,11 @@ function ideasApp() {
 
         pendingRunExtra: null,
 
+        // Auto-refresh state: paused on user interaction so content doesn't
+        // shift mid-tap / mid-read.
+        refreshPaused: false,
+        justUpdated: false,
+
         // Run dialog state (provider + model + skills + guidelines per run)
         runDialogOpen: false,
         runDialogIdeaId: null,
@@ -1400,17 +1327,35 @@ function ideasApp() {
             // Deep link from admin activity: ?idea=<id> opens the detail modal.
             const qIdea = query.get('idea');
             if (qIdea) await this.openIdeaById(qIdea);
+            // Deep link from home: ?new=true opens the create idea modal inline.
+            if (query.get('new')) {
+                this.openCreateIdeaModal();
+            }
             // Live updates: refresh the list every 30s while the page is
             // visible and no modal is open, so new ideas appear by themselves.
-            setInterval(() => {
-                if (!this.detailModalOpen && document.visibilityState === 'visible' && !this.loading) {
-                    this.loadIdeas();
-                }
-            }, 30000);
+            // Pauses on user interaction so content doesn't shift mid-tap.
+            let refreshTimer = null;
+            const startRefresh = () => {
+                if (refreshTimer) return;
+                refreshTimer = setInterval(() => {
+                    if (!this.refreshPaused && document.visibilityState === 'visible' && !this.loading && !this.detailModalOpen && !this.runDialogOpen && !this.confirmModalOpen && !this.createIdeaModalOpen) {
+                        this.loadIdeas();
+                    }
+                }, 30000);
+            };
+            const pauseRefresh = () => { this.refreshPaused = true; };
+            const resumeRefresh = () => { this.refreshPaused = false; };
+            startRefresh();
             document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible' && !this.detailModalOpen && !this.loading) {
+                if (document.visibilityState === 'visible' && !this.refreshPaused && !this.loading && !this.detailModalOpen && !this.runDialogOpen && !this.confirmModalOpen && !this.createIdeaModalOpen) {
                     this.loadIdeas();
                 }
+            });
+            // Pause auto-refresh on any user interaction so content doesn't
+            // shift mid-tap / mid-read.
+            ['mousedown','keydown','scroll','touchstart'].forEach((ev) => {
+                window.addEventListener(ev, pauseRefresh, { passive: true, once: true });
+                window.addEventListener(ev, resumeRefresh, { passive: true });
             });
             // Auto-refresh when filters change (reset to first page: the
             // server paginates, so a stale page could be empty).
@@ -1455,6 +1400,8 @@ function ideasApp() {
             } finally {
                 this.loading = false;
                 this.lastUpdated = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                this.justUpdated = true;
+                setTimeout(() => { this.justUpdated = false; }, 3000);
             }
         },
         

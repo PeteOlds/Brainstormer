@@ -314,9 +314,8 @@ function homeApp() {
         },
 
         openCreateIdeaModal() {
-            // Placeholder — the create-idea modal is on the dashboard page.
-            // Navigate there so the user can create.
-            window.location.href = '/ideas';
+            // Navigate to dashboard with ?new=true so the create modal opens inline.
+            window.location.href = '/ideas?new=true';
         },
 
         async markRead(id) {
