@@ -127,6 +127,7 @@
             <p x-show="!phaseIdeas.length" class="text-sm text-slate-500 dark:text-slate-400">No ideas in this phase.</p>
         </div>
         <p x-show="!phaseTotal" class="text-sm text-slate-500 dark:text-slate-400">No ideas yet.</p>
+        <p x-show="adminHint" class="text-sm text-red-600 dark:text-red-400 mt-2" x-text="adminHint"></p>
     </div>
 
     <!-- Phase idea detail modal (simple overlay) -->
@@ -184,6 +185,7 @@ function homeApp() {
         unread: 0, admins: [], msgAdmin: '', msgBody: '', sending: false,
         phases: {}, phaseTotal: 0, isAdmin: false, currentUserId: null,
         phaseFilter: null, phaseIdeas: [],
+        adminHint: '',
         alertModalOpen: false,
         alertModalMessage: '',
         alertModalResolve: null,
@@ -219,6 +221,9 @@ function homeApp() {
                 }
                 const probe = await authFetch('/api/v1/admin/stats');
                 this.isAdmin = probe.ok;
+                if (!probe.ok) {
+                    this.adminHint = 'Admin features unavailable — you may not have instance-admin access.';
+                }
             } catch (e) { /* logged out: sections stay empty */ }
             await this.loadAll();
         },
