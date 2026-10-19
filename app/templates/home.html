@@ -63,7 +63,75 @@
         <p x-show="!mine.length && !popular.length && !discussed.length && !unvoted.length" class="text-sm text-slate-500 dark:text-slate-400 mt-3">No ideas yet — create your first one above.</p>
     </div>
 
-    <!-- Alert modal -->
+    
+    <!-- Messages (secondary) -->
+    <div x-show="messages.length || admins.length" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Messages</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Latest first. Click a linked idea to open it.</p>
+        <ul class="space-y-2 mb-4" x-show="messages.length">
+            <template x-for="m in messages.slice(0, 5)" :key="m.id">
+                <li class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2 text-sm">
+                    <p class="text-xs text-slate-700 dark:text-slate-300"><span class="font-medium text-slate-700 dark:text-slate-300" x-text="m.sender"></span> · <span x-text="m.created_at ? m.created_at.slice(0, 10) : ''"></span> <span x-show="!m.read_at" class="ml-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">new</span></p>
+                    <p class="text-slate-700 dark:text-slate-300" x-text="m.body"></p>
+                    <p class="mt-1 flex gap-3">
+                        <a x-show="m.link" :href="m.link" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Open linked idea</a>
+                        <button x-show="!m.read_at && m.recipient_id === currentUserId" @click="markRead(m.id)" class="text-xs font-medium text-slate-500 hover:underline">Mark read</button>
+                    </p>
+                </li>
+            </template>
+        </ul>
+        <p x-show="!messages.length" class="text-sm text-slate-500 dark:text-slate-400 mb-3">No messages.</p>
+        <div class="space-y-2">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Message <span x-show="canMessageAnyone">anyone</span> <span x-show="!canMessageAnyone">an admin</span></p>
+            <select x-model="msgAdmin" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                <option value="">Choose a recipient…</option>
+                <template x-for="a in admins" :key="a.id">
+                    <option :value="a.id" x-text="(a.is_admin ? '(admin) ' : '') + (a.name || a.email) + ' (' + (a.role || 'user') + ')'"></option>
+                </template>
+            </select>
+            <textarea x-model="msgBody" rows="2" maxlength="2000" placeholder="Write your message…" class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></textarea>
+            <button @click="sendMessage()" :disabled="sending || !msgAdmin || !msgBody.trim()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Send</button>
+        </div>
+    </div>
+
+    <!-- Admin phase overview (admin only, secondary) -->
+    <div x-show="isAdmin && phaseTotal > 0" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Ideas in each phase</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Click a phase to see its ideas.</p>
+        <div class="space-y-1.5">
+            <template x-for="s in phaseOrder" :key="s">
+                <div class="flex items-center gap-2 text-sm" x-show="(phases[s] || 0) > 0" @click="showPhase(s)">
+                    <span class="w-24 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:underline" :class="statusClass(s)" x-text="stageLabel(s)"></span>
+                    <div class="flex-1 h-3 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                        <div class="h-3 rounded bg-primary-500" :style="'width: ' + phasePct(s) + '%'"></div>
+                    </div>
+                    <span class="w-10 text-right tabular-nums text-slate-700 dark:text-slate-300" x-text="phases[s] || 0"></span>
+                    <span class="ml-auto text-xs text-slate-400">▸</span>
+                </div>
+                <p class="text-[10px] text-slate-500 dark:text-slate-400 ml-26 mt-0.5" x-text="stageDescriptions[s]"></p>
+            </template>
+        </div>
+        <div class="mt-2" x-show="phaseFilter">
+            <button @click="phaseFilter = null" class="text-xs font-medium text-slate-500 hover:underline">← Clear phase filter</button>
+            <div class="mt-2 space-y-1" x-show="phaseIdeas.length">
+                <template x-for="i in phaseIdeas" :key="i.id">
+                    <div class="flex items-center gap-2 text-sm">
+                        <a :href="ideaUrl(i)" class="font-mono text-indigo-600 dark:text-indigo-400 hover:underline truncate" x-text="i.reference_code"></a>
+                        <span class="text-slate-700 dark:text-slate-300 truncate flex-1" x-text="i.prompt_title"></span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="statusClass(i.status)" x-text="stageLabel(i.status)"></span>
+                        <template x-if="i.parent_id">
+                            <span class="text-xs text-slate-500 ml-1" x-text="'child of ' + i.parent_ref"></span>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <p x-show="!phaseIdeas.length" class="text-sm text-slate-500 dark:text-slate-400">No ideas in this phase.</p>
+        </div>
+        <p x-show="!phaseTotal" class="text-sm text-slate-500 dark:text-slate-400">No ideas yet.</p>
+        <p x-show="adminHint" class="text-sm text-red-600 dark:text-red-400 mt-2" x-text="adminHint"></p>
+    </div>
+
+<!-- Alert modal -->
     <div x-show="alertModalOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeAlertModal()" aria-labelledby="alert-modal-title" role="dialog" aria-modal="true" style="display: none;">
         <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
         <div class="relative flex min-h-full items-center justify-center p-4">
@@ -89,7 +157,10 @@
 function homeApp() {
     return {
         mine: [], popular: [], discussed: [], unvoted: [],
-        unread: 0, currentUserId: null,
+        unread: 0, admins: [], msgAdmin: '', msgBody: '', sending: false,
+        phases: {}, phaseTotal: 0, isAdmin: false, currentUserId: null,
+        phaseFilter: null, phaseIdeas: [],
+        adminHint: '',
         alertModalOpen: false,
         alertModalMessage: '',
         alertModalResolve: null,
@@ -123,6 +194,13 @@ function homeApp() {
                     const u = (data.data || data).user || {};
                     this.currentUserId = u.id || null;
                 }
+                const probe = await authFetch('/api/v1/admin/stats');
+                this.isAdmin = probe.ok;
+                if (probe.ok) {
+                    const d = await probe.json();
+                    this.phases = d.counts || {};
+                    this.phaseTotal = d.total || 0;
+                }
             } catch (e) { /* logged out: sections stay empty */ }
             await this.loadAll();
         },
@@ -154,18 +232,41 @@ function homeApp() {
                     return d.data || d;
                 } catch (e) { return null; }
             };
-            const [mine, pop, dis, unv, unread] = await Promise.all([
+            const [mine, pop, dis, unv, msg, unread, phases, admins] = await Promise.all([
                 get('/api/v1/ideas?mine=true&limit=5'),
                 get('/api/v1/ideas?sort_by=-votes&limit=5'),
                 get('/api/v1/ideas?sort_by=comments&limit=5'),
                 get('/api/v1/ideas?sort_by=votes&limit=20'),
+                get('/api/v1/messages?limit=20'),
                 get('/api/v1/messages/unread-count'),
+                get('/api/v1/ideas/phase-counts'),
+                get('/api/v1/messages/admins'),
             ]);
             if (mine) this.mine = mine.ideas || [];
             if (pop) this.popular = pop.ideas || [];
             if (dis) this.discussed = dis.ideas || [];
             if (unv) this.unvoted = (unv.ideas || []).filter((i) => (i.net_votes || 0) === 0);
+            if (msg) this.messages = msg.messages || [];
             if (unread) this.unread = unread.unread || 0;
+            if (phases) {
+                this.phases = phases.counts || {};
+                this.phaseTotal = phases.total || 0;
+            }
+            if (admins) {
+                this.admins = ((admins.data || admins).admins || []).filter((u) => u.id !== this.currentUserId);
+                this.canMessageAnyone = this.admins.some((a) => !a.is_admin);
+            }
+        },
+
+        showPhase(stage) {
+            this.phaseFilter = stage;
+            this.phaseIdeas = [];
+            authFetch(`/api/v1/ideas?status=${stage}&limit=20`).then(async (r) => {
+                if (r.ok) {
+                    const d = await r.json();
+                    this.phaseIdeas = d.ideas || [];
+                }
+            });
         },
 
         openIdea(i) {
@@ -173,8 +274,39 @@ function homeApp() {
         },
 
         openCreateIdeaModal() {
-            // Navigate to dashboard with ?new=true so the create modal opens inline.
+            // Navigate to dashboard with ?new=true so the create modal opens inline
             window.location.href = '/ideas?new=true';
+        },
+
+        async markRead(id) {
+            try {
+                await authFetch(`/api/v1/messages/${id}/read`, { method: 'PATCH' });
+                await this.loadAll();
+            } catch (e) { /* retry on next load */ }
+        },
+
+        async sendMessage() {
+            const body = (this.msgBody || '').trim();
+            if (!body || !this.msgAdmin) return;
+            this.sending = true;
+            try {
+                const res = await authFetch('/api/v1/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recipient_id: this.msgAdmin, body }),
+                });
+                if (!res.ok) {
+                    const d = await res.json().catch(() => ({}));
+                    throw new Error(d.message || 'Failed to send');
+                }
+                this.msgBody = '';
+                this.msgAdmin = '';
+                await this.loadAll();
+            } catch (e) {
+                await this.showAlertModal('Failed to send: ' + e.message);
+            } finally {
+                this.sending = false;
+            }
         },
 
         async showAlertModal(message) {

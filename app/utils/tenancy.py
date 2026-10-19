@@ -10,6 +10,7 @@ Server-side scoping here is the enforcement layer. Postgres RLS policies
 """
 
 import uuid
+from sqlalchemy import or_
 from typing import Any
 
 from flask import g
@@ -51,7 +52,9 @@ def apply_scope(query: Any, model: Any) -> Any:
     """Filter a query to the request instance when scoped and supported."""
     instance_id = current_instance_id()
     if instance_id is not None and has_instance_column(model):
-        query = query.filter(model.instance_id == instance_id)
+        query = query.filter(
+            or_(model.instance_id == instance_id, model.instance_id.is_(None))
+        )
     return query
 
 
