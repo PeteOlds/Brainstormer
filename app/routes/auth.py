@@ -159,7 +159,8 @@ def refresh():
 def _scoped_instance_id(user, raw):
     """Validate an optional login/refresh instance_id.
 
-    Returns the id string, None (unscoped legacy), or False (rejected).
+    Accepts either a UUID or an instance number (e.g. "90"). Returns the
+    UUID string, None (unscoped legacy), or False (rejected).
     """
     if not raw:
         return None
@@ -170,7 +171,11 @@ def _scoped_instance_id(user, raw):
 
         iid = uuid_mod.UUID(str(raw))
     except (ValueError, TypeError):
-        return False
+        # Not a UUID — try looking up by instance number (e.g. "90").
+        inst = Instance.query.filter_by(number=int(str(raw))).first()
+        if inst is None:
+            return False
+        iid = inst.id
     if not Instance.query.get(iid):
         return False
     if Membership.is_site_admin(user.id):

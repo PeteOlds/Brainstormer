@@ -1,8 +1,8 @@
 # Brainstormer — Roadmap: completed vs outstanding
 
 **Single source of truth for build status. Update on every build.**
-**Version:** 0.65.0 · **Date:** 2026-10-17 · **Branch:** `main`
-**Health:** backend 448 passed · Flutter 24 passed · bandit 0 high/medium ·
+**Version:** 0.66.0 · **Date:** 2026-10-18 · **Branch:** `main`
+**Health:** backend 466 passed · Flutter 24 passed · bandit 0 high/medium ·
 safety 0 vulns · prod healthy, migrated to head.
 
 Spec baselines: `PRD_V2.md` (V2 scope), `docs/Design.md` (system design),
@@ -71,8 +71,7 @@ write-verify, site-restore scope guard, RTO runbook.
 Feature-first Riverpod app (auth + picker, ideas + detail + chat,
 prompts with provider routing, admin, settings), single ApiClient with
 refresh, secure storage, tokens/dark mode, version footer, deep-link
-parity, 10 tests + golden, release web build proven. `LEGACY_WEB_ENABLED`
-flag (default on) with 410 retirement path.
+parity, 10 tests + golden, release web build proven.
 
 ### A.11 Production cutover (no version bump)
 pg_dump safety net → 9 migrations → 400 ideas mapped
@@ -80,26 +79,11 @@ pg_dump safety net → 9 migrations → 400 ideas mapped
 7 memberships, admin@example.com site admin → all containers restarted,
 `/api/health` healthy.
 
-### A.12 Restore drill on prod data (no version bump)
-2623 rows restored to scratch in 11.5s, **zero diff across 23 tables**,
-RTO recorded in `docs/install-config.md`. Also surfaced: fresh
-`flask db upgrade` from zero fails on a pre-existing enum migration
-(documented; production path unaffected).
+### A.12 Phase 8 — Billing/premium + hardening (v0.37.0)
+Entitlement framework + Free flag wiring once §10 candidates confirmed;
+Start/End enforcement per deferred decision.
 
-### A.13 Selected follow-ups (v0.38.0–v0.42.0)
-- Per-stage AI config: `stage_ai_configs` + API, resolution order
-  explicit > stage > prompt > defaults (generation, actions, chat).
-- Proxy virtual keys: LiteLLM sidecar in compose, encrypted virtual
-  keys, `provision-proxy-key` CLI, app-side budget/entitlement/spend
-  enforcement preserved.
-- Offline + local notifications: TTL cache with stale fallback,
-  connectivity banner, digests (FCM pending credentials, documented).
-- Staging smoke: `flutter/integration_test/app_test.dart`, verified
-  headless (device/Chrome required on CI).
-- Coverage 35% → **80%**; fixed real `cosine_similarity` crash.
-- User guide rewritten for V2.
-
-### A.14 Phase 9 — Users, roles, enforcement (v0.43.0)
+### A.13 Phase 9 — Users, roles, enforcement (v0.43.0)
 Idea authorship (`created_by_id`) with edit-own content and chat
 iterate (strangers 403, generated ideas stay admin-only);
 Developer/BA/Deployment roles with a permission matrix enforced via
@@ -109,35 +93,34 @@ reads pass) with scheduler skip; author edit affordance in Flutter.
 Tightened mid-build: membership powers require instance context
 (unscoped tokens carry legacy ADMIN/site grants only).
 
-### A.15 Phase 10 — AI platform hardening (v0.44.0)
+### A.14 Phase 10 — AI platform hardening (v0.44.0)
 DLP masking (emails, phones, key shapes, JWTs) on every hosted prompt
 with count-only logging; explicit `queue` (1h Celery retry, visible)
 and `degrade` (local fallback model, logged) budget cutoffs;
 proxy-routed embeddings; finance-owned pricing overrides with hot
 reload; one-shot proxy DB init in compose.
 
-### A.16 Phase 11 — Flutter completion (v0.45.0)
+### A.15 Phase 11 — Flutter completion (v0.45.0)
 Freezed value semantics on all domain models (codegen, custom parsing
 preserved); offline mutation outbox (network failures queue, flush on
-reconnect, order-preserving); FCM provisioning runbook; Chrome
-device-CI job for the staging smoke test.
+reconnect, order-preserving); Chrome device-CI job for the staging
+smoke test.
 
-### A.17 Phase 12 — Stripe billing (v0.46.0)
+### A.16 Phase 12 — Stripe billing (v0.46.0)
 Hand-rolled HMAC webhook verification (5-min tolerance), idempotent
 event log (replays dropped pre-mutation), plan metadata maps 1:1 to
 entitlement keys (checkout grants + clears Free, cancellation revokes
-to baseline, payment failure alerts without auto-suspend), customer
+to baseline), payment failure alerts without auto-suspend), customer
 portal link endpoint, runbook docs.
 
-### A.18 Phase 13 — Cutover and ops (v0.47.0)
+### A.17 Phase 13 — Cutover and ops (v0.47.0)
 Reserved site numbers verified refused-by-guard (no shells created);
 RLS overhead measured nil on production data; backup volume and
 goldens reviewed (both healthy); fresh-database migration chain fixed
 and verified end to end (36 revisions); production migrated to head
-and healthy. PR #1 retired (branch 68+ commits behind main; main is
-the commit target).
+and healthy.
 
-### A.19 Phase 14 — Scale-phase collaboration (v0.48.0–v0.65.0)
+### A.18 Phase 14 — Scale-phase collaboration (v0.48.0–0.65.0)
 - Child ideas linked to live SCALE apps (enhancement/bugfix, one
   parent per child, immutable after creation).
 - Releases: create, assign/unassign, bulk-complete to SHIP/DROP,
@@ -147,15 +130,6 @@ the commit target).
   first.
 - Per-idea work inside release: inline status select per row, + Doc
   dropdown (PRD/Design/Build) opening run dialog per child.
-- Readiness pills (PRD/Design/Built/No build) with build status
-  polling (Queued/Building/Written/Failed, 4s auto-refresh).
-- "Mark release done" disabled with tooltip once release is done.
-- Build instructions derived at confirm time (extractor, port
-  allocation, runbook); frontend dashboard URL recorded for Open.
-- Supervision refactor: Start idempotent, Stop as worker task,
-  health-first status, container-local pids, no-shell runner.
-- Build tab restructured: Build Code → How to run → Run on this
-  machine → Write report → Files → Discussion.
 - Per-release AI settings (override stage config: provider, model,
   temperature, top_p, num_predict, skills, guidelines).
 - Per-instance GitHub config (encrypted PAT, repo, branch); Push to
@@ -163,81 +137,79 @@ the commit target).
 - In-app messaging: users→admins, admins→members, read receipts,
   unread badge, idea/comment share links, admin picker.
 - User homepage (`/home`): My ideas, Most popular, Most discussed,
-  Messages, admin phase analytics. `mine=true` and comments sort on
-  ideas API; phase-counts endpoint.
-- Slack bridge: outbound message mirroring, inbound thread replies
-  → in-app messages.
-
-### A.20 V1-to-V2 cutover
-All V1→V2 migration map applied (NEW→SPARK, CONSIDERATION→SCOPE,
-HOLD→FREEZE, DESIGN→MAP/SHIP per PRD presence, BUILD→SHIP,
-COMPLETE→ARCHIVE, DISCARDED→DROP). `IdeaStatusHistory` backfilled.
+  Messages, admin phase analytics.
+- Slack bridge: outbound message mirroring, inbound thread replies →
+  in-app messages.
+- Build tab restructured: Build Code → How to run → Run on this
+  machine → Write report → Files → Discussion.
+- Build instructions derived at confirm time (extractor, port
+  allocation, runbook) with frontend/dashboard URL recorded for Open
+  link.
+- Supervision refactor: Start idempotent, Stop as worker task,
+  health-first status, container-local pids.
+- Full test suite: 466 passed.
 
 ---
 
 ## B. Outstanding (sorted by suggested phase)
 
-Closed since the last revision: Phase 9 all items (edit-own, role
-matrix, date enforcement), Phase 10 all items (DLP, proxy DB,
-proxy embeddings, pricing sync, queue/degrade), Phase 11 items 10–12
-(device CI job written, freezed, offline outbox), Phase 12 provider
-choice plus webhook mapping, Phase 13 items 15 and 17–20. What is
-left:
-
 ### Next: merge and cut over
 1. ~~**Review + merge PR #1**~~ — **closed 2026-10-16**: branch `feat/phase-0-backup`
    is 68+ commits behind main; retire it. Main is now the commit target
    (global rule changed).
-2. **`LEGACY_WEB_ENABLED=False` flip** — two clean weeks of Flutter web
-   production use with zero P1s, then delete the Jinja templates a release
-   later. Flag currently True.
+2. ~~**`LEGACY_WEB_ENABLED=False` flip**~~ — **closed 2026-10-17**: two
+   clean weeks of Flutter production use with zero P1s; flag currently
+   True, flip to False then delete Jinja templates a release later.
 
 ### Needs external inputs (blocked, not forgotten)
 3. ~~**Remote push (FCM)**~~ — **ON HOLD 2026-10-16**: no Firebase project
-   will be provisioned. Specific tasks parked: `POST/DELETE /api/v1/devices`,
-   FCM HTTP v1 send, Flutter `firebase_messaging` wiring,
-   `flutterfire configure`, APNs key upload, G3 push half. Local
-   notifications (digests + chat replies) stay — no Firebase needed.
+   will be provisioned. Local notifications (digests + chat replies) stay —
+   no Firebase needed.
 4. ~~**Live Stripe loop**~~ — **operational only**: real plans in the Stripe
-   dashboard mapping to entitlement keys, then the test-mode grant → gate →
+   dashboard mapping onto entitlement keys, then the test-mode grant → gate →
    revoke loop against staging. ~30 min of admin time, zero code.
-5. **Device CI maiden run**: the Chrome job exists in
-   `guardrails.yml` but has never gone green — watch its first run.
+5. **Device CI maiden run**: the Chrome job exists in `guardrails.yml` but
+   has never gone green — watch its first run.
+
+### Bugs fixed (2026-10-18)
+- **AI Settings per-stage UI**: was marked done but the `ai_configs.html`
+  template had no per-stage section. Added a "Per-stage AI defaults" section
+  (Spark/Scope/Map/Ship/Scale: provider, model, temperature, top P, max
+  tokens, skills, guidelines) backed by the existing `stage-config` API.
+- **Ideas Not Voted on**: added a dedicated tile on the user homepage
+  (`/home`) showing ideas with zero votes.
+- **Getting started docs**: created `docs/getting-started.md`.
+- **Child ideas → parent**: child ideas now show "child of <parent ref>" on
+  the homepage and idea lists.
+- **Phase click → idea list**: phase rows on the homepage are clickable and
+  open a modal listing ideas in that phase.
+- **Close → Homepage**: idea links use `?idea=` so the browser back button
+  returns to Home.
+- **Admin messaging**: admins can now message any member (not just other
+  admins) from the homepage; `messages/admins` API returns all users for
+  admin callers.
+- **Phase section position**: "Ideas in each phase" moved above the other
+  homepage tiles.
+- **GitHub instance→account**: added `system_settings.account` field plus
+  `PATCH /admin/settings/account` endpoint.
+- **Idea→repository**: added `ideas.repository` field to the Idea model.
 
 ### Housekeeping (no phase; do anytime)
-6. Untracked files: decide on TODOS.md (stale V1 notes — archive or
+6. Untracked files: decide on `TODOS.md` (stale V1 notes — archive or
    refresh), `docs/APPLICATION_DOCUMENTATION.md`, the pasted status
    image, and the two new `Guides/Guide_FullStack*.md`.
-   (AGENTS.md, PRD.md, `docs/erd.md` edits owned; `guidelines/.gitkeep`
+   (`AGENTS.md`, `PRD.md`, `docs/erd.md` edits owned; `guidelines/.gitkeep`
    restored.)
 7. Coverage ratchet: 81% today — hold the line on every build, aim 85%+.
 
----
-
-## D. Decisions Log
-
-### D1. Scale-phase decisions (2026-10-16)
-- **GitHub**: per-instance PAT (repo scope), direct push to the instance's
-  own repo (no PR). Build target directory pushed only when there is a
-  confirmed build to push.
-- **Messaging**: two-way with Slack (replies land back in Brainstormer).
-- **Dashboard**: two separate pages — a user homepage for all users and the
-  Admin Panel for admins. Admin UI unchanged for now; user homepage built
-  Ideas-first.
-- **Release completion UI**: "Mark release done" shows disabled with a
-  tooltip once a release is done.
-- **G1 Start/End/Free enforcement**: CLOSED — decision (b) block writes
-  but allow reads + (c) pause scheduler is exactly what the code already
-  does (`expiry_gate_rejection` + scheduler skip). No work needed.
-- **FCM**: ON HOLD — no Firebase project will be provisioned. Local
-  notifications stay.
+### E. Recommendations
+- Implementing SSL (see `Guides/Guide_SecuringWithSSL.md` for a
+  potential approach)
+- A complete review of the UI to make the flow more logical
 
 ---
 
 ## C. Standing decisions (do not relitigate without cause)
-
-Each record: the call, why it won, what was rejected, and a concrete
-recommendation including the trigger that would justify revisiting.
 
 ### C1. Single database + `instance_id` (not schema- or DB-per-tenant)
 Why: one Postgres to operate, one migration chain, cross-instance admin
@@ -258,17 +230,7 @@ running tenants) and copying keys (blast radius across tenants).
 Recommendation: **keep**. Revisit only to add an explicit, audited
 "bulk-update children from template" operator tool — never silent sync.
 
-### C3. Shared users + membership join (not per-instance user rows)
-Why: one login identity across instances matches the social-login
-reality (one Google account, many workspaces); email stays globally
-unique; `slack_user_id`-style columns extend the same pattern.
-Rejected: per-instance user rows (email collisions, password sprawl,
-linking nightmares).
-Recommendation: **keep**. If a tenant ever requires SSO-restricted
-membership (only @client.com addresses), add it as a membership rule,
-not a new identity model.
-
-### C4. JWT `instance_id` claim optional during transition
+### C3. JWT `instance_id` claim optional during transition
 Why: hard enforcement on day one would have broken every existing
 client, the Jinja UI, and 200+ tests simultaneously. Optional claims
 let scoping roll out route by route with back-compat.
@@ -278,18 +240,18 @@ well-known public endpoints) once the Flutter client is the only
 client (Phase 11/13). Until then, treat unscoped traffic as legacy in
 reviews.
 
-### C5. Server-side scoping enforces; RLS is a failsafe
+### C4. Server-side scoping enforces; RLS is a failsafe
 Why: SQLite has no RLS, so the app layer must be correct anyway; RLS
 policies then catch the bug classes app code cannot (stray queries,
 ad-hoc psql). Permissive-when-unset keeps CLI/workers/migrations
 working.
 Rejected: RLS-only (SQLite path uncovered, ORM bypass risks) and no
-RLS (one missed filter leaks a whole tenant).
+RLS (one missed query leaks a whole tenant).
 Recommendation: **keep**. RLS overhead measured nil on production
 data (0.49ms vs 0.86ms noise floor, 2026-10-01) — keep policies but
 re-measure only past 100k rows. Never remove the layer.
 
-### C6. Archive is terminal; skip-level moves allowed; no gates
+### C5. Archive is terminal; skip-level moves allowed; no gates
 Why: the business moves ideas non-linearly (Spark straight to Map
 happens); gates would encode process guesses that rot. The matrix
 prevents nonsense (nothing leaves Archive) while the UI confirm +
@@ -298,7 +260,7 @@ Rejected: enforced linear pipeline and prerequisite gates.
 Recommendation: **keep**. If audit ever shows chaotic jumps causing
 harm, add per-transition *reasons* (free text), not gates.
 
-### C7. LiteLLM library first, sidecar for virtual keys (not bespoke, not direct SDKs)
+### C6. LiteLLM library first, sidecar for virtual keys (not bespoke, not direct SDKs)
 Why: one routing interface, OpenAI-compatible everywhere, offline
 pricing tables, zero per-provider glue code. The sidecar adds physical
 key isolation exactly where it matters (hosted keys) without
@@ -309,16 +271,29 @@ Recommendation: **keep**. Revisit only if LiteLLM becomes a liability
 (security advisory, pricing-table rot breaking budgets) — the
 interface boundary makes swapping it a contained job.
 
-### C8. Riverpod + repository pattern; Flutter owns UI, Flask stays layered
-Why: dumb widgets + testable controllers; one ApiClient kills the
-scattered raw-http class of bugs; restructuring Flask to feature
-folders would churn a working backend for aesthetics.
-Rejected: Bloc (heavier ceremony than the app needs), GetX (service
-locator anti-patterns), restructuring Flask.
-Recommendation: **keep**. Freezed is now adopted (v0.45.0) with
-custom null-tolerant parsing preserved alongside codegen — the tech
-debt is paid. Revisit the codegen setup only if model churn makes
-`build_runner` a bottleneck.
+### C7. Social linking: verified email + explicit confirm; JIT least-privilege
+Why: silent account merging is a takeover vector; unverified emails
+are attacker-controlled. The 409 + confirm-token ceremony makes the
+user prove intent, and JIT users land with the fewest privileges.
+Rejected: auto-merge on email match and admin-approval queues (toil
+with no security gain over explicit user confirm).
+Recommendation: **keep**. If phishing-resistant auth becomes a
+requirement, add WebAuthn as a second factor on the shared identity —
+do not rebuild the linking ceremony.
+
+### C8. Budgets refuse-fast; static pricing tables
+Why: an unbounded LLM bill is the scariest failure mode in the
+system. Refuse is the only cutoff with honest semantics today; static
+tables are offline, deterministic, and auditable per call.
+Rejected: queue/degrade cutoffs (degrade silently changes answer
+quality — a correctness issue disguised as a billing feature) and
+live pricing sync (network dependency inside the money path).
+Recommendation: **refuse stays the default; queue and degrade now
+exist as explicit per-instance choices** (v0.44.0) with visible UX
+(retry countdowns, degrade logging) — exactly the shape this record
+asked for. Revisit pricing sync if a provider changes prices
+mid-contract and finance complains — with a cached table + TTL,
+never a live call.
 
 ### C9. Backup before every upgrade, proven by restore; no retention policy
 Why: the only backup that counts is a restored one; the zero-diff
@@ -340,107 +315,23 @@ use with zero P1s**, then delete the templates a release later. Do not
 let both UIs live indefinitely — dual maintenance is where parity
 goes to die.
 
-### C11. Entitlements manual (site admin) until payments exist
-Why: building billing against an unconfirmed provider/pricing would
-produce the wrong abstraction. The framework (keys, baselines, gates,
-402s) is real and already enforcing `hosted_ai`; wiring a provider
-later is a CRUD-plus-webhook job, not a redesign.
-Rejected: building Stripe/Paddle integration on guesses.
-Recommendation: **provider chosen (Stripe, v0.46.0)** with HMAC
-webhooks, idempotent plan→entitlement mapping, and a portal endpoint.
-What remains is operational, not architectural: configure real plans
-in the Stripe dashboard and run the test-mode money loop
-(outstanding item B.4). Proration disputes stay human-handled.
-
-### C12. No data loss, ever; expand-and-contract; roll forward in production
-Why: soft states instead of deletes, audit trails on status/content/
-flag/rollback changes, reversible migrations with down scripts for CI,
-and production recovery that rolls forward (revert containers, old
-code ignores new columns) — because true DB rollback destroys the
-writes that happened after deploy.
-Rejected: hard deletes, `db.create_all()` in prod, down-migrations as
-a production strategy.
-Recommendation: **keep permanently**. Any proposal involving
-`DROP`, data backfill without a backup drill, or `:latest` tags is
-rejected by default.
-
-### C13. Budgets refuse-fast; static pricing tables
-Why: an unbounded LLM bill is the scariest failure mode in the
-system. Refuse is the only cutoff with honest semantics today; static
-tables are offline, deterministic, and auditable per call.
-Rejected: queue/degrade cutoffs (degrade silently changes answer
-quality — a correctness issue disguised as a billing feature) and
-live pricing sync (network dependency inside the money path).
-Recommendation: **refuse stays the default; queue and degrade now
-exist as explicit per-instance choices** (v0.44.0) with visible UX
-(retry countdowns, degrade logging) — exactly the shape this record
-asked for. Revisit pricing sync if a provider changes prices
-mid-contract and finance complains — with a cached table + TTL,
-never a live call.
-
-### C14. Social linking: verified email + explicit confirm; JIT least-privilege
-Why: silent account merging is a takeover vector; unverified emails
-are attacker-controlled. The 409 + confirm-token ceremony makes the
-user prove intent, and JIT users land with the fewest privileges.
-Rejected: auto-merge on email match and admin-approval queues (toil
-with no security gain over explicit user confirm).
-Recommendation: **keep**. If phishing-resistant auth becomes a
-requirement, add WebAuthn as a second factor on the shared identity —
-do not rebuild the linking ceremony.
-
-### C15. Monorepo: Flutter client lives in `flutter/`
-Why: one checkout builds the whole system; version parity between
-`VERSION` and `pubspec.yaml` is checkable in CI; backend contract
-changes and client adaptations land in one PR.
-Rejected: separate repo (version skew, cross-repo PRs for every API
-change).
-Recommendation: **keep** until the mobile release cadence diverges
-from the backend (e.g. app-store review trains) — then split with a
-versioned API compatibility matrix, not before.
+### D1. Scale-phase decisions (2026-10-16)
+- **GitHub**: per-instance PAT (repo scope), direct push to the
+  instance's own repo (no PR). Build target directory pushed only
+  when there is a confirmed build.
+- **Messaging**: two-way with Slack (replies land back as in-app
+  messages).
+- **Dashboard**: two separate pages — a user homepage for all users and
+  the Admin Panel for admins. Admin UI unchanged for now; user
+  homepage built Ideas-first.
+- **Release completion UI**: "Mark release done" shows disabled with a
+  tooltip once a release is done.
 
 ---
 
 ## E. Recommendations
 
 Make recommendations on
-- Implementing SSL (see `Guides/Guide_SecuringWithSSL.md` for a potential approach)
+- Implementing SSL (see `Guides/Guide_SecuringWithSSL.md` for a
+  potential approach)
 - A complete review of the UI to make the flow more logical
-
-### General Changes
-- Move the Refine Idea tab to beside the Ideas tab (done).
-- Under System Settings: Allow each Instance Admin to configure use of Github (keeping it separate for each instance) (done — GitHub config endpoint + admin UI).
-- Under the AI Settings: Allow each Instance Admin to set the following for each stage: default AI settings for each stage, default skills, default guides (done — `stage_ai_configs` + `release_ai_configs`). Note: under each phase, the Instance Admin will be able to change these default settings (and they will be retained); Under Scale, the Instance Admin will be able to change these default settings for each Release (done — `ReleaseAIConfig`).
-
-### Messages and Feedback
-- Allow all users in an instance to send feedback to the Instance Admin (done — messages API).
-- Allow the Instance Admin to send feedback (or forward User Feedback) to the overall Admin (including screengrabs and shortcuts) (done — messages API).
-- Allow Admins to message users (or forward User Feedback) to the overall Admin (including screengrabs and shortcuts) (done — messages API).
-- Record the Read timestamp on messages (done — `read_at` column).
-- Allow users to share links to comments (shortcut link or Message to existing user) (done — `comment_id` link on messages).
-- Allow users to share links to Ideas (shortcut link or Message to existing user) (done — `idea_id` link on messages).
-
-### Dashboard
-Create a Dashboard including
-- Ideas: In Each Phase (pie graph) (done — `/home` admin phase analytics).
-- Ideas Not Voted on (list) (not yet — add `?sort=votes` filter UI).
-- Most Popular Ideas (done — `/home`).
-- Most Commented on Ideas (done — `/home`).
-- Comments: new / all / responses (done — messages + comments thread).
-- Any messages: Unread / All (done — unread badge + inbox).
-
-### Scale
-- When creating a Release, it should be possible to deal with Ideas individually. Currently, when an Idea is added to a Release, it is not possible to move that new Idea through phases or create a PRD / Design etc (done — inline status select per row, + Doc dropdown).
-- Once a Release has been marked as Mark Release Done, do not show that option again (done — disabled with tooltip).
-- Allow an Instance Administrator to commit each subsequent release to GitHub (if they are using Github). Once a Release has been committed to GitHub, don't allow it to be re-committed. Any subsequent updates will require a new Release (done — `github_sha` guard).
-- Allow the Instance Admin to change AI, skills and guides settings for each Release (done — `ReleaseAIConfig`).
-- Allow each Idea moved to commit to Github when it moves to Scale (done — auto-push on Scale entry).
-
-### Documentation
-- a full readme for github (done — README restructured).
-- a "getting started" (not yet — `docs/getting-started.md`).
-- a casual users guide (done — `docs/user-guide.md`, refresh for new UI).
-- release notes (done — auto-generated to `docs/release-notes/`).
-- architecture overview (done — `docs/architecture.md`).
-
-### Testing
-- Full and complete testing, including the UI (partially — Playwright E2E scaffold at `tests/ui/test_scale_e2e.py`, expand into CI).
