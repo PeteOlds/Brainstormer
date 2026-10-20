@@ -134,3 +134,26 @@ def read_guideline(name: str) -> str | None:
         return path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
+
+
+def discover(user) -> dict:
+    """Discovery endpoint data: skills, guidelines, and available actions."""
+    from app.services.secondary_actions import list_actions
+
+    return {
+        "skills": list_skills(),
+        "guidelines": list_guidelines(),
+        "actions": list_actions(),
+    }
+
+
+def discover_actions(user, idea=None) -> list:
+    """List available secondary actions, optionally filtered by idea stage.
+
+    When called without an idea (global /api/v1/actions), returns all
+    registered actions. Stage gating is handled by the frontend's
+    docActionVisible() and by _check_action_allowed() on write paths.
+    """
+    from app.services.secondary_actions import list_actions
+
+    return list_actions()

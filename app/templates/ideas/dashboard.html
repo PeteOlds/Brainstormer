@@ -3521,7 +3521,7 @@ function ideasApp() {
             }
         },
 
-        startDocEdit(key) {
+        async startDocEdit(key) {
             try {
                 const cur = this.docCurrentResult(key) || this.actionTabResult(key);
                 if (!cur || !cur.id) {
