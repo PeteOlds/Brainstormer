@@ -54,11 +54,11 @@ def list_ideas(user):
 
     query = apply_scope(Idea.query, Idea)
 
-    if status and status.upper() not in ("ACTIVE_ONLY", "ALL"):
-        query = query.filter(Idea.status == status.upper())
-    elif status and status.upper() == "ACTIVE_ONLY":
+    if status and status.upper() in ("ACTIVE", "ACTIVE_ONLY"):
         # ACTIVE_ONLY is a frontend-only filter - exclude dropped/archived ideas
         query = query.filter(Idea.status.notin_(["DROP", "ARCHIVE"]))
+    elif status and status.upper() != "ALL":
+        query = query.filter(Idea.status == status.upper())
     # 'ALL' (or absent) means no status filter.
     if search:
         like = f"%{search}%"
