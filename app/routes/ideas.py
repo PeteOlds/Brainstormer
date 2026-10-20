@@ -299,8 +299,8 @@ def update_idea_status(user, idea_id):
 
     history = IdeaStatusHistory(
         idea_id=idea.id,
-        from_status=old_status,
-        to_status=idea.status,
+        old_status=old_status,
+        new_status=idea.status,
         changed_by_id=user.id,
     )
     db.session.add(history)
@@ -379,8 +379,8 @@ def bulk_update_idea_status(user):
 
         history = IdeaStatusHistory(
             idea_id=idea.id,
-            from_status=old_status,
-            to_status=new_status,
+            old_status=old_status,
+            new_status=new_status,
             changed_by_id=user.id,
         )
         db.session.add(history)
