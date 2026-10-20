@@ -147,6 +147,9 @@ class Idea(db.Model):
             "created_by_id": (str(self.created_by_id) if self.created_by_id else None),
             "parent_id": str(self.parent_id) if self.parent_id else None,
             "child_kind": self.child_kind,
+            "parent_reference_code": (
+                self.parent.reference_code if self.parent else None
+            ),
             "release_id": str(self.release_id) if self.release_id else None,
             "repository": self.repository,
             "created_at": self.created_at.isoformat() if self.created_at else None,

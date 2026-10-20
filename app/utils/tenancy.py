@@ -179,8 +179,12 @@ def set_rls_instance(instance_id: Any) -> None:
 
         from app.extensions import db
 
+        # set_config(name, value, is_local) is the parameterized equivalent of
+        # SET LOCAL; Postgres does not allow bound parameters in SET LOCAL
+        # directly, which would abort the transaction and 500 every later query.
         db.session.execute(
-            text("SET LOCAL app.instance_id = :iid"), {"iid": str(instance_id)}
+            text("SELECT set_config('app.instance_id', :iid, true)"),
+            {"iid": str(instance_id)},
         )
     except Exception:
         pass

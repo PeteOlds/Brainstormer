@@ -26,3 +26,4 @@ psycopg2-binary>=2.9.0
 slack-sdk>=3.0.0
 pgvector>=0.2.0
 litellm>=1.103.0
+psycopg>=2.9
