@@ -277,7 +277,7 @@ def list_prompts(user):
     limit = request.args.get("limit", 20, type=int)
     is_active = request.args.get("is_active", type=lambda x: x.lower() == "true")
 
-    query = apply_scope(PromptConfig.query, PromptConfig)
+    query = apply_scope(PromptConfig.query, PromptConfig, include_unscoped=False)
     if is_active is not None:
         query = query.filter(PromptConfig.is_active == is_active)
 
@@ -365,7 +365,7 @@ def create_prompt(user):
         return err
 
     # Check max active prompts (10 per instance when scoped, else global)
-    active_query = apply_scope(PromptConfig.query, PromptConfig)
+    active_query = apply_scope(PromptConfig.query, PromptConfig, include_unscoped=False)
     active_count = active_query.filter(PromptConfig.is_active == True).count()
     if data.get("is_active", True) and active_count >= 10:
         return api_error(
@@ -514,7 +514,7 @@ def update_prompt(user, prompt_id):
     if "is_active" in data:
         # Check max active limit
         if data["is_active"] and not prompt.is_active:
-            scoped = apply_scope(PromptConfig.query, PromptConfig)
+            scoped = apply_scope(PromptConfig.query, PromptConfig, include_unscoped=False)
             active_count = scoped.filter(PromptConfig.is_active == True).count()
             if active_count >= 10:
                 return api_error(

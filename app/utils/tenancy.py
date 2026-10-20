@@ -48,13 +48,21 @@ def has_instance_column(model: Any) -> bool:
     return "instance_id" in model.__table__.columns
 
 
-def apply_scope(query: Any, model: Any) -> Any:
-    """Filter a query to the request instance when scoped and supported."""
+def apply_scope(query: Any, model: Any, include_unscoped: bool = True) -> Any:
+    """Filter a query to the request instance when scoped and supported.
+
+    When scoped to an instance, only rows belonging to that instance are
+    returned. Set include_unscoped=True to also return rows with
+    instance_id IS NULL (legacy unscoped items).
+    """
     instance_id = current_instance_id()
     if instance_id is not None and has_instance_column(model):
-        query = query.filter(
-            or_(model.instance_id == instance_id, model.instance_id.is_(None))
-        )
+        if include_unscoped:
+            query = query.filter(
+                or_(model.instance_id == instance_id, model.instance_id.is_(None))
+            )
+        else:
+            query = query.filter(model.instance_id == instance_id)
     return query
 
 
