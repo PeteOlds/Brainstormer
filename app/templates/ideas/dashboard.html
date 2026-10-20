@@ -106,12 +106,10 @@
                     <!-- Header row: reference + status + actions -->
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <template x-if="isAdmin">
-                                <span class="font-mono text-xs text-slate-500 dark:text-slate-400 truncate" x-text="idea.reference_code"></span>
-                                <input type="checkbox" :checked="selectedIdeaIds.includes(idea.id)"
-                                    @change="toggleIdeaSelection(idea.id)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500" aria-label="Select idea">
-                            </template>
-                            <span x-show="!isAdmin || idea.parent_id" class="font-mono text-xs text-slate-500 dark:text-slate-400 truncate" x-text="idea.reference_code"></span>
+                            <span class="font-mono text-xs text-slate-500 dark:text-slate-400 truncate" x-text="idea.reference_code" x-show="isAdmin || idea.parent_id"></span>
+                            <input type="checkbox" :checked="selectedIdeaIds.includes(idea.id)"
+                                @change="toggleIdeaSelection(idea.id)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500" aria-label="Select idea" x-show="isAdmin">
+                            <span class="font-mono text-xs text-slate-500 dark:text-slate-400 truncate" x-text="idea.reference_code" x-show="!isAdmin && !idea.parent_id"></span>
                             <button x-show="idea.parent_id" @click.stop="openIdeaById(idea.parent_id)" class="text-left text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" :title="'Part of ' + (idea.parent_title || 'the main app') + ' — open it'" x-text="(idea.child_kind === 'bugfix' ? 'Problem for ' : 'Improvement for ') + (idea.parent_reference_code || 'main app')"></button>
                         </div>
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(idea.status)" x-text="stageLabel(idea.status)"></span>
