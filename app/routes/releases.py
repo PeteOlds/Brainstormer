@@ -63,7 +63,7 @@ def _release_counts(parent_id):
     counts = {}
     for r in (
         Idea.query.with_entities(Idea.release_id, db.func.count(Idea.id))
-        .filter_by(parent_idea_id=parent_id)
+        .filter_by(parent_id=parent_id)
         .group_by(Idea.release_id)
         .all()
     ):
