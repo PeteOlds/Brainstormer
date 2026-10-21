@@ -88,6 +88,34 @@ class TestIdeasContract:
                 f"idea {idea_id} status is {idea['status']}, expected SCOPE"
             )
 
+    def test_get_releases_for_idea(self, admin_client):
+        """GET /api/v1/ideas/<id>/releases must not 500 and must return
+        releases with child counts. Regression test for parent_idea_id vs
+        parent_id column name bug on the Idea model."""
+        # First create a parent idea (SCALE status so it can have releases)
+        res = admin_client.post(
+            "/api/v1/ideas",
+            json={"prompt_title": "Release Parent Idea", "raw_content": "parent", "status": "SCALE"},
+        )
+        assert res.status_code == 201, res.get_data(as_text=True)
+        idea_id = res.get_json()["data"]["id"]
+
+        # Fetch releases for the parent idea - this used to 500 because
+        # _release_counts used parent_idea_id instead of parent_id on Idea
+        res = admin_client.get(f"/api/v1/ideas/{idea_id}/releases")
+        assert res.status_code == 200, f"releases API returned {res.status_code}: {res.get_data(as_text=True)}"
+        data = res.get_json()
+        assert "data" in data, "response missing 'data' key"
+        assert "releases" in data["data"], "response data missing 'releases' key"
+        releases = data["data"]["releases"]
+
+        # Each release should have an id, name, status, and child_count
+        for release in releases:
+            assert "id" in release, "release missing 'id'"
+            assert "name" in release, "release missing 'name'"
+            assert "status" in release, "release missing 'status'"
+            assert "child_count" in release, "release missing 'child_count'"
+
 
 class TestPromptsContract:
     """Contract tests for the prompts API."""
