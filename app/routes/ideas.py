@@ -269,7 +269,7 @@ def get_idea(user, idea_id):
                 "status": parent.status.value,
             }
 
-    return api_ok({"idea": idea.to_dict(user_vote=user.id), "parent": parent_context_data})
+    return api_ok({"idea": idea.to_dict(user_vote=user.id, include_content=True), "parent": parent_context_data})
 
 
 @bp.route("/ideas/<uuid:idea_id>/status", methods=["PATCH"])
