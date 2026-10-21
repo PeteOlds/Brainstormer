@@ -102,7 +102,7 @@
     <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
         <div class="divide-y divide-slate-200 dark:divide-slate-700">
             <template x-for="idea in paginatedIdeas" :key="idea.id">
-                <article @click="openDetailModal(idea)" class="p-3 space-y-1 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors" :aria-label="'Open idea ' + idea.reference_code" role="button" tabindex="0" @keydown.enter="openDetailModal(idea)" @keydown.space.prevent="openDetailModal(idea)">
+                <article @click="openDetailModal(idea)" class="p-2 space-y-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors" :aria-label="'Open idea ' + idea.reference_code" role="button" tabindex="0" @keydown.enter="openDetailModal(idea)" @keydown.space.prevent="openDetailModal(idea)">
                     <!-- Header row: reference + status + actions -->
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2 flex-shrink-0">
@@ -136,20 +136,20 @@
                     </button>
 
                     <!-- Meta row: comments + votes -->
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="'💬 ' + idea.comments_count"></span>
-                        <div class="flex items-center space-x-1">
-                            <button @click.stop="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Like this idea">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                    <div class="flex items-center justify-between gap-1">
+                        <span class="inline-flex items-center px-1 py-0 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" x-text="'💬 ' + idea.comments_count"></span>
+                        <div class="flex items-center space-x-0.5">
+                            <button @click.stop="vote(idea.id, 1)" :class="getVoteClass(idea, 1)" class="p-1 min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Like this idea">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
                             </button>
-                            <span class="text-[10px] font-medium tabular-nums text-emerald-600 dark:text-emerald-400" x-text="idea.upvotes_count"></span>
-                            <span class="text-xs font-bold tabular-nums text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
-                            <span class="text-[10px] font-medium tabular-nums text-red-600 dark:text-red-400" x-text="idea.downvotes_count"></span>
-                            <button @click.stop="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Not helpful">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            <span class="text-[9px] font-medium tabular-nums text-emerald-600 dark:text-emerald-400" x-text="idea.upvotes_count"></span>
+                            <span class="text-[9px] font-bold tabular-nums text-slate-900 dark:text-white" x-text="idea.net_votes"></span>
+                            <span class="text-[9px] font-medium tabular-nums text-red-600 dark:text-red-400" x-text="idea.downvotes_count"></span>
+                            <button @click.stop="vote(idea.id, -1)" :class="getVoteClass(idea, -1)" class="p-1 min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg transition-colors" :disabled="voteLoading === idea.id" aria-label="Not helpful">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
                         </div>
-                        <div class="flex items-center justify-center gap-1 ml-auto">
+                        <div class="flex items-center justify-center gap-0.5 ml-auto">
                             <span class="text-[9px] text-emerald-600 dark:text-emerald-400" x-text="idea.upvotes_count > 0 ? idea.upvotes_count + ' like' + (idea.upvotes_count !== 1 ? 's' : '') : ''"></span>
                             <span class="text-[9px] text-slate-900 dark:text-white" x-text="idea.net_votes !== 0 ? '·' : ''"></span>
                             <span class="text-[9px] text-red-600 dark:text-red-400" x-text="idea.downvotes_count > 0 ? idea.downvotes_count + ' not helpful' + (idea.downvotes_count !== 1 ? 's' : '') : ''"></span>
@@ -159,9 +159,9 @@
 
                     <!-- Admin actions dropdown -->
                     <template x-if="isAdmin">
-                        <div class="flex items-center justify-end gap-2 mt-1">
-                            <button @click="dropdownOpenId = dropdownOpenId === idea.id ? null : idea.id" class="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+                        <div class="flex items-center justify-end gap-1">
+                            <button @click="dropdownOpenId = dropdownOpenId === idea.id ? null : idea.id" class="p-1 min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
                             </button>
                             <div x-show="dropdownOpenId === idea.id" @click.outside="dropdownOpenId = null" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
                                 <button @click="openDetailModal(idea); dropdownOpenId = null" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">View Details</button>
