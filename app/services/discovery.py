@@ -151,9 +151,13 @@ def discover_actions(user, idea=None) -> list:
     """List available secondary actions, optionally filtered by idea stage.
 
     When called without an idea (global /api/v1/actions), returns all
-    registered actions. Stage gating is handled by the frontend's
-    docActionVisible() and by _check_action_allowed() on write paths.
+    registered actions. When called with an idea, filters by stage using
+    _check_action_allowed().
     """
     from app.services.secondary_actions import list_actions
+    from app.routes.ideas import _check_action_allowed
 
-    return list_actions()
+    actions = list_actions()
+    if idea is not None:
+        actions = [a for a in actions if _check_action_allowed(idea, a["key"])]
+    return actions

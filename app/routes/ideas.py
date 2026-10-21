@@ -634,6 +634,10 @@ def _check_action_allowed(idea, action_type):
     from app.models import IdeaStatus
 
     st = idea.status
+    # Only PRD_DOC, DESIGN_DOC, BUILD_CODE are valid action types for the
+    # run_action endpoint. Everything else is rejected server-side.
+    if action_type not in ("PRD_DOC", "DESIGN_DOC", "BUILD_CODE"):
+        return False
     if action_type == "PRD_DOC":
         return st not in (IdeaStatus.SPARK, IdeaStatus.DROP, IdeaStatus.ARCHIVE)
     if action_type == "DESIGN_DOC":
