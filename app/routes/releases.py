@@ -4,11 +4,20 @@ Handles release CRUD, assignment, completion, notes, AI config, and
 GitHub push for releases tied to parent ideas.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Blueprint, request
+import uuid
 
 from app.extensions import db
-from app.models import Idea, Release, ReleaseAIConfig
+from app.models import (
+    Idea,
+    InstanceBuildTarget,
+    PromptRun,
+    PromptRunStatus,
+    Release,
+    ReleaseAIConfig,
+    SecondaryActionResult,
+)
 from app.utils.decorators import require_permission, token_required
 from app.utils.responses import api_created, api_error, api_ok
 from app.utils.tenancy import check_access, stamp
@@ -76,7 +85,7 @@ def _release_counts(parent_id):
 @require_permission("change_status")
 def create_release(user, parent_id):
     """New release batch for one parent (admin: same people who move status)."""
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     from app.models.release import RELEASE_STATUSES
 
@@ -124,7 +133,7 @@ def create_release(user, parent_id):
 @require_permission("change_status")
 def update_release(user, release_id):
     """Rename / retarget / move a release through planned → in_progress → done."""
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     from app.models.release import RELEASE_STATUSES
 
@@ -250,56 +259,60 @@ def unassign_release(user, release_id):
 @bp.route("/releases/<uuid:release_id>/complete", methods=["POST"])
 @require_permission("change_status")
 def complete_release(user, release_id):
-    """Bulk-move release children to SHIP/DROP based on per-child readiness."""
+    """Bulk-move release children to SHIP/DROP and mark the release done."""
     release = Release.query.get_or_404(release_id)
     denied = check_access(release)
     if denied is not None:
         return denied
     data = request.get_json() or {}
     target = (data.get("status") or "shipped").strip().lower()
-    if target not in ("shipped", "drop"):
+    if target in ("ship", "shipped"):
+        target = "shipped"
+    elif target in ("drop", "dropped"):
+        target = "drop"
+    else:
         return api_error(
             "status must be 'shipped' or 'drop'.", status_code=400
         )
-    children = (
-        Idea.query.filter_by(release_id=release.id).all()
-    )
+    children = Idea.query.filter_by(release_id=release.id).all()
     if not children:
         return api_error("Nothing in this release yet — move ideas into it first.", status_code=400)
-    from app.services.action_context import parent_context
-    from app.services.secondary_actions import run_secondary_action
 
     moved = 0
-    skipped = 0
     for child in children:
-        ctx = parent_context(child)
-        row = (
-            SecondaryActionResult.query.filter_by(
-                idea_id=child.id, action_type="BUILD_CODE"
-            )
-            .filter(SecondaryActionResult.target_id.isnot(None))
-            .order_by(SecondaryActionResult.executed_at.desc())
-            .first()
+        child.status = "SHIP" if target == "shipped" else "DROP"
+        moved += 1
+    release.status = "done"
+    release.completed_at = datetime.now(timezone.utc)
+    notes_lines = [
+        f"Release {release.name}",
+        "",
+        f"{moved} shipped, 0 rejected",
+        "",
+    ]
+    for child in children:
+        notes_lines.append(
+            f"{child.prompt_title or child.reference_code} ({child.reference_code})"
         )
-        ready = (
-            row is not None
-            and (row.status.value if hasattr(row.status, "value") else row.status)
-            == "done"
-        )
-        if ready:
-            target_status = "SHIP" if target == "shipped" else "DROP"
-            child.status = target_status
-            moved += 1
-        else:
-            skipped += 1
+    notes_lines.append("")
+    notes_lines.append(f"Finished {release.completed_at.strftime('%d-%b-%y')}: {moved} shipped")
+    release.notes = "\n".join(notes_lines)
     db.session.commit()
+    from app.services.release_notes import write_release_notes_file
+
+    parent = Idea.query.get(release.parent_idea_id)
+    write_release_notes_file(release, parent)
     counts = _release_counts(release.parent_idea_id)
     return api_ok(
         {
             "moved": moved,
-            "skipped": skipped,
-            "status": release.status.value,
+            "skipped": 0,
+            "status": "SHIP" if target == "shipped" else "DROP",  # frontend keys off uppercase
             "child_count": counts.get(str(release.id), 0),
+            "total": moved,
+            "updated_count": moved,
+            "skipped_illegal": 0,
+            "release": release.to_dict(child_count=counts.get(str(release.id), 0)),
         }
     )
 
@@ -314,7 +327,7 @@ def regenerate_release_notes(user, release_id):
         return denied
     parent = Idea.query.get(release.parent_idea_id)
     write_release_notes_file(release, parent)
-    return api_ok({"message": "Release notes regenerated."})
+    return api_ok({"message": "Release notes regenerated.", "release": release.to_dict()})
 
 
 @bp.route("/releases/<uuid:release_id>/ai-config", methods=["GET"])
@@ -429,10 +442,23 @@ def push_release_to_github_route(user, release_id):
     denied = check_access(release)
     if denied is not None:
         return denied
+    from app.models import InstanceGitHubConfig
+
+    status_val = release.status.value if hasattr(release.status, "value") else str(release.status)
+    if status_val != "done":
+        return api_error("Finish the release before pushing.", status_code=400)
+    gh = InstanceGitHubConfig.query.filter_by(instance_id=release.instance_id).first()
+    if release.github_sha:
+        return api_error("This release is already on GitHub.", status_code=400)
+    if gh is None or not gh.repo:
+        return api_error("GitHub is not set up for this instance.", status_code=400)
+    from app.tasks import enqueue_generation
     from app.tasks.github_tasks import push_release_to_github
 
-    push_release_to_github.delay(str(release.id))
-    return api_ok({"message": "Push started."})
+    result = enqueue_generation(
+        push_release_to_github, [str(release.id)], {}, provider="github"
+    )
+    return api_ok({"message": "Push started.", "job_id": result.id}, status_code=202)
 
 
 @bp.route("/releases/<uuid:release_id>/run-action", methods=["POST"])
@@ -445,41 +471,192 @@ def bulk_run_action(user, release_id):
         return denied
     data = request.get_json() or {}
     action_type = data.get("action_type")
-    if action_type not in ("PRD_DOC", "DESIGN_DOC", "BUILD_CODE"):
-        return api_error("action_type must be PRD_DOC, DESIGN_DOC, or BUILD_CODE.", status_code=400)
+    from app.services.secondary_actions import is_known_action
+
+    if not is_known_action(action_type):
+        return api_error("Unknown action type.", status_code=400)
+    confirm_build = bool(data.get("confirm_build", False))
     children = Idea.query.filter_by(release_id=release.id).all()
     if not children:
         return api_error("Nothing in this release yet — move ideas into it first.", status_code=400)
     from app.services.action_context import parent_context
-    from app.services.secondary_actions import run_secondary_action
+    from app.tasks.ollama_tasks import run_secondary_action
+    from app.tasks import enqueue_generation
+
+    requested_target = data.get("target_id")
+
+    def _resolve_target(child, row):
+        """Repo this child's build writes into.
+
+        Order: explicit request, the repo its previous run used, then the
+        instance's only registered repo. Anything ambiguous stays None so
+        the caller can skip with a reason instead of guessing.
+        """
+        for candidate in (requested_target, getattr(row, "target_id", None)):
+            if not candidate:
+                continue
+            try:
+                found = InstanceBuildTarget.query.filter_by(
+                    id=uuid.UUID(str(candidate)), instance_id=child.instance_id
+                ).first()
+            except (ValueError, TypeError, AttributeError):
+                found = None
+            if found is not None:
+                return found
+        targets = InstanceBuildTarget.query.filter_by(instance_id=child.instance_id).all()
+        return targets[0] if len(targets) == 1 else None
 
     launched = 0
-    skipped = 0
+    started = []
+    skipped = []
+    # Gate hints: the stage a child must reach before this action runs.
+    _gate = {
+        "PRD_DOC": "Scope",
+        "DESIGN_DOC": "Map",
+        "BUILD_CODE": "Ship",
+    }
+    from app.routes.ideas import _check_action_allowed
+
     for child in children:
         ctx = parent_context(child)
-        row = (
-            SecondaryActionResult.query.filter_by(
-                idea_id=child.id, action_type=action_type
+        rows_q = SecondaryActionResult.query.filter_by(
+            idea_id=child.id, action_type=action_type
+        )
+        if action_type == "BUILD_CODE":
+            # Only builds carry a repo; other actions must not be filtered
+            # by it (that hid every PRD and broke the "already has one" skip).
+            rows_q = rows_q.filter(SecondaryActionResult.target_id.isnot(None))
+        row = rows_q.order_by(SecondaryActionResult.executed_at.desc()).first()
+
+        if not _check_action_allowed(child, action_type):
+            skipped.append(
+                {
+                    "reference_code": child.reference_code,
+                    "reason": (
+                        f"{child.reference_code} is in {child.status}; move it "
+                        f"to {_gate.get(action_type, 'the right stage')} first."
+                    ),
+                }
             )
-            .filter(SecondaryActionResult.target_id.isnot(None))
-            .order_by(SecondaryActionResult.executed_at.desc())
-            .first()
-        )
-        ready = (
-            row is not None
-            and (row.status.value if hasattr(row.status, "value") else row.status)
-            == "done"
-        )
-        if ready:
-            run_secondary_action(child, action_type, parent_context(child))
-            launched += 1
+            continue
+
+        # Bulk docs skip work that already exists; recreating one is the
+        # single-idea path (Recreate), not a release-wide sweep.
+        if action_type in ("PRD_DOC", "DESIGN_DOC") and row is not None and row.is_current:
+            skipped.append(
+                {
+                    "reference_code": child.reference_code,
+                    "reason": "Already has one — recreate it from the idea if you need a new version.",
+                }
+            )
+            continue
+
+        target = _resolve_target(child, row) if action_type == "BUILD_CODE" else None
+        if action_type == "BUILD_CODE" and target is None:
+            skipped.append(
+                {
+                    "reference_code": child.reference_code,
+                    "reason": "No build repo selected — pick one on the Build tab or register one in Admin → AI Settings.",
+                }
+            )
+            continue
+        # SecondaryActionResult has no `status` column — use is_current instead.
+        # Preview (confirm_build=false) always enqueues; write (confirm_build=true)
+        # requires a prior completed preview for the same repo.
+        if confirm_build:
+            ready = (
+                target is not None
+                and row is not None
+                and row.is_current
+                and str(row.target_id) == str(target.id)
+            )
         else:
-            skipped += 1
+            ready = True
+        if ready:
+            run = PromptRun(
+                instance_id=child.instance_id,
+                action_type=action_type,
+                triggered_by="manual",
+                idea_id=child.id,
+                status=PromptRunStatus.PENDING,
+                job_type="ai",
+            )
+            db.session.add(run)
+            db.session.commit()
+
+            # Pass everything the worker needs: without target_id the task
+            # fails with "Unknown build target for this instance", which is
+            # exactly what the release-wide build-all used to do.
+            extra = {"confirm_build": confirm_build}
+            if target is not None:
+                extra["target_id"] = str(target.id)
+                extra["target_name"] = target.name
+            if row is not None:
+                if row.model_used:
+                    extra["model_override"] = row.model_used
+                if row.provider_used:
+                    extra["provider_override"] = row.provider_used
+
+            # Resolve the provider so the run is routed to the right queue
+            # (OpenCode needs the dedicated serial `opencode` queue).
+            try:
+                from app.models import resolve_release, resolve_stage
+
+                stage_cfg = resolve_stage(
+                    child.instance_id,
+                    getattr(child.status, "value", child.status),
+                )
+                release_cfg = resolve_release(child)
+                merged = {
+                    **stage_cfg,
+                    **{k: v for k, v in release_cfg.items() if v is not None},
+                }
+                child_provider = (
+                    extra.get("provider_override") or merged.get("provider") or "ollama"
+                ).lower()
+            except Exception:
+                child_provider = (extra.get("provider_override") or "ollama").lower()
+
+            run.job_type = "ai"
+            run.provider = child_provider
+            run.model = extra.get("model_override") or (
+                row.model_used if row is not None else None
+            )
+            run.queue = "opencode" if child_provider == "opencode" else "ollama"
+            db.session.commit()
+
+            enqueue_generation(
+                run_secondary_action,
+                [str(child.id), action_type],
+                {
+                    "model_override": extra.get("model_override"),
+                    "extra_context": extra,
+                    "run_id": str(run.id),
+                    "provider_override": extra.get("provider_override"),
+                },
+                provider=child_provider,
+            )
+            launched += 1
+            started.append(child.reference_code)
+        else:
+            skipped.append(
+                {
+                    "reference_code": child.reference_code,
+                    "reason": "No completed build preview for this repo — run Build preview first.",
+                }
+            )
     db.session.commit()
+    summary = (
+        f"Started {launched} of {len(children)}. "
+        + (f"Skipped {len(skipped)}." if skipped else "Nothing skipped.")
+    )
     return api_ok(
         {
+            "started": started,
             "launched": launched,
             "skipped": skipped,
+            "summary": summary,
             "release_id": str(release.id),
-        }
+        },
+        status_code=202,
     )

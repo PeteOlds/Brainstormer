@@ -109,7 +109,7 @@
                             <span class="font-mono text-xs text-slate-500 dark:text-slate-400 truncate" x-text="idea.reference_code" x-show="isAdmin || idea.parent_id"></span>
                             <input type="checkbox" :checked="selectedIdeaIds.includes(idea.id)"
                                 @change="toggleIdeaSelection(idea.id)" @click.stop
-                                class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500" aria-label="Select idea" x-show="isAdmin">
+                                class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500" aria-label="Select idea" title="Select this idea" x-show="isAdmin">
                             <span class="font-mono text-xs text-slate-500 dark:text-slate-400 truncate" x-text="idea.reference_code" x-show="!isAdmin && !idea.parent_id"></span>
                             <button x-show="idea.parent_id" @click.stop="openIdeaById(idea.parent_id)" class="text-left text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" :title="'Part of ' + (idea.parent_title || 'the main app') + ' — open it'" x-text="(idea.child_kind === 'bugfix' ? 'Problem for ' : 'Improvement for ') + (idea.parent_reference_code || 'main app')"></button>
                         </div>
@@ -163,7 +163,7 @@
                             <button @click="dropdownOpenId = dropdownOpenId === idea.id ? null : idea.id" class="p-1 min-w-[32px] min-h-[32px] inline-flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="More actions">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
                             </button>
-                            <div x-show="dropdownOpenId === idea.id" @click.outside="dropdownOpenId = null" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
+                            <div x-show="dropdownOpenId === idea.id" @click.outside="dropdownOpenId = null" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="transform opacity-0 scale-95" x-transition:enter-end="transform opacity-100 scale-100" class="absolute right-0 mt-2 w-56 max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-800 rounded-md shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
                                 <button @click="openDetailModal(idea); dropdownOpenId = null" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">View Details</button>
                                 <hr class="border-slate-200 dark:border-slate-700 my-1">
                                 <div class="px-4 py-1 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Change Status</div>
@@ -176,19 +176,27 @@
                                     <option value="SCALE">Scale</option>
                                     <option value="DROP">Drop</option>
                                     <option value="FREEZE">Freeze</option>
-                                    <option value="ARCHIVE">Archive</option>
                                 </select>
                                 <hr class="border-slate-200 dark:border-slate-700 my-1">
                                 <button @click="confirmDiscard(idea, () => dropdownOpenId = null)" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Discard (hidden by the default filter)">
                                     <svg class="mr-2 h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                     Discard
                                 </button>
+                                <button x-show="canArchive(idea)" @click="confirmArchive(idea, () => dropdownOpenId = null)" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Archive this idea (stored away, hidden by the default filter). You can restore it later.">
+                                    <svg class="mr-2 h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
+                                    <span>Archive this idea</span>
+                                </button>
+                                <button x-show="canRestore(idea)" @click="confirmRestore(idea, () => dropdownOpenId = null)" class="flex w-full items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700" title="Put this idea back where it was">
+                                    <span x-text="'Restore to ' + stageLabel(restoreTarget(idea))"></span>
+                                </button>
                                 <hr class="border-slate-200 dark:border-slate-700 my-1">
                                 <template x-for="action in refinedActions" :key="action.key">
-                                    <button @click="runAction(idea.id, action.key); dropdownOpenId = null" :title="action.description" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
-                                        <span class="font-medium" x-text="action.label"></span>
-                                        <span class="ml-2 text-xs text-slate-500" x-show="idea.actions_run.includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
-                                    </button>
+                                    <template x-if="docActionVisible(action.key)">
+                                        <button @click="runAction(idea.id, action.key); dropdownOpenId = null" :title="action.description" class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Select idea">
+                                            <span class="font-medium" x-text="action.label"></span>
+                                            <span class="ml-2 text-xs text-slate-500" x-show="idea.actions_run.includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
+                                        </button>
+                                    </template>
                                 </template>
                                 </div>
                             </div>
@@ -226,7 +234,6 @@
                             <option value="SCALE">Scale</option>
                             <option value="DROP">Drop</option>
                             <option value="FREEZE">Freeze</option>
-                            <option value="ARCHIVE">Archive</option>
                         </select>
                         <button @click="confirmBulkAction()" :disabled="bulkUpdating || !bulkStatus" class="w-full sm:w-auto px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
                             <span x-show="!bulkUpdating">Apply</span>
@@ -235,6 +242,7 @@
                                 Applying…
                             </span>
                         </button>
+                        <button @click="confirmBulkArchive()" :disabled="bulkUpdating" class="w-full sm:w-auto px-4 py-2 min-h-[44px] text-sm font-medium text-amber-700 dark:text-amber-300 bg-white dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-800/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Archive selected</button>
                         <button @click="clearSelection()" class="w-full sm:w-auto px-4 py-2 min-h-[44px] text-sm font-medium text-amber-700 dark:text-amber-300 bg-white dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-800/50 transition-colors">Clear</button>
                     </div>
                 </div>
@@ -281,7 +289,7 @@
         </div>
 
     <!-- Detail Modal -->
-    <div x-show="detailModalOpen" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="if (!runDialogOpen && !confirmModalOpen) closeDetailModal()" aria-labelledby="detail-modal-title" role="dialog" aria-modal="true">
+    <div x-show="detailModalOpen" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="if (!runDialogOpen && !confirmModalOpen && !promptModalOpen) closeDetailModal()" aria-labelledby="detail-modal-title" role="dialog" aria-modal="true">
         <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
         <div class="relative flex min-h-full items-end sm:items-center justify-center sm:p-4">
             <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full sm:max-w-4xl bg-white dark:bg-slate-800 sm:rounded-xl rounded-t-2xl shadow-2xl border-2 border-slate-300 dark:border-slate-500 border-b-0 sm:border-b-2 max-h-[92vh] sm:max-h-[90vh] flex flex-col outline-none" tabindex="-1">
@@ -413,9 +421,10 @@
                                     <option value="SCALE">Scale</option>
                                     <option value="DROP">Drop</option>
                                     <option value="FREEZE">Freeze</option>
-                                    <option value="ARCHIVE">Archive</option>
                                 </select>
                                 <button @click="startIdeaEdit()" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Edit content</button>
+                                <button x-show="canArchive(selectedIdea)" @click="confirmArchive(selectedIdea)" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Archive this idea</button>
+                                <button x-show="canRestore(selectedIdea)" @click="confirmRestore(selectedIdea)" class="px-4 py-2 min-h-[44px] text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors" x-text="'Restore to ' + stageLabel(restoreTarget(selectedIdea))"></button>
                             </div>
                             <div x-show="editingIdea" class="mt-3 space-y-3">
                                 <div>
@@ -509,6 +518,73 @@
                         </div>
                         <div x-show="!scaleChildren.length" class="text-sm text-slate-500 dark:text-slate-400">No suggestions yet — be the first.</div>
                         <div class="space-y-4">
+                            <!-- Children not yet assigned to a release: show first, above all releases -->
+                            <template x-if="scaleKids(null).length">
+                                <div class="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3">
+                                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                                        <span class="text-sm font-semibold text-slate-900 dark:text-white">No release yet</span>
+                                        <span class="text-xs px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700" x-text="scaleKids(null).length + ' unassigned'"></span>
+                                        <span class="flex gap-2 ml-auto" x-show="isAdmin">
+                                            <button @click="assignToNewRelease()" :disabled="releaseBusy" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50" title="Create a new release and move these ideas into it">Add to new release</button>
+                                        </span>
+                                    </div>
+                                    <ul class="space-y-2">
+                                        <template x-for="k in scaleKids(null)" :key="k.id">
+                                            <li class="rounded-lg bg-slate-50 dark:bg-slate-900/50 px-3 py-2">
+                                                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                                                    <a href="#" @click.prevent="openIdeaById(k.id)" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="k.reference_code"></a>
+                                                    <span class="text-xs px-2 py-0.5 rounded-full" :class="k.child_kind === 'bugfix' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'" x-text="k.child_kind === 'bugfix' ? 'Problem' : 'Improvement'"></span>
+                                                    <span class="text-slate-700 dark:text-slate-300" x-text="k.prompt_title"></span>
+                                                    <span x-show="!isAdmin" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" :class="getStatusClass(k.status)" x-text="stageLabel(k.status)"></span>
+                                                    <select x-show="isAdmin" @change="changeStatus($event.target.value, k.id); $event.target.value = k.status" :disabled="releaseBusy" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500" :class="getStatusClass(k.status)" :title="'Move ' + k.reference_code + ' to a new stage'" x-text="stageLabel(k.status)"></select>
+                                                    <span class="text-xs text-slate-500" x-text="'💬 ' + (k.comments_count || 0)"></span>
+                                                    <span x-show="isAdmin" class="flex items-center gap-1 ml-auto">
+                                                        <select @change="moveChildToRelease(k.id, $event.target.value)" :disabled="releaseBusy" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-1 py-1" aria-label="Move to release">
+                                                            <option value="">Move to…</option>
+                                                            <template x-for="r2 in scaleReleases" :key="r2.id || 'none'">
+                                                                <option x-show="r2.id" :value="r2.id" x-text="r2.name"></option>
+                                                            </template>
+                                                        </select>
+                                                    </span>
+                                                </div>
+                                                <div class="mt-1.5 flex flex-wrap items-center gap-1">
+                                                    <span class="text-[11px] font-medium text-slate-600 dark:text-slate-400 mr-0.5">Ready:</span>
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="(k.actions_run || []).includes('PRD_DOC') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'" x-text="((k.actions_run || []).includes('PRD_DOC') ? '✓ ' : '') + 'PRD'"></span>
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="(k.actions_run || []).includes('DESIGN_DOC') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'" x-text="((k.actions_run || []).includes('DESIGN_DOC') ? '✓ ' : '') + 'Design'"></span>
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="(k.actions_run || []).includes('BUILD_CODE') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'" x-text="((k.actions_run || []).includes('BUILD_CODE') ? '✓ ' : '') + 'Built'"></span>
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium" :class="buildPillClass(k)" x-text="buildPillText(k)" :title="buildPillTitle(k)"></span>
+                                                    <span x-show="isAdmin" class="inline-flex items-center gap-1 ml-auto">
+                                                        <select @change="openChildDoc(k, $event.target.value); $event.target.value = ''" :disabled="releaseBusy || actionLoading === 'PRD_DOC' || actionLoading === 'DESIGN_DOC' || actionLoading === 'BUILD_CODE'" class="text-[11px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-1 py-0.5" :aria-label="'Start a document for ' + k.reference_code" title="Start a PRD, Design or Build for this idea">
+                                                            <option value="">+ Doc</option>
+                                                            <option value="PRD_DOC">PRD</option>
+                                                            <option value="DESIGN_DOC">Design</option>
+                                                            <option value="BUILD_CODE">Build</option>
+                                                        </select>
+                                                    </span>
+                                                </div>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                    <div x-show="isAdmin" class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                                        <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Move everything together:</p>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <select x-model="unassignedMove" :disabled="releaseBusy" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-4 py-2 min-h-[44px]" aria-label="Move all unassigned to stage">
+                                                <option value="">Move all to…</option>
+                                                <option value="SCOPE">Scope</option>
+                                                <option value="MAP">Map</option>
+                                                <option value="SHIP">Ship</option>
+                                                <option value="DROP">Drop</option>
+                                            </select>
+                                            <button @click="moveUnassignedAll()" :disabled="releaseBusy || !unassignedMove" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">Move</button>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <button @click="bulkUnassignedAction('PRD_DOC', false)" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" title="Write a PRD for every unassigned idea">Write PRDs</button>
+                                            <button @click="bulkUnassignedAction('DESIGN_DOC', false)" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" title="Write a design for every unassigned idea">Write designs</button>
+                                            <button @click="bulkUnassignedAction('BUILD_CODE', false)" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" title="Preview code builds for every unassigned idea (nothing written yet)">Preview builds</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
                             <template x-for="rel in scaleReleases" :key="rel.id || 'none'">
                                 <div class="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3">
                                     <div class="flex flex-wrap items-center gap-2 mb-2">
@@ -764,6 +840,19 @@
                                             </span>
                                         </template>
                                     </div>
+                                    <div x-show="isAdmin" class="mt-3 flex flex-wrap items-end gap-2">
+                                        <div class="min-w-[240px]">
+                                            <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Write this build into</label>
+                                            <select x-model="buildTargetChoice" aria-label="Build repo" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                                <option value="">auto (only repo)</option>
+                                                <template x-for="t in buildTargetChoices" :key="t.id">
+                                                    <option :value="t.id" x-text="t.name + ' · ' + t.path"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                        <a href="/admin/ai" class="px-4 py-2 min-h-[44px] inline-flex items-center text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Manage repos</a>
+                                    </div>
+                                    <p x-show="isAdmin && !buildTargetChoices.length" class="mt-1 text-xs text-amber-700 dark:text-amber-300">No build repos registered for this instance — add one in Admin → AI Settings before building.</p>
                                     <div class="mt-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-4" x-show="buildSummary()">
                                         <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-1">Build Code</h4>
                                         <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">What this build contains.</p>
@@ -807,11 +896,11 @@
                                                     <button @click="configureManagedApp()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 disabled:opacity-50" x-text="managedApp ? 'Update supervised setup' : 'Enable one-click run'"></button>
                                                     <button @click="startManagedApp()" x-show="managedApp && !managedAppLive()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Start</button>
                                                     <button @click="stopManagedApp()" x-show="managedAppLive()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Stop</button>
-                                                    <a :href="managedAppOpenUrl()" x-show="managedAppHealthy()" target="_blank" rel="noopener" class="px-4 py-2 min-h-[44px] inline-flex items-center text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Open</a>
+                                                    <a :href="managedAppOpenUrl()" x-show="managedAppHealthy()" target="_blank" rel="noopener" class="px-4 py-2 min-h-[44px] inline-flex items-center text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Open app</a>
                                                     <button @click="loadAppLogs()" x-show="managedApp" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Refresh logs</button>
                                                 </span>
                                             </div>
-                                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Start launches this build here on the server and watches it — no terminal needed. Stop shuts it down again.</p>
+                                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Start runs this app here on the server — no terminal needed. Stop shuts it down again.</p>
                                             <p x-show="managedApp && managedApp.last_error" class="mt-2 text-xs text-red-700 dark:text-red-400" x-text="(managedApp && managedApp.last_error) || ''"></p>
                                             <pre x-show="appLogText" class="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap text-xs font-mono text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2" x-text="appLogText"></pre>
                                         </div>
@@ -1222,6 +1311,7 @@ function ideasApp() {
         childError: '',
         releaseBusy: false,
         releaseMove: {},
+        unassignedMove: null,
         exportMsg: '',
         docEditing: null,
         docEditList: [],
@@ -1300,6 +1390,8 @@ function ideasApp() {
         runDialogSkills: [],
         runDialogGuidelines: [],
         runDialogAdvanced: false,
+        buildTargetChoices: [],
+        buildTargetChoice: '',
         ollamaModels: [],
         discoverySkills: [],
         discoveryGuidelines: [],
@@ -1526,6 +1618,7 @@ function ideasApp() {
                     rendered_output: this.prettyActionOutput(this.displayOutput(a))
                 }));
                 this.loadScaleFamily();
+                this.loadBuildTargetChoices(this.selectedIdea.instance_id);
                 // Reload after the detail assignment: openDetailModal fires
                 // loadComments concurrently, and the detail response (without
                 // comments) would otherwise wipe a faster comments response.
@@ -1541,6 +1634,8 @@ function ideasApp() {
             this.prdAnswers = {};
             this.docViewVersion = {};
             this.exportMsg = '';
+            this.buildTargetChoices = [];
+            this.buildTargetChoice = '';
             this.loadIdeaDetail(idea.id);
             this.loadComments(idea.id);
             this.detailModalOpen = true;
@@ -2003,6 +2098,10 @@ function ideasApp() {
         },
 
         async createRelease() {
+            if (!this.selectedIdea) {
+                this.showAlertModal('No idea selected — open an idea first.');
+                return;
+            }
             const name = await this.showPromptModal('Release name', 'for example: Release 1.1');
             if (!name || !name.trim()) return;
             this.releaseBusy = true;
@@ -2123,14 +2222,14 @@ function ideasApp() {
         // Start a secondary action for one release child (dropdown).
         async openChildDoc(k, actionType) {
             if (!actionType) return;
-            const targetId = this.buildTargetId();
-            if (actionType === 'BUILD_CODE' && !targetId) {
-                await this.showAlertModal('No build target for this app — an admin needs to register one.');
-                return;
-            }
+            // Use the repo picked on the Build tab, else this idea's last
+            // build repo. Never hard-block: the worker falls back to the
+            // instance's only repo and names the options when ambiguous.
+            const targetId = this.buildTargetChoice || this.buildTargetId() || null;
             this.actionLoading = actionType;
             try {
-                const extra = { target_id: targetId };
+                const extra = {};
+                if (targetId) extra.target_id = targetId;
                 const res = await authFetch(`/api/v1/ideas/${k.id}/actions`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2201,7 +2300,11 @@ function ideasApp() {
                 const res = await authFetch(`/api/v1/releases/${releaseId}/run-action`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action_type: actionType, confirm_build: !!confirmBuild }),
+                    body: JSON.stringify({
+                        action_type: actionType,
+                        confirm_build: !!confirmBuild,
+                        target_id: this.buildTargetChoice || null,
+                    }),
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message || data.error || 'Failed to start');
@@ -2213,6 +2316,100 @@ function ideasApp() {
                 await this.loadScaleFamily();
                 // Builds settle async: watch until every started one finishes.
                 if (d.started && d.started.length) await this.refreshBuildStatus();
+            } catch (e) {
+                this.showAlertModal('Failed to start: ' + e.message);
+            } finally {
+                this.releaseBusy = false;
+            }
+        },
+
+        // Create a new release and move all unassigned children into it.
+        async assignToNewRelease() {
+            const ids = this.releaseKidIds(null);
+            if (!ids.length) return;
+            const name = await this.showPromptModal('New release name', 'for example: Release 1.1');
+            if (!name || !name.trim()) return;
+            if (!this.selectedIdea) {
+                this.showAlertModal('No idea selected — open an idea first.');
+                return;
+            }
+            this.releaseBusy = true;
+            try {
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/releases`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name.trim() }),
+                });
+                if (!res.ok) throw new Error('Failed to create release');
+                const d = await res.json();
+                const releaseId = ((d.data || d).release || {}).id;
+                if (!releaseId) throw new Error('No release id returned');
+                const assignRes = await authFetch(`/api/v1/releases/${releaseId}/assign`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idea_ids: ids }),
+                });
+                if (!assignRes.ok) throw new Error('Failed to assign ideas to release');
+                await this.loadScaleFamily();
+            } catch (e) {
+                this.showAlertModal('Failed to create release: ' + e.message);
+            } finally {
+                this.releaseBusy = false;
+            }
+        },
+
+        // Move every unassigned child idea to one stage together.
+        async moveUnassignedAll() {
+            const status = this.unassignedMove;
+            const ids = this.releaseKidIds(null);
+            if (!status || !ids.length) return;
+            if (!(await this.showConfirmModal(`Move ${ids.length} unassigned idea(s) to ${status}? Skipped ones stay where they are.`, '', 'Move all'))) return;
+            this.releaseBusy = true;
+            try {
+                const res = await authFetch('/api/v1/ideas/bulk-status', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idea_ids: ids, status }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Failed to move');
+                const d = data.data || data;
+                await this.showAlertModal(`Moved: ${d.updated_count} of ${ids.length}${d.skipped_illegal ? `, ${d.skipped_illegal} not ready for ${status}` : ''}.`);
+                await this.loadScaleFamily();
+            } catch (e) {
+                this.showAlertModal('Failed to move: ' + e.message);
+            } finally {
+                this.releaseBusy = false;
+            }
+        },
+
+        // Start one document/build step for every unassigned child idea.
+        async bulkUnassignedAction(actionType, confirmBuild) {
+            const ids = this.releaseKidIds(null);
+            if (!ids.length) return;
+            const what = actionType === 'BUILD_CODE' ? (confirmBuild ? 'write all previews into the app repo' : 'preview builds for all') : `start ${actionType} for all`;
+            if (!(await this.showConfirmModal(`This will ${what} (${ids.length} idea(s)). Continue?`, '', 'Continue'))) return;
+            this.releaseBusy = true;
+            try {
+                let started = 0;
+                const skipped = [];
+                for (const id of ids) {
+                    const res = await authFetch(`/api/v1/ideas/${id}/actions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action_type: actionType }),
+                    });
+                    if (res.ok) started++;
+                    else {
+                        const d = await res.json().catch(() => ({}));
+                        skipped.push({ reference_code: id, reason: d.message || d.error || 'failed' });
+                    }
+                }
+                let msg = `Started ${started} of ${ids.length}.`;
+                for (const s of skipped.slice(0, 5)) msg += `\n• ${s.reference_code}: ${s.reason}`;
+                if (skipped.length > 5) msg += `\n… and ${skipped.length - 5} more.`;
+                await this.showAlertModal(msg);
+                await this.loadScaleFamily();
             } catch (e) {
                 this.showAlertModal('Failed to start: ' + e.message);
             } finally {
@@ -2343,6 +2540,9 @@ function ideasApp() {
         docActionVisible(actionKey) {
             // V2 stage gates: PRD unlocks at Scope, Design docs at Map,
             // code builds at Ship. Dropped/archived ideas are read-only.
+            // Secondary actions (REFINE, COMPETITORS, FIVE_FORCES, PESTEL,
+            // etc.) are always available; only PRD_DOC, DESIGN_DOC,
+            // BUILD_CODE are stage-restricted.
             const st = this.selectedIdea?.status;
             if (actionKey === 'PRD_DOC') {
                 return st && st !== 'SPARK' && st !== 'DROP' && st !== 'ARCHIVE';
@@ -2359,6 +2559,49 @@ function ideasApp() {
         async confirmDiscard(idea, close) {
             if (!(await this.showConfirmModal('Drop this idea? It will be hidden by the default filter.', '', 'Drop idea'))) return;
             await this.changeStatus('DROP', idea.id, true);
+            if (close) close();
+        },
+
+        // Mirrors ALLOWED_TRANSITIONS in app/models/lifecycle.py.
+        canArchive(idea) {
+            return !!idea && ['SPARK', 'SCOPE', 'MAP', 'SHIP', 'SCALE', 'DROP', 'FREEZE'].includes(idea.status);
+        },
+
+        canRestore(idea) {
+            return !!idea && idea.status === 'ARCHIVE';
+        },
+
+        // Restore returns the idea to the stage it left (server-side history).
+        restoreTarget(idea) {
+            return (idea && idea.archived_from) || 'SPARK';
+        },
+
+        async confirmArchive(idea, close) {
+            if (!idea || !this.canArchive(idea)) {
+                if (close) close();
+                return;
+            }
+            const message = 'Archive this idea? It is stored away and hidden from the default list. You can restore it later.';
+            if (!(await this.showConfirmModal(message, '', 'Archive idea'))) {
+                if (close) close();
+                return;
+            }
+            await this.changeStatus('ARCHIVE', idea.id, true);
+            if (close) close();
+        },
+
+        async confirmRestore(idea, close) {
+            if (!idea || !this.canRestore(idea)) {
+                if (close) close();
+                return;
+            }
+            const target = this.restoreTarget(idea);
+            const message = 'Restore this idea to ' + this.stageLabel(target) + '?';
+            if (!(await this.showConfirmModal(message, '', 'Restore idea'))) {
+                if (close) close();
+                return;
+            }
+            await this.changeStatus(target, idea.id, true);
             if (close) close();
         },
 
@@ -2586,6 +2829,14 @@ function ideasApp() {
                     if (root) this.runDialogNewRepoPath = root.replace(/\/+$/, '') + '/' + idea.reference_code;
                 }
             }
+            // Preselect the repo: the one this idea last built into, else the
+            // Build tab's choice, else the first registered. A blank select
+            // silently failed the run with "Unknown build target".
+            if (actionType === 'BUILD_CODE') {
+                const prior = (last && last.target_id) || this.buildTargetChoice;
+                const match = this.runDialogTargets.find((t) => String(t.id) === String(prior));
+                this.runDialogTarget = match ? match.id : ((this.runDialogTargets[0] || {}).id || '');
+            }
             // Assign Recreate defaults AFTER the option lists render: an
             // x-model value set before its <option>s exist stays blank.
             this.runDialogModel = (last && last.model_used) || '';
@@ -2683,6 +2934,33 @@ function ideasApp() {
                 this.runDialogTargetDefaults = ((data.data || data).defaults) || {};
             } catch (e) {
                 console.error('Failed to load build targets:', e);
+            }
+        },
+
+        async loadBuildTargetChoices(instanceId) {
+            this.buildTargetChoices = [];
+            if (!instanceId) return;
+            try {
+                const res = await authFetch(`/api/v1/instances/${instanceId}/build-targets`);
+                if (!res.ok) return;
+                const data = await res.json();
+                this.buildTargetChoices = ((data.data || data).targets) || [];
+            } catch (e) {
+                console.error('Failed to load build repos:', e);
+                return;
+            }
+            // Keep a valid selection: previous build's repo, else the first.
+            const known = this.buildTargetChoices.some(
+                (t) => String(t.id) === String(this.buildTargetChoice)
+            );
+            if (!known) {
+                const prior = this.buildTargetId();
+                const match = this.buildTargetChoices.find(
+                    (t) => String(t.id) === String(prior)
+                );
+                this.buildTargetChoice = match
+                    ? match.id
+                    : ((this.buildTargetChoices[0] || {}).id || '');
             }
         },
 
@@ -2791,6 +3069,18 @@ function ideasApp() {
             this.showBulkConfirm = true;
         },
 
+        confirmBulkArchive() {
+            // Bulk archive is its own button (not a status in the select)
+            // so non-technical users see a plain-language confirmation.
+            if (this.selectedIdeaIds.length === 0) return;
+            this.bulkStatus = 'ARCHIVE';
+            const count = this.selectedIdeaIds.length;
+            this.bulkConfirmMessage = `Archive <strong>${count}</strong> idea${count !== 1 ? 's' : ''}?`;
+            this.bulkConfirmDetail = 'Archived ideas are stored away and hidden from the default list. You can restore them later.';
+            this.bulkConfirmActionLabel = 'Archive selected';
+            this.showBulkConfirm = true;
+        },
+
         closeBulkConfirm() {
             this.showBulkConfirm = false;
             this.bulkConfirmMessage = '';
@@ -2861,8 +3151,34 @@ function ideasApp() {
                     const err = await response.json().catch(() => ({}));
                     throw new Error(err.message || 'Failed to run action');
                 }
-                
-                // Poll for result
+                const postData = await response.json();
+                const runId = postData.data?.run_id;
+
+                // Poll the PromptRun status so the user sees "Running…" instead
+                // of an immediate "Done". The worker marks the run RUNNING when
+                // it starts and SUCCESS/FAILED when it finishes.
+                let runStatus = null;
+                for (let i = 0; i < 60; i++) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    try {
+                        const statusRes = await authFetch(`/api/v1/ideas/${ideaId}/actions/${runId}/status`);
+                        const statusData = await statusRes.json();
+                        const payload = statusData.data || statusData;
+                        runStatus = payload.status;
+                        if (runStatus === 'SUCCESS' || runStatus === 'FAILED') break;
+                    } catch (e) {
+                        // Status endpoint may 404 briefly while the row is being
+                        // committed — keep polling.
+                    }
+                }
+
+                // If the run succeeded, poll for the SecondaryActionResult to
+                // display the actual output. If it failed, surface the error.
+                if (runStatus === 'FAILED') {
+                    throw new Error('Action run failed.');
+                }
+
+                // Poll for the completed result (same logic as before).
                 const poll = async () => {
                     const response = await authFetch(`/api/v1/ideas/${ideaId}/actions`);
                     const data = await response.json();
@@ -3124,6 +3440,16 @@ function ideasApp() {
             return this.managedApp.open_url || this.managedApp.health_url || '#';
         },
 
+        managedAppUiUrl() {
+            if (!this.managedApp || !this.selectedIdea) return '#';
+            const target = String(this.managedApp.target_id || '');
+            const rows = (this.selectedIdea.actions || []).filter((a) => a.action_type === 'BUILD_CODE');
+            const row = rows.find((a) => String(a.target_id || '') === target && ((a.output || {}).written))
+                || rows.find((a) => (a.output || {}).written);
+            const data = row ? (row.output || {}) : {};
+            return data.frontend_url || '#';
+        },
+
         managedAppStatusText() {
             const app = this.managedApp;
             if (!app) return 'Not set up yet.';
@@ -3207,7 +3533,7 @@ function ideasApp() {
             }
             if (data.start_command) lines.push({ label: 'Run', value: cd + this.prettyBuildCmd(data.start_command), copy: true });
             }
-            if (data.docker_compose_file) lines.push({ label: 'Docker (alternative)', value: cd + 'docker compose -f ' + data.docker_compose_file + ' up --build', copy: true });
+            if (data.docker_compose_file) lines.push({ label: 'Docker Compose (alternative)', value: cd + '(docker compose version >/dev/null 2>&1 || sudo apt-get install -y docker-compose-v2) && (test -d /var/log/opencode || sudo mkdir -p /var/log/opencode) && (test -f .env || cp .env.example .env) && docker compose up --build', copy: true });
             // The human UI may live on a different port than the API
             // Human UI first: the supervised dashboard URL when one is
             // configured, else the frontend URL recorded at confirm time,
@@ -3217,8 +3543,13 @@ function ideasApp() {
             const dashUrl = (this.managedApp && this.managedApp.open_url) || '';
             const frontUrl = data.frontend_url || '';
             const apiUrl = data.app_url || '';
-            const openUrl = dashUrl || frontUrl || apiUrl;
-            if (openUrl) lines.push({ label: 'Open', value: openUrl, link: true });
+            // Prefer the frontend address in prose, but show both addresses
+            // as separate links so users can tell which one is live.
+            const openUrl = frontUrl || apiUrl;
+            const linkUrls = [];
+            if (apiUrl) linkUrls.push({ label: 'Open backend (API)', value: apiUrl });
+            if (frontUrl && frontUrl !== apiUrl) linkUrls.push({ label: 'Open UI (after Docker Compose)', value: frontUrl });
+            linkUrls.forEach((entry) => lines.push({ label: entry.label, value: entry.value, link: true }));
             // Port adds nothing next to a clickable URL that already carries it.
             if (data.port && !data.app_url) lines.push({ label: 'Port', value: String(data.port) });
             if (data.credentials && typeof data.credentials === 'object') {

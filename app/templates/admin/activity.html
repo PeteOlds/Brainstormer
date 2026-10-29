@@ -244,7 +244,57 @@
     <div x-show="!modelFilter" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Activity stream -->
         <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Recent runs</h2>
+        <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between mb-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 flex-1">
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Job type</label>
+                    <select x-model="jobTypeFilter" @change="runPage = 1; load()" class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                        <option value="all">All jobs</option>
+                        <option value="ai">AI jobs</option>
+                        <option value="app">App jobs</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Status</label>
+                    <select x-model="statusFilter" @change="runPage = 1; load()" class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                        <option value="">All statuses</option>
+                        <option value="PENDING">Pending</option>
+                        <option value="RUNNING">Running</option>
+                        <option value="SUCCESS">Success</option>
+                        <option value="FAILED">Failed</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Error</label>
+                    <select x-model="errorFilter" @change="runPage = 1; load()" class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                        <option value="">All outcomes</option>
+                        <option value="timeout">Timeout</option>
+                        <option value="provider_unavailable">Provider unavailable</option>
+                        <option value="model_not_installed">Model not installed</option>
+                        <option value="validation_failed">Validation failed</option>
+                        <option value="file_permission">File permission</option>
+                        <option value="orphaned">Orphaned</option>
+                        <option value="configuration">Configuration</option>
+                        <option value="unknown">Unknown</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Window</label>
+                    <select x-model.number="daysFilter" @change="runPage = 1; load()" class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                        <option :value="7">7 days</option>
+                        <option :value="30">30 days</option>
+                        <option :value="60">60 days</option>
+                        <option :value="90">90 days</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Prompt / idea</label>
+                    <input x-model="promptFilter" @keyup.enter="runPage = 1; load()" placeholder="Search…" class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                </div>
+            </div>
+            <button @click="runPage = 1; load()" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">Apply</button>
+        </div>
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Recent runs</h2>
             <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Manual and scheduled generations, newest first</p>
             <div x-show="loading" class="py-8 text-center text-sm text-slate-500">Loading…</div>
 <ol x-show="!loading" class="relative space-y-4 before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-px before:bg-slate-200 dark:before:bg-slate-700">
@@ -265,7 +315,7 @@
                             · <span x-text="run.status.charAt(0) + run.status.slice(1).toLowerCase()"></span>
                             <span x-show="run.duration_seconds != null" x-text="' · ' + fmtDuration(run.duration_seconds)"></span>
                         </p>
-                        <p x-show="run.status === 'FAILED' && run.error" class="mt-1 text-xs text-red-600 dark:text-red-400 break-words" x-text="run.error"></p>
+                        <p x-show="run.status === 'FAILED' && run.error" class="mt-1 text-xs text-red-600 dark:text-red-400 break-words" x-text="(run.error_category ? '[' + run.error_category + '] ' : '') + run.error"></p>
                     </li>
                 </template>
                 <li x-show="!loading && filteredRuns.length === 0" class="pl-7 text-sm text-slate-500" x-text="(statusFilter || modelFilter) ? 'No runs match this filter.' : 'No runs yet — press Run Now on a prompt.'"></li>
@@ -326,6 +376,10 @@ function activityApp() {
         loadError: false,
         statusFilter: '',
         modelFilter: '',
+        jobTypeFilter: 'all',
+        errorFilter: '',
+        promptFilter: '',
+        daysFilter: 30,
         runPage: 1,
         runPages: 1,
         runTotal: 0,
@@ -337,6 +391,10 @@ function activityApp() {
             const params = new URLSearchParams(window.location.search);
             this.statusFilter = (params.get('run_status') || '').toUpperCase();
             this.modelFilter = params.get('model') || '';
+            this.jobTypeFilter = params.get('job_type') || 'all';
+            this.errorFilter = params.get('error_condition') || '';
+            this.promptFilter = params.get('prompt') || '';
+            this.daysFilter = parseInt(params.get('days') || '30', 10) || 30;
             this.runPage = Math.max(parseInt(params.get('page') || '1', 10) || 1, 1);
             await this.load();
             setInterval(() => {
@@ -353,6 +411,10 @@ function activityApp() {
                 const params = new URLSearchParams();
                 if (this.statusFilter) params.append('run_status', this.statusFilter);
                 if (this.modelFilter) params.append('model', this.modelFilter);
+                if (this.jobTypeFilter && this.jobTypeFilter !== 'all') params.append('job_type', this.jobTypeFilter);
+                if (this.errorFilter) params.append('error_condition', this.errorFilter);
+                if (this.promptFilter) params.append('prompt', this.promptFilter);
+                params.append('days', this.daysFilter || 30);
                 params.append('page', this.runPage);
                 params.append('limit', this.runPageSize);
                 const qs = params.toString();
@@ -409,6 +471,10 @@ function activityApp() {
         clearFilters() {
             this.statusFilter = '';
             this.modelFilter = '';
+            this.jobTypeFilter = 'all';
+            this.errorFilter = '';
+            this.promptFilter = '';
+            this.daysFilter = 30;
             this.runPage = 1;
             window.history.replaceState(null, '', '/admin/activity');
             this.load();

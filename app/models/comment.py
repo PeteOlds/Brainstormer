@@ -74,7 +74,7 @@ class Comment(db.Model):
     # backrefs `idea`; User defines no comment relationship to clash with).
     user = db.relationship("User", foreign_keys="Comment.user_id", viewonly=True)
 
-    def to_dict(self, author_name=None, children=None, include_flag=False):
+    def to_dict(self, author_name=None, children=None, include_flag=False, action_result_id=None):
         data = {
             "id": str(self.id),
             "idea_id": str(self.idea_id),
@@ -98,6 +98,17 @@ class Comment(db.Model):
 
     def __repr__(self):
         return f"<Comment {self.id} idea={self.idea_id} parent={self.parent_id}>"
+
+    @property
+    def depth(self):
+        """0 for a top-level comment, 1 per reply level (cycle-guarded)."""
+        depth, parent_id, hops = 0, self.parent_id, 0
+        while parent_id is not None and hops < 10:
+            depth += 1
+            hops += 1
+            parent = db.session.get(Comment, parent_id)
+            parent_id = parent.parent_id if parent is not None else None
+        return depth
 
 
 @event.listens_for(Comment, "after_insert")

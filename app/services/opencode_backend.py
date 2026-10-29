@@ -13,7 +13,7 @@ Repo mode (Site-Admin opt-in per instance) runs in
 
 Attach mode: when the instance config sets ``endpoint`` (or
 ``OPENCODE_SERVER_URL`` is set), the CLI runs against a remote opencode
-server (``opencode run --attach <url> --dir <server-dir>``) instead of a
+server (``opencode run --server <url> <server-dir>``) instead of a
 local server. Credentials then live on that server; the worker only needs
 the CLI binary. Project-local ``--agent`` files are rejected by attached
 servers, so attach mode skips ``--agent`` and isolates by directory only.
@@ -313,6 +313,31 @@ def list_server_models(
     base = (server_url or "").strip().rstrip("/")
     if not base:
         return []
+    # OpenCode servers require HTTP Basic auth (username "opencode").
+    # Resolve the password from env first, then the local service.json
+    # (which on the server host holds the canonical password).
+    import base64 as _b64
+    import os as _os
+
+    password = (
+        _os.environ.get("OPENCODE_SERVER_PASSWORD")
+        or _os.environ.get("OPENCODE_PASSWORD")
+        or ""
+    )
+    if not password:
+        try:
+            import json as _json
+
+            with open(
+                _os.path.expanduser("~/.config/opencode/service.json")
+            ) as _fh:
+                password = (_json.load(_fh).get("password") or "")
+        except (OSError, ValueError, KeyError):
+            password = ""
+    headers = {}
+    if password:
+        token = _b64.b64encode(f"opencode:{password}".encode()).decode()
+        headers["Authorization"] = f"Basic {token}"
     now = _time.monotonic()
     cached = _server_models_cache.get((base, provider))
     if cached and cached[0] > now:
@@ -320,7 +345,7 @@ def list_server_models(
     slugs: list[dict] = []
     try:
         with httpx.Client(timeout=timeout) as client:
-            response = client.get(f"{base}/api/model")
+            response = client.get(f"{base}/api/model", headers=headers)
             response.raise_for_status()
             body = response.json()
     except Exception as exc:
@@ -381,7 +406,7 @@ def opencode_generate(
     argv = [resolved, "run", "--format", "json", "--model", model]
     server_dir: str | None = None
     if attach_url:
-        argv += ["--attach", attach_url]
+        argv += ["--server", attach_url]
         agent = _sandbox_agent_name()
         if workspace == "sandbox" and agent:
             # Attached servers reject project-local --agent files, so
@@ -396,15 +421,13 @@ def opencode_generate(
         agent = _sandbox_agent_name()
         if workspace == "sandbox" and agent:
             argv += ["--agent", agent]
-    argv.append(_compose_message(prompt_text, system))
-
     env = _clean_env()
     started = time.monotonic()
     attached = bool(attach_url)
     with _run_dir(workspace, attach_url) as (cwd, server_dir):
         if attach_url and server_dir:
-            argv.insert(-1, "--dir")
-            argv.insert(-1, server_dir)
+            argv.append(server_dir)
+        argv.append(_compose_message(prompt_text, system))
         try:
             proc = subprocess.Popen(
                 argv,

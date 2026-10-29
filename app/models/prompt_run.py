@@ -37,6 +37,12 @@ class PromptRun(db.Model):
         nullable=False,
         index=True,
     )
+    job_type = db.Column(db.String(20), nullable=False, default="ai")
+    provider = db.Column(db.String(50), nullable=True)
+    model = db.Column(db.String(100), nullable=True)
+    queue = db.Column(db.String(50), nullable=True)
+    worker = db.Column(db.String(100), nullable=True)
+    error_category = db.Column(db.String(50), nullable=True)
     error = db.Column(db.Text, nullable=True)
     started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -68,15 +74,42 @@ class PromptRun(db.Model):
                 now - ensure_aware(self.started_at)
             ).total_seconds()
 
-    def mark_failed(self, error):
+    def mark_failed(self, error, error_category=None):
         now = datetime.now(timezone.utc)
         self.status = PromptRunStatus.FAILED
         self.finished_at = now
         self.error = str(error)[:2000] if error else "Unknown error"
+        if error_category is None:
+            error_category = self.categorize_error(self.error)
+        self.error_category = error_category
         if self.started_at:
             self.duration_seconds = (
                 now - ensure_aware(self.started_at)
             ).total_seconds()
+
+    @staticmethod
+    def categorize_error(error):
+        text = str(error or "").lower()
+        if "timeout" in text or "timed out" in text:
+            return "timeout"
+        if "permission denied" in text or "permissionerror" in text:
+            return "file_permission"
+        if "not installed" in text:
+            return "model_not_installed"
+        if (
+            "unreachable" in text
+            or "connection" in text
+            or "refused" in text
+            or "could not be executed" in text
+        ):
+            return "provider_unavailable"
+        if "validation" in text or "invalid model output" in text:
+            return "validation_failed"
+        if "orphaned" in text:
+            return "orphaned"
+        if "unknown build target" in text or "no build repo" in text:
+            return "configuration"
+        return "unknown"
 
     @property
     def display_title(self):
@@ -102,6 +135,12 @@ class PromptRun(db.Model):
             "idea_id": str(self.idea_id) if self.idea_id else None,
             "status": self.status.value,
             "error": self.error,
+            "job_type": self.job_type or "ai",
+            "provider": self.provider,
+            "model": self.model,
+            "queue": self.queue,
+            "worker": self.worker,
+            "error_category": self.error_category or self.categorize_error(self.error),
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
             "duration_seconds": self.duration_seconds,

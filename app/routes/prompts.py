@@ -558,7 +558,14 @@ def run_prompt_now(user, prompt_id):
     runs = []
     instance_id = current_instance_id()
     for _ in range(count):
-        run = PromptRun(prompt_config_id=prompt.id, triggered_by="manual")
+        run = PromptRun(
+            prompt_config_id=prompt.id,
+            triggered_by="manual",
+            job_type="ai",
+            provider=prompt.provider,
+            model=prompt.model_name,
+            queue="opencode" if (prompt.provider or "").lower() == "opencode" else "ollama",
+        )
         stamp(run)
         db.session.add(run)
         db.session.commit()

@@ -41,4 +41,14 @@ def init_extensions(app):
         "connect-src": "'self'",
         "frame-ancestors": "'none'",
     }
-    talisman.init_app(app, content_security_policy=csp, force_https=app.config.get("FLASK_ENV") == "production")
+    talisman.init_app(
+        app,
+        content_security_policy=csp,
+        force_https=app.config.get("FORCE_HTTPS", False),
+        strict_transport_security=app.config.get("FORCE_HTTPS", False),
+        strict_transport_security_max_age=int(
+            app.config.get("HSTS_MAX_AGE", 31536000)
+        ),
+        strict_transport_security_include_subdomains=True,
+        session_cookie_secure=app.config.get("FORCE_HTTPS", False),
+    )

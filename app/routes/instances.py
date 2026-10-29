@@ -413,6 +413,9 @@ def _spec_from_build_version(version_row, target, idea_ref):
     run inside worker containers, where host paths do not exist. Display
     strings stay host-native in the runbook itself.
     """
+    import os
+    import sys
+
     from app.services.build_service import container_path, server_path
     from app.tasks.ollama_tasks import _derive_runbook
 
@@ -469,10 +472,63 @@ def _spec_from_build_version(version_row, target, idea_ref):
         port = int(out.get("port")) if out.get("port") else None
     except (TypeError, ValueError):
         port = None
-    app_url = (out.get("app_url") or "").strip() or None
-    # Open goes to the human UI when the build ships one (recorded at
-    # confirm time by the extractor); health always polls the API.
-    open_url = (out.get("frontend_url") or "").strip() or app_url
+    from app.tasks.ollama_tasks import _host_network_ip
+
+    def _network_url(url):
+        if not isinstance(url, str) or not url.strip():
+            return None
+        import re
+
+        ip = _host_network_ip()
+        return re.sub(r"^(https?://)(?:localhost|127\.0\.0\.1)(?=[:/])", r"\g<1>" + ip, url.strip(), count=1)
+
+    app_url = _network_url(out.get("app_url")) or (out.get("app_url") or "").strip() or None
+    frontend_url = _network_url(out.get("frontend_url")) or (out.get("frontend_url") or "").strip() or None
+    try:
+        frontend_port = int(out.get("frontend_port")) if out.get("frontend_port") else None
+    except (TypeError, ValueError):
+        frontend_port = None
+    project_root = (out.get("target_path") or (target.path if target else "") or "").strip()
+    frontend_root = None
+    has_frontend = False
+    for entry in files:
+        path = str((entry or {}).get("path") or "").replace("\\", "/")
+        if path == "frontend/src/index.html" or path.startswith("frontend/src/"):
+            frontend_root = os.path.join(project_root, "frontend", "src")
+            has_frontend = True
+            break
+    if not has_frontend:
+        for entry in files:
+            path = str((entry or {}).get("path") or "").replace("\\", "/")
+            if path == "frontend/index.html" or path.startswith("frontend/"):
+                frontend_root = os.path.join(project_root, "frontend")
+                has_frontend = True
+                break
+    if frontend_root is None:
+        for rel in ("frontend/src", "frontend", "src"):
+            cand = os.path.join(project_root, rel) if project_root else ""
+            if cand and os.path.isfile(os.path.join(cand, "index.html")):
+                frontend_root = cand
+                has_frontend = True
+                break
+    frontend_run_argv = None
+    if has_frontend and frontend_root and frontend_port:
+        backend_for_proxy = app_url or (
+            f"http://127.0.0.1:{port}" if port else "http://127.0.0.1:8000"
+        )
+        frontend_run_argv = [
+            sys.executable,
+            "/app/app/services/frontend_proxy.py",
+            "--port",
+            str(frontend_port),
+            "--root",
+            frontend_root,
+            "--backend",
+            backend_for_proxy,
+        ]
+    # Open goes to the human UI when this runner can serve it; otherwise
+    # fall back to the API root.
+    open_url = frontend_url if frontend_run_argv else app_url
     log_path = workdir.rstrip("/") + "/.brainstormer/" + idea_ref + ".log"
     display = (runbook or {}).get("run") or str(out.get("start_command") or "")
     spec = {
@@ -484,6 +540,9 @@ def _spec_from_build_version(version_row, target, idea_ref):
         "log_path": log_path,
         "health_url": app_url,
         "open_url": open_url,
+        "frontend_run_argv": frontend_run_argv,
+        "frontend_workdir": frontend_root,
+        "frontend_log_path": log_path if frontend_run_argv else None,
     }
     return spec, display, None
 
@@ -634,9 +693,21 @@ def start_managed_app_route(user, instance_id, app_id):
             return api_ok({"app": _managed_live(row), "already": True})
     row.state = "starting"
     row.last_error = None
+    from app.models import PromptRun, PromptRunStatus
+
+    run = PromptRun(
+        instance_id=instance.id,
+        action_type="APP_START",
+        triggered_by="manual",
+        idea_id=row.idea_id,
+        status=PromptRunStatus.PENDING,
+        job_type="app",
+        queue="default",
+    )
+    db.session.add(run)
     db.session.commit()
     start_managed_app.apply_async(
-        args=[str(row.id)],
+        args=[str(row.id), str(run.id)],
         queue="default",
         soft_time_limit=1500,
         time_limit=1620,
@@ -664,9 +735,21 @@ def stop_managed_app_route(user, instance_id, app_id):
     if row is None:
         return api_error("Unknown supervised app for this instance.", status_code=404)
     row.state = "stopping"
+    from app.models import PromptRun, PromptRunStatus
+
+    run = PromptRun(
+        instance_id=instance.id,
+        action_type="APP_STOP",
+        triggered_by="manual",
+        idea_id=row.idea_id,
+        status=PromptRunStatus.PENDING,
+        job_type="app",
+        queue="default",
+    )
+    db.session.add(run)
     db.session.commit()
     stop_managed_app.apply_async(
-        args=[str(row.id)],
+        args=[str(row.id), str(run.id)],
         queue="default",
         soft_time_limit=120,
         time_limit=180,
@@ -1008,7 +1091,10 @@ def list_stage_configs(user, instance_id):
     by_stage = {r.stage: r.to_dict() for r in rows}
     return api_ok(
         {
-            "stages": [by_stage.get(stage) for stage in STAGES],
+            # Return an entry for every stage: configured ones carry their
+            # settings, unconfigured ones carry just the stage name so the
+            # frontend can render an "inherits" card with an edit button.
+            "stages": [by_stage.get(stage) or {"stage": stage} for stage in STAGES],
         }
     )
 

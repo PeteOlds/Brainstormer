@@ -156,7 +156,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                     <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">AI provider</label>
-                    <select x-model="stageDraft.provider" class="block w-full px-3 py-2 min-h-[36px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                    <select x-model="stageDraft.provider" @change="onProviderChange()" class="block w-full px-3 py-2 min-h-[36px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                         <option value="">inherit</option>
                         <template x-for="prov in providers" :key="prov">
                             <option :value="prov" x-text="prov"></option>
@@ -165,7 +165,15 @@
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Model</label>
-                    <input x-model="stageDraft.model_name" type="text" placeholder="e.g. qwen3:32b" class="block w-full px-3 py-2 min-h-[36px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                    <select :value="modelSelectValue()" @change="onModelSelect($event.target.value)" :disabled="!stageDraft.provider" class="block w-full px-3 py-2 min-h-[36px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 disabled:opacity-50">
+                        <option value="">inherit</option>
+                        <template x-for="m in models" :key="m">
+                            <option :value="m" x-text="m"></option>
+                        </template>
+                        <option value="__custom__">Custom model…</option>
+                    </select>
+                    <input x-show="stageCustomModel" x-model="stageDraft.model_name" type="text" placeholder="model id, e.g. qwen3:32b" class="mt-2 block w-full px-3 py-2 min-h-[36px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="stageDraft.provider && !models.length">No models listed for this provider — pick Custom model… and type an id.</p>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
@@ -233,7 +241,6 @@
             </tbody>
         </table>
     </div>
-</div>
 
 <script>
 function aiSettingsApp() {
@@ -258,6 +265,8 @@ function aiSettingsApp() {
         stageSaving: false,
         stageMsg: '',
         stageErr: '',
+        models: [],
+        stageCustomModel: false,
         ghDraft: { repo: '', branch: 'main', pat: '' },
         ghHasPat: false,
         ghConfigured: false,
@@ -512,14 +521,70 @@ function aiSettingsApp() {
         },
 
         stageConfigured(stageId) {
-            return !!this.stageConfigs.find((s) => s && String(s.stage) === String(stageId));
+            const s = this.stageConfigs.find((s) => s && String(s.stage) === String(stageId));
+            // A stage counts as configured only when it has at least one
+            // non-default value set; a bare {"stage": "SPARK"} means "inherits".
+            return !!s && (s.provider || s.model_name || s.temperature !== undefined || s.top_p !== undefined || s.num_predict !== undefined || (s.skills || []).length || (s.guidelines || []).length);
         },
 
         stageFor(stageId) {
             return this.stageConfigs.find((s) => s && String(s.stage) === String(stageId)) || {};
         },
 
-        editStage(stageId) {
+        async loadModels() {
+            const provider = this.stageDraft.provider;
+            if (!provider) {
+                this.models = [];
+                this.stageCustomModel = false;
+                return;
+            }
+            try {
+                const url = provider === 'ollama'
+                    ? '/api/v1/ollama/models'
+                    : `/api/v1/ollama/models?provider=${encodeURIComponent(provider)}`;
+                const res = await authFetch(url);
+                if (!res.ok) {
+                    this.models = [];
+                    return;
+                }
+                const data = await res.json();
+                const payload = data.data || data;
+                const raw = payload.models || [];
+                this.models = raw.map((m) => (typeof m === 'string' ? m : m.name || m.model || m.id)).filter(Boolean);
+            } catch (e) {
+                this.models = [];
+            }
+            // A saved/typed model outside the catalogue stays visible and
+            // editable via the Custom model… input.
+            const cur = this.stageDraft.model_name || '';
+            this.stageCustomModel = !!cur && !this.models.includes(cur);
+        },
+
+        // Value shown in the model <select>: a catalogue entry, blank
+        // (inherit), or the custom escape hatch.
+        modelSelectValue() {
+            const cur = this.stageDraft.model_name || '';
+            if (!cur) return '';
+            return this.models.includes(cur) ? cur : '__custom__';
+        },
+
+        onModelSelect(value) {
+            if (value === '__custom__') {
+                this.stageCustomModel = true;
+                return;
+            }
+            this.stageCustomModel = false;
+            this.stageDraft.model_name = value;
+        },
+
+        // Model ids differ per provider, so switching clears the old one.
+        onProviderChange() {
+            this.stageDraft.model_name = '';
+            this.stageCustomModel = false;
+            this.loadModels();
+        },
+
+        async editStage(stageId) {
             const cur = this.stageFor(stageId);
             const labelMap = { SPARK: 'Spark', SCOPE: 'Scope', MAP: 'Map', SHIP: 'Ship', SCALE: 'Scale' };
             this.editingStage = stageId;
@@ -535,6 +600,8 @@ function aiSettingsApp() {
             };
             this.stageMsg = '';
             this.stageErr = '';
+            this.stageCustomModel = !!this.stageDraft.model_name;
+            await this.loadModels();
         },
 
         async saveStage() {
@@ -560,6 +627,7 @@ function aiSettingsApp() {
                 if (!res.ok) throw new Error((data && (data.message || data.msg)) || 'Save failed');
                 this.editingStage = null;
                 this.stageDraft = { provider: '', model_name: '', temperature: '', top_p: '', num_predict: '', skills: '', guidelines: '' };
+                this.stageCustomModel = false;
                 this.stageMsg = 'Saved.';
                 setTimeout(() => { this.stageMsg = ''; }, 3000);
                 await this.loadAll();
@@ -634,5 +702,6 @@ function aiSettingsApp() {
             </div>
         </div>
     </div>
+</div>
 
 {% endblock %}

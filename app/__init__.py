@@ -23,6 +23,24 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     else:
         app.config.from_object(config_name)
 
+    # Self-contained TLS: a readable cert+key pair implies HTTPS. Do this
+    # before init_extensions so Talisman and the cookie flags see it.
+    tls_cert = (app.config.get("TLS_CERT_FILE") or "").strip()
+    tls_key = (app.config.get("TLS_KEY_FILE") or "").strip()
+    if tls_cert and tls_key:
+        app.config["FORCE_HTTPS"] = True
+        app.config["SESSION_COOKIE_SECURE"] = True
+        app.config["JWT_COOKIE_SECURE"] = True
+
+    # Trust X-Forwarded-* only when explicitly enabled (direct exposure of
+    # a trusting ProxyFix would let clients spoof their own scheme/IP).
+    if app.config.get("TRUST_PROXY_HEADERS"):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1
+        )
+
     init_extensions(app)
 
     # Build version for the UI footer (also a freshness signal: if the
@@ -49,6 +67,7 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     )
     from .routes.admin import admin_api_bp, admin_pages_bp
     from .routes.auth import bp as auth_bp
+    from .routes.backup import bp as backup_bp
     from .routes.health import bp as health_bp
     from .routes.ideas import bp as ideas_bp
     from .routes.instances import bp as instances_bp
@@ -72,6 +91,7 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     app.register_blueprint(admin_pages_bp)
     app.register_blueprint(admin_api_bp, url_prefix="/api/v1")
     app.register_blueprint(instances_bp, url_prefix="/api/v1")
+    app.register_blueprint(backup_bp, url_prefix="/api/v1")
     app.register_blueprint(oauth_bp, url_prefix="/api/v1")
     app.register_blueprint(billing_bp, url_prefix="/api/v1")
     app.register_blueprint(releases_bp, url_prefix="/api/v1")

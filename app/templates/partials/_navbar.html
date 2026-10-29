@@ -7,10 +7,10 @@
                     <span class="text-xl font-bold text-slate-900 dark:text-white">Brainstormer</span>
                 </a>
             </div>
-<div class="hidden md:flex items-center space-x-4">
+<div class="hidden md:flex items-center space-x-1">
                 {% for link in nav_links %}
                 {% set active = request.endpoint == link.endpoint %}
-                <a href="{{ url_for(link.endpoint) }}" {% if active %}aria-current="page"{% endif %} class="px-3 py-2 min-h-[44px] inline-flex items-center rounded-md text-sm font-medium {% if active %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-700 dark:text-slate-300 hover:text-indigo-600{% endif %}">{{ link.label }}</a>
+                <a href="{{ url_for(link.endpoint) }}" {% if active %}aria-current="page"{% endif %} class="px-2 py-2 min-h-[44px] inline-flex items-center rounded-md text-sm font-medium {% if active %}text-indigo-600 dark:text-indigo-400{% else %}text-slate-700 dark:text-slate-300 hover:text-indigo-600{% endif %}">{{ link.label }}</a>
                 {% endfor %}
             </div>
             <div class="flex items-center space-x-3 min-w-0">

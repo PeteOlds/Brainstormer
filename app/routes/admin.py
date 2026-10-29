@@ -293,6 +293,13 @@ def activity_page(user):
     return render_template("admin/activity.html", user=user, current_user=user)
 
 
+@admin_pages_bp.route("/admin/jobs", methods=["GET"])
+@admin_required
+def jobs_page(user):
+    """Jobs dashboard page (Admin only)."""
+    return render_template("admin/activity.html", user=user, current_user=user)
+
+
 @admin_pages_bp.route("/admin/ai", methods=["GET"])
 @admin_required
 def ai_settings_page(user):
@@ -300,11 +307,20 @@ def ai_settings_page(user):
     return render_template("admin/ai_configs.html", user=user, current_user=user)
 
 
+@admin_pages_bp.route("/admin/backup", methods=["GET"])
+@admin_required
+def backup_page(user):
+    """Backup & Restore: site-wide (site admins) and per-instance."""
+    return render_template("admin/backup.html", user=user, current_user=user)
+
+
 @admin_api_bp.route("/admin/activity/stats", methods=["GET"])
+@admin_api_bp.route("/admin/jobs/stats", methods=["GET"])
 @admin_required
 def activity_stats(user):
     """Activity, performance and popularity stats for the admin dashboard."""
     from app.models import PromptRun, PromptRunStatus
+    from datetime import datetime, timedelta, timezone
 
     # Optional server-side run filters (?run_status=, ?model=). The stream
     # defaults to the 20 most recent runs; a filter widens the window so
@@ -330,16 +346,42 @@ def activity_stats(user):
     idea_ids = set()
     prompt_ids = set()
 
+    prompt_filter = (request.args.get("prompt") or "").strip() or None
+    error_condition = (request.args.get("error_condition") or "").strip() or None
+    job_type = (request.args.get("job_type") or "all").lower()
+    if job_type not in ("all", "ai", "app"):
+        return api_error("Invalid job_type filter", status_code=400)
+    try:
+        days = int(request.args.get("days", 30))
+    except (TypeError, ValueError):
+        days = 30
+    days = min(max(days, 1), 365)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
     run_query = apply_scope(
-        PromptRun.query.order_by(PromptRun.created_at.desc()), PromptRun
+        PromptRun.query.filter(PromptRun.created_at >= cutoff).order_by(
+            PromptRun.created_at.desc()
+        ),
+        PromptRun,
     )
     if status_filter:
         run_query = run_query.filter(PromptRun.status == status_filter)
+    if job_type == "ai":
+        run_query = run_query.filter(
+            (PromptRun.job_type == "ai") | (PromptRun.job_type.is_(None))
+        )
+    elif job_type == "app":
+        run_query = run_query.filter(PromptRun.job_type == "app")
 
-    # Paginate the base query (before model filter which requires Python)
-    pagination = run_query.paginate(page=page, per_page=per_page, error_out=False)
+    # Backfill normalized error categories for older rows.
+    for run in run_query.all():
+        if run.error and not run.error_category:
+            run.error_category = PromptRun.categorize_error(run.error)
+    db.session.commit()
 
-    for run in pagination.items:
+    idea_ids = set()
+    prompt_ids = set()
+    for run in run_query.all():
         item = run.to_dict()
         item["prompt_title"] = run.display_title
         recent_runs.append(item)
@@ -386,8 +428,6 @@ def activity_stats(user):
     # Apply model filter in Python (requires enriched data)
     if model_filter:
         recent_runs = [r for r in recent_runs if r["model"] == model_filter]
-        # Note: model filter may reduce count below per_page; this is acceptable
-        # for filtered views. Total count reflects pre-filter for simplicity.
 
     for item in recent_runs:
         if item["idea_id"] and item["idea_id"] in idea_refs:
@@ -397,6 +437,39 @@ def activity_stats(user):
                     f"{item['action_type'].title().replace('_', ' ')}"
                     f" on {idea_refs[item['idea_id']]}"
                 )
+
+    # Apply prompt and error-condition filters.
+    if prompt_filter:
+        needle = prompt_filter.lower()
+        recent_runs = [
+            r
+            for r in recent_runs
+            if needle in str(r.get("prompt_title") or "").lower()
+            or needle in str(r.get("action_type") or "").lower()
+            or needle in str(r.get("idea_reference") or "").lower()
+        ]
+    if error_condition:
+        recent_runs = [
+            r
+            for r in recent_runs
+            if (r.get("error_category") or "unknown") == error_condition
+        ]
+
+    # Paginate after all filters so totals are accurate.
+    total_runs_window = len(recent_runs)
+    start = (page - 1) * per_page
+    page_items = recent_runs[start : start + per_page]
+    from types import SimpleNamespace
+
+    pagination = SimpleNamespace(
+        page=page,
+        per_page=per_page,
+        total=total_runs_window,
+        pages=max(1, (total_runs_window + per_page - 1) // per_page),
+        has_next=start + per_page < total_runs_window,
+        has_prev=page > 1,
+    )
+    recent_runs = page_items
 
     # Per-run timings for the model timing graph (?model= only): successful
     # runs with a measured duration, newest first.
@@ -450,10 +523,12 @@ def activity_stats(user):
         pending_runs.append(item)
 
     # --- Performance ---
-    total_runs = apply_scope(PromptRun.query, PromptRun).count()
+    total_runs = apply_scope(
+        PromptRun.query.filter(PromptRun.created_at >= cutoff), PromptRun
+    ).count()
     status_rows = (
         db.session.query(PromptRun.status, func.count(PromptRun.id))
-        .filter(*_iid_filters(PromptRun.instance_id))
+        .filter(PromptRun.created_at >= cutoff, *_iid_filters(PromptRun.instance_id))
         .group_by(PromptRun.status)
         .all()
     )
@@ -464,7 +539,9 @@ def activity_stats(user):
     avg_duration = (
         db.session.query(func.avg(PromptRun.duration_seconds))
         .filter(
-            PromptRun.duration_seconds.isnot(None), *_iid_filters(PromptRun.instance_id)
+            PromptRun.created_at >= cutoff,
+            PromptRun.duration_seconds.isnot(None),
+            *_iid_filters(PromptRun.instance_id),
         )
         .scalar()
     )
@@ -617,7 +694,10 @@ def activity_stats(user):
         ideas_by_status[status.value] = count
 
     pending_count = apply_scope(
-        PromptRun.query.filter(PromptRun.status.in_(live_statuses)), PromptRun
+        PromptRun.query.filter(
+            PromptRun.created_at >= cutoff, PromptRun.status.in_(live_statuses)
+        ),
+        PromptRun,
     ).count()
 
     return api_ok(

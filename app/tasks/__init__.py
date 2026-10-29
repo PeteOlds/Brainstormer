@@ -78,6 +78,11 @@ def init_celery(app):
         task_soft_time_limit=600,
         task_time_limit=660,
         task_routes={
+            # The orphan reconciler and due-prompt scheduler run from beat.
+            # They must not sit behind the ollama queue: when that worker is
+            # down, stuck runs would never be failed (seen 2026-10-26: a run
+            # RUNNING for 13 h, 791 check_due_prompts queued).
+            "app.tasks.ollama_tasks.check_due_prompts": {"queue": "default"},
             "app.tasks.ollama_tasks.*": {"queue": "ollama"},
             "app.tasks.maintenance_tasks.*": {"queue": "default"},
             "app.tasks.supervision_tasks.*": {"queue": "supervision"},
@@ -103,6 +108,7 @@ def init_celery(app):
             "celery": {"exchange": "celery", "routing_key": "celery"},
             "ollama": {"exchange": "ollama", "routing_key": "ollama"},
             "default": {"exchange": "default", "routing_key": "default"},
+            "opencode": {"exchange": "opencode", "routing_key": "opencode"},
             "supervision": {"exchange": "supervision", "routing_key": "supervision"},
             "github": {"exchange": "github", "routing_key": "github"},
             "dlq": {"exchange": "dlq", "routing_key": "dlq"},

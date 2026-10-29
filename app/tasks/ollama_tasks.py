@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import structlog
-from celery.exceptions import Retry
+from celery.exceptions import Retry, SoftTimeLimitExceeded
 from pydantic import ValidationError
 
 from app.extensions import db
@@ -15,7 +15,31 @@ from app.services.prompt_templates import get_base_prompt, get_prompt_template
 from app.tasks import BaseTask, celery, enqueue_generation
 from app.utils.crypto import decrypt
 
+def _host_network_ip() -> str:
+    """Best-effort LAN IP of this machine (never 127.x) for shareable URLs."""
+    import socket
+
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.connect(("8.8.8.8", 80))
+            ip = sock.getsockname()[0]
+        finally:
+            sock.close()
+        if ip and not ip.startswith("127."):
+            return ip
+    except Exception:
+        pass
+    return "localhost"
+
 logger = structlog.get_logger()
+
+# Secondary actions (PRD/Design/Build/analysis) get their own ceiling.
+# Code builds on a CPU-only host routinely exceed the 600 s global
+# default; idea generation keeps the short global limit so a stuck
+# generation fails fast. Env-tunable for slower hosts.
+SECONDARY_SOFT_TIME_LIMIT = int(os.environ.get("SECONDARY_SOFT_TIME_LIMIT", "1800"))
+SECONDARY_TIME_LIMIT = int(os.environ.get("SECONDARY_TIME_LIMIT", "1860"))
 
 
 class _AbortAction(Exception):
@@ -773,12 +797,12 @@ def _extract_runtime_info(files: list) -> dict:
     if docker_image:
         notes.append(f"Docker image: {docker_image}")
     if compose_path:
-        notes.append(f"Or run everything with docker-compose using {compose_path}.")
+        notes.append(f"Or run everything with Docker Compose using {compose_path} (install docker-compose-v2 first if `docker compose` is missing; create /var/log/opencode and copy .env.example to .env if needed).")
     if port:
-        app_url = f"http://localhost:{port}"
+        app_url = f"http://{_host_network_ip()}:{port}"
     frontend_url = None
     if frontend_port:
-        frontend_url = f"http://localhost:{frontend_port}"
+        frontend_url = f"http://{_host_network_ip()}:{frontend_port}"
         notes.append(f"Open {frontend_url} in your browser once it is running.")
     elif app_url:
         notes.append(f"Open {app_url} in your browser once it is running.")
@@ -1012,8 +1036,8 @@ def _derive_runbook(
         rel = _os.path.relpath(req, appdir) if appdir else req
         if not rel.startswith(".."):
             setup = (
-                f"{quoted} && python3 -m venv --upgrade .venv "
-                f"&& . .venv/bin/activate && pip install -r {rel}"
+                f'{quoted} && rm -rf .venv && python3 -m venv .venv '
+                f'&& . .venv/bin/activate && .venv/bin/pip install -r {rel}'
             )
     use_venv = setup is not None
     # Supervised processes run inside worker containers, where host paths
@@ -1068,9 +1092,16 @@ def _derive_runbook(
             if m and not line.startswith("-"):
                 names.append(m.group(1))
         if names:
-            setup_fallback = (
-                f"{quoted} && . .venv/bin/activate && pip install {' '.join(names)}"
+            # Unpinned installs work on newer Pythons where the old pins
+            # no longer build (e.g. pydantic-core on 3.14). Make that the
+            # primary, paste-and-run command; keep the pinned one as the
+            # reproducibility fallback.
+            pinned = setup
+            setup = (
+                f'{quoted} && rm -rf .venv && python3 -m venv .venv '
+                f'&& . .venv/bin/activate && .venv/bin/pip install {" ".join(names)}'
             )
+            setup_fallback = pinned
             pip_fallback_argv = [evenv + "/bin/pip", "install"] + names
     if run_argv is None:
         # No safe argv (non-python command without installable requirements):
@@ -1144,13 +1175,13 @@ def _allocate_build_port(runtime: dict, files: list) -> tuple[dict, list, list]:
         else:
             files, _ = _rewrite_compose_host_port(files, fport, fnew)
             runtime = dict(
-                runtime, frontend_port=fnew, frontend_url=f"http://localhost:{fnew}"
+                runtime, frontend_port=fnew, frontend_url=f"http://{_host_network_ip()}:{fnew}"
             )
             existing = runtime.get("run_notes")
             if isinstance(existing, str) and existing:
                 runtime["run_notes"] = re.sub(
-                    r"(localhost|127\.0\.0\.1)" + r":" + str(fport) + r"\b",
-                    lambda m: m.group(1) + f":{fnew}",
+                    r"((?:localhost|127\.0\.0\.1|\d{1,3}(?:\.\d{1,3}){3}))" + r":" + str(fport) + r"\b",
+                    lambda m: f"{_host_network_ip()}:{fnew}",
                     existing,
                 )
             line = (
@@ -1216,8 +1247,8 @@ def _allocate_build_port(runtime: dict, files: list) -> tuple[dict, list, list]:
         import re
 
         runtime["run_notes"] = re.sub(
-            r"(localhost|127\.0\.0\.1)" + r":" + str(old) + r"\b",
-            lambda m: m.group(1) + f":{new}",
+            r"((?:localhost|127\.0\.0\.1|\d{1,3}(?:\.\d{1,3}){3}))" + r":" + str(old) + r"\b",
+            lambda m: f"{_host_network_ip()}:{new}",
             existing_notes,
         )
     line = (
@@ -1352,8 +1383,15 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
     base=BaseTask,
     name="app.tasks.ollama_tasks.run_secondary_action",
     autoretry_for=(Exception,),
+    dont_autoretry_for=(SoftTimeLimitExceeded, _AbortAction),
     retry_backoff=True,
     max_retries=2,
+    # Code builds on a CPU-only host routinely exceed the 600 s global
+    # default (a single qwen2.5-coder:3b write can take 10+ minutes).
+    # Give secondary actions their own generous ceiling; the global
+    # default stays short so a stuck idea-generation task still fails fast.
+    soft_time_limit=SECONDARY_SOFT_TIME_LIMIT,
+    time_limit=SECONDARY_TIME_LIMIT,
 )
 def run_secondary_action(
     self,
@@ -1393,7 +1431,10 @@ def run_secondary_action(
         run.mark_running()
         db.session.commit()
 
-    client = OllamaClient(timeout=600.0)
+    # Per-request ceiling for write-type actions (builds/code generation).
+    # Must stay below the task's soft limit so the task reports a clean
+    # timeout instead of being killed mid-request.
+    client = OllamaClient(timeout=1500.0)
     # Explicit run args always win; the prompt (or the built-in default)
     # only fills what the caller left blank.
     model = model_override or (
@@ -1615,8 +1656,23 @@ def run_secondary_action(
             except (ValueError, TypeError, AttributeError):
                 build_target = None
             if build_target is None:
-                _record_failure(run_id, "Unknown build target for this instance.")
-                return
+                # A preview can fall back to an unambiguous single repo (the
+                # UI often has no target to send). A confirm never guesses:
+                # it writes a stored manifest, which must match its repo.
+                candidates = InstanceBuildTarget.query.filter_by(
+                    instance_id=idea.instance_id
+                ).all()
+                if not build_confirm and len(candidates) == 1:
+                    build_target = candidates[0]
+                else:
+                    names = ", ".join(sorted(t.name for t in candidates)) or "none"
+                    _record_failure(
+                        run_id,
+                        "No build repo selected. Registered repos for this "
+                        f"instance: {names}. Pick one on the Build tab or add "
+                        "one in Admin → AI Settings.",
+                    )
+                    return
             try:
                 build_root = resolve_target(build_target)
             except BuildError as exc:
@@ -1904,6 +1960,12 @@ def check_due_prompts():
             prompt.provider,
         )
         run.job_id = job.id
+        # Advance the schedule at enqueue time, not only on success. A run
+        # whose worker died never completes, and the prompt would otherwise
+        # stay due: every reconcile (45 min) would queue another run.
+        prompt.next_run_at = datetime.now(timezone.utc) + timedelta(
+            minutes=prompt.interval_minutes
+        )
         db.session.commit()
         enqueued += 1
 

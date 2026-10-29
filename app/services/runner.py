@@ -129,6 +129,23 @@ def _check_spec(spec: dict) -> dict:
         raise RunnerError(
             "The recorded start command cannot be run safely — confirm the build again."
         )
+    frontend_argv = spec.get("frontend_run_argv") or []
+    if frontend_argv and (
+        not isinstance(frontend_argv, list)
+        or not frontend_argv
+        or not all(isinstance(a, str) and a for a in frontend_argv)
+    ):
+        raise RunnerError(
+            "The recorded front-end command cannot be run safely — "
+            "confirm the build again."
+        )
+    frontend_workdir = str(spec.get("frontend_workdir") or "").strip() or workdir
+    if frontend_argv and (
+        not frontend_workdir or not os.path.isabs(frontend_workdir)
+    ):
+        raise RunnerError(
+            "The app has no front-end folder recorded — confirm the build again."
+        )
     # Bare names (e.g. python3 for venv creation) resolve at start time
     # against the runner-controlled PATH below.
     return {
@@ -138,6 +155,8 @@ def _check_spec(spec: dict) -> dict:
         "pip_argv": list(spec.get("pip_argv") or []),
         "log_path": str(spec.get("log_path") or "").strip(),
         "health_url": str(spec.get("health_url") or "").strip() or None,
+        "frontend_run_argv": list(frontend_argv),
+        "frontend_workdir": frontend_workdir,
     }
 
 
@@ -181,6 +200,28 @@ class LocalRunner(Runner):
         except (OSError, IndexError, ValueError):
             return True
         return state not in ("Z", "X", "x")
+
+    def _terminate_process_group(self, pid: int, sig: int, grace: float) -> None:
+        """Best-effort full process-group teardown. Never raises."""
+        try:
+            pgid = os.getpgid(int(pid))
+        except (ProcessLookupError, PermissionError, OSError, TypeError, ValueError):
+            return
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError, OSError):
+            return
+        deadline = time.monotonic() + grace
+        while time.monotonic() < deadline:
+            if not self._pid_alive(pid):
+                self._reap(pid)
+                return
+            time.sleep(0.25)
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+        self._reap(pid)
 
     def _reap(self, pid: int) -> None:
         """Collect our own dead children so they vanish instead of
@@ -323,8 +364,40 @@ class LocalRunner(Runner):
         except OSError as exc:
             log_fh.close()
             raise RunnerError(f"Could not start the app: {exc}") from exc
-        finally:
-            # The child keeps its own copy; closing ours is correct.
+
+        frontend_proc = None
+        frontend_argv = norm.get("frontend_run_argv") or []
+        if frontend_argv:
+            try:
+                frontend_proc = subprocess.Popen(
+                    frontend_argv,
+                    cwd=norm.get("frontend_workdir") or norm["workdir"],
+                    env=_supervision_env(
+                        norm.get("frontend_workdir") or norm["workdir"],
+                        frontend_argv,
+                    ),
+                    stdout=log_fh,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+            except OSError as exc:
+                self._terminate_process_group(proc.pid, signal.SIGTERM, self.STOP_GRACE_SECONDS)
+                log_fh.close()
+                raise RunnerError(f"Could not start the app UI: {exc}") from exc
+            time.sleep(1)
+            if frontend_proc.poll() is not None:
+                self._terminate_process_group(proc.pid, signal.SIGTERM, self.STOP_GRACE_SECONDS)
+                log_fh.close()
+                tail_lines = self.tail(log_path, 15)
+                raise RunnerError(
+                    "The app UI exited immediately. "
+                    + (
+                        "Last log lines: " + " / ".join(tail_lines)
+                        if tail_lines
+                        else "No output was logged."
+                    )
+                )
+            # The children keep their own copies; closing ours is correct.
             try:
                 log_fh.close()
             except OSError:
@@ -334,8 +407,16 @@ class LocalRunner(Runner):
         try:
             proc.wait(timeout=2)
         except subprocess.TimeoutExpired:
-            return {"pid": proc.pid}
+            pids = [proc.pid]
+            if frontend_proc is not None:
+                pids.append(frontend_proc.pid)
+            return {"pid": proc.pid, "frontend_pid": getattr(frontend_proc, "pid", None), "pids": pids}
         tail_lines = self.tail(log_path, 15)
+        if frontend_proc is not None:
+            try:
+                os.killpg(os.getpgid(frontend_proc.pid), signal.SIGTERM)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
         raise RunnerError(
             "The app exited immediately. "
             + (

@@ -30,7 +30,10 @@
         const tok=getToken();
         opts.headers=opts.headers||{};
         if(tok) opts.headers["Authorization"]="Bearer "+tok;
-        if(!opts.headers["Content-Type"] && opts.body) opts.headers["Content-Type"]="application/json";
+        // FormData must set its own multipart boundary — forcing JSON here
+        // made file uploads arrive with an empty request.files.
+        const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+        if(!isForm && !opts.headers["Content-Type"] && opts.body) opts.headers["Content-Type"]="application/json";
         return fetch(url, opts).then(r=>{
             if(r.status===401){ localStorage.removeItem("access_token"); localStorage.removeItem("refresh_token"); if(!location.pathname.startsWith("/login") && !location.pathname.startsWith("/register")) location.href="/login"; throw new Error("Unauthorized");}
             return r;

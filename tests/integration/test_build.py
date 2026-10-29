@@ -174,7 +174,7 @@ class TestBuildGates:
             headers=headers,
         )
         assert res.status_code == 400
-        assert "target_id" in res.get_json()["message"]
+        assert "No build repo selected" in res.get_json()["message"]
 
 
 class TestBuildTargets:
@@ -562,7 +562,8 @@ class TestBuildRuntimeInfo:
         )
         assert info["port"] == 3000
         assert "uvicorn" in (info["start_command"] or "")
-        assert info["app_url"] == "http://localhost:3000"
+        from app.tasks.ollama_tasks import _host_network_ip
+        assert info["app_url"] == f"http://{_host_network_ip()}:3000"
         assert info["frontend_url"] is None
         assert info["credentials"] == {
             "ADMIN_USER": "<set via environment>",
@@ -593,11 +594,14 @@ class TestBuildRuntimeInfo:
         )
         # Backend keeps the API port; the human UI gets its own URL.
         assert info["port"] == 8001
-        assert info["app_url"] == "http://localhost:8001"
+        from app.tasks.ollama_tasks import _host_network_ip
+        assert info["app_url"] == f"http://{_host_network_ip()}:8001"
         assert info["frontend_port"] == 3000
-        assert info["frontend_url"] == "http://localhost:3000"
+        from app.tasks.ollama_tasks import _host_network_ip
+        assert info["frontend_url"] == f"http://{_host_network_ip()}:3000"
         # The browser line names the UI, never the raw API.
-        assert "http://localhost:3000" in (info["run_notes"] or "")
+        from app.tasks.ollama_tasks import _host_network_ip
+        assert f"http://{_host_network_ip()}:3000" in (info["run_notes"] or "")
         assert "Open http://localhost:8001" not in (info["run_notes"] or "")
 
     def test_extract_empty_manifest(self):
@@ -687,11 +691,13 @@ class TestBuildPortAllocation:
     def test_allocate_build_port_rewrites_host_side(self):
         from app.tasks.ollama_tasks import _allocate_build_port
 
+        from app.tasks.ollama_tasks import _host_network_ip
+
         sock, busy = _hold_port()
         try:
             runtime = {
                 "port": busy,
-                "app_url": f"http://localhost:{busy}",
+                "app_url": f"http://{_host_network_ip()}:{busy}",
                 "start_command": '["python", "-m", "uvicorn", "src.main:app", '
                 f'"--host", "0.0.0.0", "--port", "{busy}"]',
                 "run_notes": f"Open http://localhost:{busy} in your browser once it is running.",
@@ -710,11 +716,11 @@ class TestBuildPortAllocation:
             assert new != busy
             assert out["port_requested"] == busy
             assert out["port_changed"] is True
-            assert out["app_url"] == f"http://localhost:{new}"
+            assert out["app_url"] == f"http://{_host_network_ip()}:{new}"
             assert f'"{new}"]' in out["start_command"]
             assert f'"{busy}"]' not in out["start_command"]
-            assert f"http://localhost:{new}" in out["run_notes"]
-            assert f"http://localhost:{busy}" not in out["run_notes"]
+            assert f"http://{_host_network_ip()}:{new}" in out["run_notes"]
+            assert f"http://{_host_network_ip()}:{busy}" not in out["run_notes"]
             assert f"{new}:8000" in new_files[0]["content"]
             assert f"{busy}:8000" not in new_files[0]["content"]
             # Plain language for non-technical users, on the row and report.
@@ -732,13 +738,15 @@ class TestBuildPortAllocation:
         probe.bind(("127.0.0.1", 0))
         free_api = probe.getsockname()[1]
         probe.close()
+        from app.tasks.ollama_tasks import _host_network_ip
+
         sock, busy = _hold_port()
         try:
             runtime = {
                 "port": free_api,
-                "app_url": f"http://localhost:{free_api}",
+                "app_url": f"http://{_host_network_ip()}:{free_api}",
                 "frontend_port": busy,
-                "frontend_url": f"http://localhost:{busy}",
+                "frontend_url": f"http://{_host_network_ip()}:{busy}",
                 "run_notes": f"Open http://localhost:{busy} in your browser once it is running.",
             }
             files = [
@@ -753,12 +761,12 @@ class TestBuildPortAllocation:
             out, new_files, report = _allocate_build_port(runtime, files)
             new = out["frontend_port"]
             assert new != busy
-            assert out["frontend_url"] == f"http://localhost:{new}"
+            assert out["frontend_url"] == f"http://{_host_network_ip()}:{new}"
             # Backend untouched.
             assert out["port"] == free_api
             assert f"{new}:3000" in new_files[0]["content"]
             assert f"{busy}:3000" not in new_files[0]["content"]
-            assert f"http://localhost:{new}" in out["run_notes"]
+            assert f"http://{_host_network_ip()}:{new}" in out["run_notes"]
             assert any("Dashboard port" in line for line in report)
         finally:
             sock.close()
@@ -830,12 +838,12 @@ class TestDeriveRunbook:
         assert rb is not None
         assert rb["workdir"] == "/mnt/host/IDEA-1/backend"
         assert rb["setup"] == (
-            'cd "/mnt/host/IDEA-1/backend" && python3 -m venv --upgrade .venv '
-            "&& . .venv/bin/activate && pip install -r requirements.txt"
+            'cd "/mnt/host/IDEA-1/backend" && rm -rf .venv && python3 -m venv .venv '
+            "&& . .venv/bin/activate && .venv/bin/pip install fastapi"
         )
         assert rb["setup_fallback"] == (
-            'cd "/mnt/host/IDEA-1/backend" && . .venv/bin/activate '
-            "&& pip install fastapi"
+            'cd "/mnt/host/IDEA-1/backend" && rm -rf .venv && python3 -m venv .venv '
+            "&& . .venv/bin/activate && .venv/bin/pip install -r requirements.txt"
         )
         assert rb["workdir"] == "/mnt/host/IDEA-1/backend"
         assert rb["venv_dir"] == "/mnt/host/IDEA-1/backend/.venv"
@@ -1007,15 +1015,22 @@ class TestManagedApps:
                 "port": 8001,
                 "frontend_url": "http://localhost:3000",
                 "frontend_port": 3000,
-                "files": [{"path": "app.py", "content": "x"}],
+                "files": [
+                    {"path": "app.py", "content": "x"},
+                    {"path": "frontend/src/index.html", "content": "<h1>hi</h1>"},
+                ],
+                "frontend_port": 3000,
             }
         )
         target = SimpleNamespace(path=str(tmp_path))
         spec, display, err = _spec_from_build_version(version_row, target, "IDEA-1")
         assert err is None
         # Health still polls the API; Open goes to the human UI.
-        assert spec["health_url"] == "http://localhost:8001"
-        assert spec["open_url"] == "http://localhost:3000"
+        from app.tasks.ollama_tasks import _host_network_ip
+
+        assert spec["health_url"] == f"http://{_host_network_ip()}:8001"
+        assert spec["open_url"] == f"http://{_host_network_ip()}:3000"
+        assert spec["frontend_run_argv"]
 
     def test_spec_open_url_falls_back_to_api(self, tmp_path):
         from types import SimpleNamespace
@@ -1036,7 +1051,8 @@ class TestManagedApps:
         target = SimpleNamespace(path=str(tmp_path))
         spec, display, err = _spec_from_build_version(version_row, target, "IDEA-1")
         assert err is None
-        assert spec["open_url"] == "http://localhost:8001"
+        from app.tasks.ollama_tasks import _host_network_ip
+        assert spec["open_url"] == f"http://{_host_network_ip()}:8001"
 
     def test_upsert_requires_written_version(self, app, client, tmp_path):
         with app.app_context():

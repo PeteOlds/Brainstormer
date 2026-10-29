@@ -129,6 +129,19 @@ class Idea(db.Model):
                         return clean[:limit] + ("..." if len(clean) > limit else "")
         return text[:limit] + ("..." if len(text) > limit else "")
 
+    def archived_from(self):
+        """Stage the idea was in when it was last archived (None if unknown)."""
+        from app.models.status_history import IdeaStatusHistory
+
+        row = (
+            IdeaStatusHistory.query.filter_by(
+                idea_id=self.id, new_status=IdeaStatus.ARCHIVE
+            )
+            .order_by(IdeaStatusHistory.changed_at.desc())
+            .first()
+        )
+        return row.old_status.value if row is not None else None
+
     def to_dict(self, include_content: bool = False, user_vote: int | None = None):
         data = {
             "id": str(self.id),
@@ -147,18 +160,24 @@ class Idea(db.Model):
             "created_by_id": (str(self.created_by_id) if self.created_by_id else None),
             "parent_id": str(self.parent_id) if self.parent_id else None,
             "child_kind": self.child_kind,
-            "parent_reference_code": (
-                self.parent.reference_code if self.parent else None
-            ),
-            "release_id": str(self.release_id) if self.release_id else None,
-            "repository": self.repository,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "actions_run": [a.action_type for a in self.actions],
         }
+        if self.parent:
+            data["parent_reference_code"] = self.parent.reference_code
+            data["parent_title"] = self.parent.prompt_title
+        data["release_id"] = str(self.release_id) if self.release_id else None
+        data["repository"] = self.repository
+        data["created_at"] = (
+            self.created_at.isoformat() if self.created_at else None
+        )
+        data["updated_at"] = (
+            self.updated_at.isoformat() if self.updated_at else None
+        )
+        data["actions_run"] = [a.action_type for a in self.actions]
         if user_vote is not None:
             data["user_vote"] = user_vote
         data["comments_count"] = self.comments_count
+        if self.status == IdeaStatus.ARCHIVE:
+            data["archived_from"] = self.archived_from()
         if include_content:
             data["content"] = self.raw_content
             data["structured_content"] = self.structured_content

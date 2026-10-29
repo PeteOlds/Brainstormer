@@ -17,6 +17,9 @@ APPROVED = {
     "app/services/slack_service.py",
     "app/services/llm_backends.py",
     "app/services/embedding_service.py",  # httpx only to local Ollama
+    "app/services/opencode_backend.py",  # httpx to the LAN opencode server
+    "app/services/runner.py",  # urllib only for local health probes
+    "app/services/frontend_proxy.py",  # stdlib reverse proxy for supervised apps
     "app/routes/health.py",  # httpx only to local Ollama readiness probe
     "app/routes/prompts.py",  # httpx only to local Ollama test-stream
     "app/routes/billing.py",  # httpx only to api.stripe.com (portal link)

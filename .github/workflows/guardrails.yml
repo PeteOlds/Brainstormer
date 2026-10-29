@@ -93,11 +93,32 @@ jobs:
       - run: flutter pub get
         working-directory: flutter
       - name: Flutter integration smoke (headless)
-        # integration_test/ needs a device build (Chrome unavailable for
-        # it on runners); run the identical file through the headless
-        # test VM against the scratch backend started above.
+        # The API contract smoke runs on the VM: Chrome would enforce CORS
+        # on the scratch backend (no CORS headers by design), so the
+        # browser leg is covered by the `flutter-integration-chrome` job.
         working-directory: flutter
         run: |
           cp integration_test/app_test.dart test/zz_it_smoke_test.dart
           flutter test test/zz_it_smoke_test.dart --dart-define=API_BASE_URL=http://127.0.0.1:8123
           rm test/zz_it_smoke_test.dart
+
+  flutter-integration-chrome:
+    # Device-CI leg: compile the web target and run the widget/unit suite
+    # inside real Chrome. Golden images are OS/font specific and stay on
+    # the VM job (excluded by tag).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.4"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: flutter
+      - name: Web build compiles
+        working-directory: flutter
+        run: flutter build web --release
+      - name: Widget + unit tests in Chrome
+        working-directory: flutter
+        run: flutter test --platform chrome test/ --exclude-tags golden

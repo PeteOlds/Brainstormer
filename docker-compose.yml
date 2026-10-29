@@ -52,6 +52,10 @@ services:
     command: gunicorn -w 2 -b 0.0.0.0:8000 wsgi:app
     ports:
       - "8000:8000"
+    volumes:
+      # Optional self-contained TLS: put server.crt + server.key here and
+      # set TLS_CERT_FILE=/certs/server.crt, TLS_KEY_FILE=/certs/server.key.
+      - ./certs:/certs:ro
     environment:
       - DATABASE_URL=postgresql://app:${DB_PASSWORD}@postgres:5432/brainstormer
       - REDIS_URL=redis://redis:6379
@@ -64,6 +68,10 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - RATE_LIMIT_STORAGE_URL=redis://redis:6379/2
+      - TLS_CERT_FILE=${TLS_CERT_FILE:-}
+      - TLS_KEY_FILE=${TLS_KEY_FILE:-}
+      - FORCE_HTTPS=${FORCE_HTTPS:-False}
+      - TRUST_PROXY_HEADERS=${TRUST_PROXY_HEADERS:-False}
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,7 +80,7 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      test: ["CMD-SHELL", "if [ -n \"$$TLS_CERT_FILE\" ]; then curl -kf https://localhost:8000/api/health; else curl -f http://localhost:8000/api/health; fi"]
       interval: 30s
       timeout: 10s
       retries: 3

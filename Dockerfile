@@ -23,12 +23,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 COPY celery_worker.py .
 COPY celery_beat.py .
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Development stage
 FROM base AS development

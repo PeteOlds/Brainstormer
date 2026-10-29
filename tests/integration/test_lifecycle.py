@@ -30,12 +30,15 @@ def test_transition_matrix_unit():
     assert can_transition(IdeaStatus.SPARK, IdeaStatus.SCOPE)
     assert can_transition(IdeaStatus.SPARK, IdeaStatus.MAP)
     assert not can_transition(IdeaStatus.SPARK, IdeaStatus.SHIP)
-    assert not can_transition(IdeaStatus.SPARK, IdeaStatus.ARCHIVE)
+    assert can_transition(IdeaStatus.SPARK, IdeaStatus.ARCHIVE)
     assert can_transition(IdeaStatus.SHIP, IdeaStatus.SCALE)
     assert can_transition(IdeaStatus.DROP, IdeaStatus.SCALE)
-    assert not can_transition(IdeaStatus.ARCHIVE, IdeaStatus.SPARK)
+    assert can_transition(IdeaStatus.ARCHIVE, IdeaStatus.SPARK)
+    assert not can_transition(IdeaStatus.SPARK, IdeaStatus.SHIP)
     assert can_transition(IdeaStatus.SCOPE, IdeaStatus.SCOPE)
-    assert allowed_from(IdeaStatus.ARCHIVE) == []
+    assert set(allowed_from(IdeaStatus.ARCHIVE)) == {
+        "DROP", "FREEZE", "MAP", "SCALE", "SCOPE", "SHIP", "SPARK"
+    }
 
 
 def test_illegal_transition_rejected_with_history(
@@ -45,10 +48,10 @@ def test_illegal_transition_rejected_with_history(
         idea_id = make_idea("SPARK")
 
     resp = admin_client.patch(
-        f"/api/v1/ideas/{idea_id}/status", json={"status": "ARCHIVE"}
+        f"/api/v1/ideas/{idea_id}/status", json={"status": "SHIP"}
     )
     assert resp.status_code == 400
-    assert resp.get_json()["message"].startswith("Illegal transition SPARK -> ARCHIVE")
+    assert resp.get_json()["message"].startswith("Illegal transition SPARK -> SHIP")
 
     resp = admin_client.patch(
         f"/api/v1/ideas/{idea_id}/status", json={"status": "SCOPE"}

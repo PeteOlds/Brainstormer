@@ -632,6 +632,83 @@ class TestBulkRunAction:
         # repo was picked automatically.
         assert body["started"] == ["IDEA-B30"]
         assert body["skipped"] == []
+        # The worker must actually receive it: a mocked task used to hide
+        # the missing target_id, and the run failed at execution time with
+        # "Unknown build target for this instance".
+        extra = mock_run.delay.call_args.kwargs["extra_context"]
+        assert extra["target_id"] == str(tid)
+        assert extra["target_name"] == "repo"
+
+    def test_bulk_build_skips_when_target_ambiguous(self, admin_client, app):
+        from unittest.mock import patch as _patch
+
+        from app.models import Instance, InstanceBuildTarget
+
+        rid, ids = self._release_with(admin_client, app, "5", ("SHIP",))
+        with app.app_context():
+            from app.models import Idea as _Idea
+
+            inst = Instance(number=9995, name="Scale ambiguous")
+            db.session.add(inst)
+            db.session.flush()
+            kid = _Idea.query.filter_by(reference_code="IDEA-B50").one()
+            kid.instance_id = inst.id
+            # Two repos and no previous build: the route must not guess.
+            for name in ("one", "two"):
+                db.session.add(
+                    InstanceBuildTarget(
+                        instance_id=inst.id, name=name, path=f"/tmp/{name}"
+                    )
+                )
+            db.session.commit()
+        with _patch("app.tasks.ollama_tasks.run_secondary_action") as mock_run:
+            mock_run.delay.return_value.id = "job-5"
+            res = admin_client.post(
+                f"/api/v1/releases/{rid}/run-action",
+                json={"action_type": "BUILD_CODE"},
+            )
+        assert res.status_code == 202, res.get_json()
+        body = res.get_json()["data"]
+        assert body["started"] == []
+        assert "repo" in body["skipped"][0]["reason"].lower()
+        assert mock_run.delay.call_count == 0
+
+    def test_bulk_build_honours_requested_target(self, admin_client, app):
+        from unittest.mock import patch as _patch
+
+        from app.models import Instance, InstanceBuildTarget
+
+        rid, ids = self._release_with(admin_client, app, "6", ("SHIP",))
+        with app.app_context():
+            from app.models import Idea as _Idea
+
+            inst = Instance(number=9996, name="Scale explicit")
+            db.session.add(inst)
+            db.session.flush()
+            kid = _Idea.query.filter_by(reference_code="IDEA-B60").one()
+            kid.instance_id = inst.id
+            chosen = InstanceBuildTarget(
+                instance_id=inst.id, name="chosen", path="/tmp/chosen"
+            )
+            db.session.add_all(
+                [
+                    chosen,
+                    InstanceBuildTarget(
+                        instance_id=inst.id, name="other", path="/tmp/other"
+                    ),
+                ]
+            )
+            db.session.commit()
+            chosen_id = str(chosen.id)
+        with _patch("app.tasks.ollama_tasks.run_secondary_action") as mock_run:
+            mock_run.delay.return_value.id = "job-6"
+            res = admin_client.post(
+                f"/api/v1/releases/{rid}/run-action",
+                json={"action_type": "BUILD_CODE", "target_id": chosen_id},
+            )
+        assert res.status_code == 202, res.get_json()
+        extra = mock_run.delay.call_args.kwargs["extra_context"]
+        assert extra["target_id"] == chosen_id
 
     def test_bulk_build_confirm_needs_preview(self, admin_client, app):
         rid, ids = self._release_with(admin_client, app, "4", ("SHIP",))

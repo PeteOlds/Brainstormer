@@ -32,7 +32,7 @@ def _now():
     acks_late=True,
     reject_on_worker_lost=True,
 )
-def start_managed_app(self, app_id: str):
+def start_managed_app(self, app_id: str, run_id: str | None = None):
     """Bring one managed app up. Slow path (venv+pip+boot): generous
     limits, generous logging. All failures land on the row in plain
     language — the UI never has to interpret tracebacks."""
@@ -48,15 +48,28 @@ def start_managed_app(self, app_id: str):
     if app_row is None:
         logger.warning("supervise_missing", app_id=str(app_id)[:40])
         return
+    from app.models import PromptRun, PromptRunStatus
+    import uuid as _uuid
+
+    run = None
+    if run_id:
+        try:
+            run = db.session.get(PromptRun, _uuid.UUID(str(run_id)))
+        except (ValueError, TypeError):
+            run = None
     runner = get_runner()
     app_row.state = "starting"
     app_row.last_error = None
+    if run is not None and run.status == PromptRunStatus.PENDING:
+        run.mark_running()
     db.session.commit()
 
     def _fail(message: str):
         app_row.state = "failed"
         app_row.last_error = message
         app_row.stopped_at = _now()
+        if run is not None:
+            run.mark_failed(message)
         db.session.commit()
         logger.warning("supervise_failed", app_id=str(app_row.id), error=message[:200])
 
@@ -89,12 +102,16 @@ def start_managed_app(self, app_id: str):
                 return
             app_row.state = "running"
             app_row.last_error = None
+            if run is not None:
+                run.mark_success()
             db.session.commit()
             return
     live = runner.status(app_row.pid, None)
     if live["state"] == "running" and live["pid"] == app_row.pid:
         app_row.state = "running"
         app_row.last_error = None
+        if run is not None:
+            run.mark_success()
         db.session.commit()
         return
     try:
@@ -105,7 +122,14 @@ def start_managed_app(self, app_id: str):
     except Exception as exc:  # never leak a traceback to the row
         _fail(f"Could not start the app: {exc}")
         return
+    if run is not None:
+        run.mark_success()
     app_row.pid = launched["pid"]
+    spec = dict(app_row.spec or {})
+    spec["pids"] = launched.get("pids") or [launched["pid"]]
+    if launched.get("frontend_pid") is not None:
+        spec["frontend_pid"] = launched["frontend_pid"]
+    app_row.spec = spec
     app_row.state = "running"
     app_row.last_error = None
     app_row.started_at = _now()
@@ -123,7 +147,7 @@ def start_managed_app(self, app_id: str):
     acks_late=True,
     reject_on_worker_lost=True,
 )
-def stop_managed_app(self, app_id: str):
+def stop_managed_app(self, app_id: str, run_id: str | None = None):
     """Stop one managed app. Runs on a worker so the pid resolves in the
     spawner's PID namespace. Verifies the port went quiet afterwards."""
     from app.services.runner import get_runner, poll_health
@@ -137,13 +161,32 @@ def stop_managed_app(self, app_id: str):
     if app_row is None:
         logger.warning("supervise_missing", app_id=str(app_id)[:40])
         return
+    from app.models import PromptRun, PromptRunStatus
+
+    run = None
+    if run_id:
+        try:
+            run = db.session.get(PromptRun, uuid.UUID(str(run_id)))
+        except (ValueError, TypeError):
+            run = None
     runner = get_runner()
-    try:
-        runner.stop(app_row.pid)
-    except Exception as exc:  # stop never raises, but never trust that here
-        logger.warning(
-            "supervise_stop_error", app_id=str(app_id)[:40], error=str(exc)[:200]
-        )
+    if run is not None and run.status == PromptRunStatus.PENDING:
+        run.mark_running()
+        db.session.commit()
+    pids = [app_row.pid]
+    spec = app_row.spec or {}
+    if spec.get("frontend_pid") is not None:
+        pids.append(spec["frontend_pid"])
+    for pid in spec.get("pids") or []:
+        if pid not in pids:
+            pids.append(pid)
+    for pid in pids:
+        try:
+            runner.stop(pid)
+        except Exception as exc:  # stop never raises, but never trust that here
+            logger.warning(
+                "supervise_stop_error", app_id=str(app_id)[:40], error=str(exc)[:200]
+            )
     app_row.state = "stopped"
     app_row.pid = None
     app_row.stopped_at = _now()
@@ -153,5 +196,10 @@ def stop_managed_app(self, app_id: str):
             "The app did not shut down — its port is still answering. "
             "Press Stop again, or stop the program using that port."
         )
+        if run is not None:
+            run.mark_failed(app_row.last_error)
+    else:
+        if run is not None:
+            run.mark_success()
     db.session.commit()
     logger.info("supervise_stopped", app_id=str(app_row.id), state=app_row.state)

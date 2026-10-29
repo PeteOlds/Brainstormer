@@ -159,5 +159,10 @@ def discover_actions(user, idea=None) -> list:
 
     actions = list_actions()
     if idea is not None:
+        st = idea.status
+        st_str = st.value if hasattr(st, 'value') else str(st)
+        print(f"DEBUG discover_actions: instance_id={idea.instance_id}, status={st_str}, type={type(st).__name__}")
+        print(f"DEBUG discover_actions: all actions={[a['key'] for a in actions]}")
         actions = [a for a in actions if _check_action_allowed(idea, a["key"])]
+        print(f"DEBUG discover_actions: filtered actions={[a['key'] for a in actions]}")
     return actions

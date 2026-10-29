@@ -149,7 +149,13 @@ def scheduled_site_backup(self, backup_dir: str | None = None) -> dict:
 
     from flask import current_app
 
+    from app.models import SystemSettings
     from app.services import backup as backup_svc
+
+    # Operators can pause the daily job from Admin -> Backup & Restore.
+    settings = SystemSettings.get_instance()
+    if not (settings.platform or {}).get("site_backup_automated", True):
+        return {"status": "skipped", "reason": "automation disabled"}
 
     target = (
         backup_dir

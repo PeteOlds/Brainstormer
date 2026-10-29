@@ -99,6 +99,22 @@ def ready():
     workers_opencode = 0
     workers_default = 0
 
+    # Backlog = tasks still sitting in the broker, not yet taken by a worker.
+    # Counting only inspect().active()/reserved() hid a 790-task ollama
+    # backlog when no ollama worker was running (2026-10-26).
+    try:
+        import redis as _redis
+        from flask import current_app as _app
+
+        broker = _redis.from_url(
+            _app.config["CELERY_BROKER_URL"], socket_timeout=2
+        )
+        queue_depth_ollama += int(broker.llen("ollama") or 0)
+        queue_depth_opencode += int(broker.llen("opencode") or 0)
+        queue_depth_default += int(broker.llen("default") or 0)
+    except Exception:
+        pass
+
     try:
         from app.tasks import celery
         inspect = celery.control.inspect()
@@ -139,4 +155,23 @@ def ready():
         "workers_ollama": workers_ollama,
         "workers_opencode": workers_opencode,
         "workers_default": workers_default,
+        "warnings": _queue_warnings(
+            {
+                "ollama": (queue_depth_ollama, workers_ollama),
+                "opencode": (queue_depth_opencode, workers_opencode),
+                "default": (queue_depth_default, workers_default),
+            }
+        ),
     }, status_code=code)
+
+
+def _queue_warnings(queues):
+    """Human-readable warnings for queues with a backlog and no worker."""
+    warnings = []
+    for name, (depth, workers) in queues.items():
+        if depth and not workers:
+            warnings.append(
+                f"{depth} task(s) waiting on the '{name}' queue with no "
+                f"'{name}' worker running. Start the {name} worker to drain them."
+            )
+    return warnings

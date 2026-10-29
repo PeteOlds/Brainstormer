@@ -122,6 +122,10 @@ class Config:
             "task": "app.tasks.ollama_tasks.check_due_prompts",
             "schedule": 60.0,
         },
+        "beat-heartbeat": {
+            "task": "app.tasks.maintenance_tasks.beat_heartbeat",
+            "schedule": 60.0,
+        },
         "scheduled-site-backup": {
             "task": "app.tasks.maintenance_tasks.scheduled_site_backup",
             "schedule": 86400.0,
@@ -163,6 +167,19 @@ class Config:
     SESSION_COOKIE_SECURE = FLASK_ENV == "production"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Strict"
+
+    # Self-contained TLS (Phase E/1). Point both vars at a PEM certificate
+    # and key mounted read-only into the container; gunicorn then serves
+    # HTTPS itself (no host reverse proxy needed). Leaving them empty keeps
+    # plain HTTP. When files are present the app also forces HTTPS, sends
+    # HSTS, and marks cookies Secure.
+    TLS_CERT_FILE = get_env("TLS_CERT_FILE", "")
+    TLS_KEY_FILE = get_env("TLS_KEY_FILE", "")
+    FORCE_HTTPS = get_env("FORCE_HTTPS", "False") == "True"
+    HSTS_MAX_AGE = int(get_env("HSTS_MAX_AGE", "31536000"))
+    # Only enable behind a trusted reverse proxy: trusts X-Forwarded-Proto
+    # / X-Forwarded-For from the immediate hop.
+    TRUST_PROXY_HEADERS = get_env("TRUST_PROXY_HEADERS", "False") == "True"
 
     # Prompt Encryption
     ENCRYPT_PROMPTS = True

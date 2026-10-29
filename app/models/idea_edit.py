@@ -36,6 +36,11 @@ class IdeaEdit(db.Model):
     )
 
     def to_dict(self, editor_name=None):
+        if editor_name is None:
+            from app.models import User
+
+            u = User.query.get(self.editor_id)
+            editor_name = u.email if u is not None else None
         return {
             "id": str(self.id),
             "idea_id": str(self.idea_id),

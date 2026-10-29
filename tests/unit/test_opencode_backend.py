@@ -238,10 +238,12 @@ def test_opencode_generate_attach_sandbox(monkeypatch, tmp_path):
     )
 
     argv = captured["argv"]
-    assert argv[argv.index("--attach") + 1] == "http://192.168.1.130:4096"
+    assert argv[argv.index("--server") + 1] == "http://192.168.1.130:4096"
     # Attached servers reject project-local agents: never pass --agent.
     assert "--agent" not in argv
-    assert argv[argv.index("--dir") + 1].startswith(server_root + "/brainstormer-")
+    # v2 has no --dir: the server-side project directory is the positional
+    # argument immediately before the message.
+    assert argv[-2].startswith(server_root + "/brainstormer-")
     assert captured["cwd"].startswith(str(tmp_path))
     # Local side cleaned up afterwards.
     assert not os.path.exists(captured["cwd"])
@@ -269,7 +271,7 @@ def test_opencode_attach_url_env_fallback(monkeypatch, tmp_path):
     ob.opencode_generate("m", "hi")
 
     argv = captured["argv"]
-    assert argv[argv.index("--attach") + 1] == "http://srv:4096"
+    assert argv[argv.index("--server") + 1] == "http://srv:4096"
 
 
 def test_opencode_generate_attach_repo(monkeypatch):
@@ -282,7 +284,7 @@ def test_opencode_generate_attach_repo(monkeypatch):
     ob.opencode_generate("m", "hi", workspace="repo", endpoint="http://x:4096")
 
     argv = captured["argv"]
-    assert argv[argv.index("--dir") + 1] == "/srv/repo"
+    assert argv[-2] == "/srv/repo"
     assert "--agent" not in argv
 
 
@@ -348,14 +350,17 @@ class _FakeCatalogClient:
     def __exit__(self, *exc):
         return False
 
-    def get(self, url):
+    def get(self, url, headers=None):
         _FakeCatalogClient.calls += 1
+        _FakeCatalogClient.headers = headers or {}
         return _FakeCatalogResponse(_CATALOG)
 
 
 def test_list_server_models_filters_and_sorts(monkeypatch):
     import httpx
 
+    monkeypatch.setenv("OPENCODE_SERVER_PASSWORD", "s3cret")
+    ob._server_models_cache.clear()
     _FakeCatalogClient.calls = 0
     monkeypatch.setattr(httpx, "Client", _FakeCatalogClient)
     got = ob.list_server_models("http://srv:4096", provider="opencode")
@@ -364,6 +369,11 @@ def test_list_server_models_filters_and_sorts(monkeypatch):
         {"id": "opencode/big-pickle", "name": "opencode/big-pickle"},
     ]
     assert _FakeCatalogClient.calls == 1
+    # Catalogue requests must authenticate (OpenCode servers use Basic auth).
+    import base64
+
+    expected = "Basic " + base64.b64encode(b"opencode:s3cret").decode()
+    assert _FakeCatalogClient.headers == {"Authorization": expected}
     # Second call is served from cache: no further HTTP.
     assert ob.list_server_models("http://srv:4096", provider="opencode") == got
     assert _FakeCatalogClient.calls == 1
