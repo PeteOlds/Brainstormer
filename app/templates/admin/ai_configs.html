@@ -190,12 +190,20 @@
                     <input x-model="stageDraft.num_predict" type="number" min="1" max="4096" class="block w-full px-3 py-2 min-h-[36px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Skills (one per line)</label>
-                    <textarea x-model="stageDraft.skills" rows="2" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></textarea>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Skills</label>
+                    <select x-model="stageDraft.skills" multiple class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 min-h-[80px]">
+                        <template x-for="s in discoverySkills" :key="s.name">
+                            <option :value="s.name" x-text="s.name"></option>
+                        </template>
+                    </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Guidelines (one per line)</label>
-                    <textarea x-model="stageDraft.guidelines" rows="2" class="block w-full px-3 py-2 text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></textarea>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Guidelines</label>
+                    <select x-model="stageDraft.guidelines" multiple class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 min-h-[80px]">
+                        <template x-for="g in discoveryGuidelines" :key="g.name">
+                            <option :value="g.name" x-text="g.name"></option>
+                        </template>
+                    </select>
                 </div>
             </div>
             <div class="flex gap-2 mt-3">
@@ -261,11 +269,13 @@ function aiSettingsApp() {
         stageConfigs: [],
         editingStage: null,
         editingStageStageLabel: '',
-        stageDraft: { provider: '', model_name: '', temperature: '', top_p: '', num_predict: '', skills: '', guidelines: '' },
+        stageDraft: { provider: '', model_name: '', temperature: '', top_p: '', num_predict: '', skills: [], guidelines: [] },
         stageSaving: false,
         stageMsg: '',
         stageErr: '',
         models: [],
+        discoverySkills: [],
+        discoveryGuidelines: [],
         stageCustomModel: false,
         ghDraft: { repo: '', branch: 'main', pat: '' },
         ghHasPat: false,
@@ -333,12 +343,19 @@ function aiSettingsApp() {
         async loadAll() {
             this.saveErr = '';
             try {
-                const [cfgRes, stageRes, spendRes, tgtRes] = await Promise.all([
+                const [cfgRes, stageRes, spendRes, tgtRes, discRes] = await Promise.all([
                     authFetch(`/api/v1/instances/${this.instanceId}/ai-configs`),
                     authFetch(`/api/v1/instances/${this.instanceId}/stage-config`),
                     authFetch(`/api/v1/instances/${this.instanceId}/spend`),
                     authFetch(`/api/v1/instances/${this.instanceId}/build-targets`),
+                    authFetch('/api/v1/discovery'),
                 ]);
+                if (discRes.ok) {
+                    const dd = await discRes.json();
+                    const d = dd.data || dd;
+                    this.discoverySkills = d.skills || [];
+                    this.discoveryGuidelines = d.guidelines || [];
+                }
                 if (cfgRes.status === 403 || cfgRes.status === 404) {
                     this.fatal = 'Instance admin access required for this instance.';
                     return;
@@ -594,8 +611,8 @@ function aiSettingsApp() {
                 temperature: cur.temperature != null ? String(cur.temperature) : '',
                 top_p: cur.top_p != null ? String(cur.top_p) : '',
                 num_predict: cur.num_predict != null ? String(cur.num_predict) : '',
-                skills: Array.isArray(cur.skills) ? cur.skills.join('\n') : '',
-                guidelines: Array.isArray(cur.guidelines) ? cur.guidelines.join('\n') : '',
+                skills: Array.isArray(cur.skills) ? cur.skills : [],
+                guidelines: Array.isArray(cur.guidelines) ? cur.guidelines : [],
             };
             this.stageMsg = '';
             this.stageErr = '';
@@ -615,8 +632,8 @@ function aiSettingsApp() {
                 if (this.stageDraft.temperature) body.temperature = parseFloat(this.stageDraft.temperature);
                 if (this.stageDraft.top_p) body.top_p = parseFloat(this.stageDraft.top_p);
                 if (this.stageDraft.num_predict) body.num_predict = parseInt(this.stageDraft.num_predict, 10);
-                if (this.stageDraft.skills) body.skills = String(this.stageDraft.skills).split(/\n/).map((s) => s.trim()).filter(Boolean);
-                if (this.stageDraft.guidelines) body.guidelines = String(this.stageDraft.guidelines).split(/\n/).map((s) => s.trim()).filter(Boolean);
+                if (this.stageDraft.skills && this.stageDraft.skills.length) body.skills = this.stageDraft.skills;
+                if (this.stageDraft.guidelines && this.stageDraft.guidelines.length) body.guidelines = this.stageDraft.guidelines;
                 const res = await authFetch(`/api/v1/instances/${this.instanceId}/stage-config`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -625,7 +642,7 @@ function aiSettingsApp() {
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((data && (data.message || data.msg)) || 'Save failed');
                 this.editingStage = null;
-                this.stageDraft = { provider: '', model_name: '', temperature: '', top_p: '', num_predict: '', skills: '', guidelines: '' };
+                this.stageDraft = { provider: '', model_name: '', temperature: '', top_p: '', num_predict: '', skills: [], guidelines: [] };
                 this.stageCustomModel = false;
                 this.stageMsg = 'Saved.';
                 setTimeout(() => { this.stageMsg = ''; }, 3000);

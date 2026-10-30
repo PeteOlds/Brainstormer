@@ -1460,6 +1460,11 @@ def run_secondary_action(
     if provider_override:
         # Explicit run choice wins over stage and prompt config.
         provider = provider_override.lower()
+    # OpenCode model ids are "provider/model". A stored display name
+    # ("Beam Free") or stale cached selection would make the CLI reject the
+    # run; normalise to the id form.
+    if provider == "opencode" and model and "/" not in str(model):
+        model = "opencode/" + str(model).strip().lower().replace(" ", "-")
     hosted = provider != "ollama"
     # A model override on a hosted idea is a litellm model id; on a
     # prompt-less idea the override alone cannot imply a provider — unless

@@ -2086,7 +2086,8 @@ function ideasApp() {
 
         actionTabs() {
             const seen = [];
-            for (const a of (this.selectedIdea?.actions || [])) {
+            const actions = (this.selectedIdea?.actions || []).slice().reverse();
+            for (const a of actions) {
                 if (a.action_type === 'REFINE') continue;                // Existing result tabs always display (history survives
                 // every transition); creation is gated by docActionVisible.
                 if (!seen.find((t) => t.key === a.action_type)) {
@@ -2830,11 +2831,17 @@ function ideasApp() {
                 .filter((x) => x.a !== '')
                 .map((x) => `Q: ${x.q}\nA: ${x.a}`);
             if (!answers.length) return;
-            const accepted = await this.runAction(this.selectedIdea.id, 'PRD_DOC', { answers });
-            // Keep the draft when the run was refused or failed to enqueue,
-            // so typed answers are never lost to a failed submit.
-            if (accepted) this.prdAnswers = {};
-            this.activeTab = 'PRD_DOC';
+            // Open the run dialog so the user can pick model/provider/skills
+            // (as on the first run) instead of silently re-running with the
+            // previous parameters.
+            this.pendingRunExtra = { answers };
+            await this.openRunDialog(
+                this.selectedIdea.id,
+                'PRD_DOC',
+                this.selectedIdea.reference_code,
+                this.selectedIdea.instance_id,
+            );
+            this.prdAnswers = {};
         },
 
         stageLabels: {

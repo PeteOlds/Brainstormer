@@ -398,6 +398,22 @@ def opencode_generate(
     if not model:
         raise ProviderError("OpenCode requires a model.", retryable=False)
 
+    # Tolerate a stored display name ("Beam Free") instead of the model
+    # id ("opencode/beam-free"): resolve against the server catalog so a
+    # misconfigured stage config can't break every run.
+    if "/" not in model and attach_url:
+        try:
+            for m in list_server_models(attach_url, provider="opencode"):
+                if m.get("name") == model or m.get("id") == model:
+                    model = m["id"]
+                    break
+            else:
+                # Heuristic fallback: slugify the display name.
+                slug = model.strip().lower().replace(" ", "-")
+                model = f"opencode/{slug}"
+        except Exception:
+            pass
+
     if timeout is None:
         timeout = float(_config("OPENCODE_TIMEOUT", 1500) or 1500)
 
