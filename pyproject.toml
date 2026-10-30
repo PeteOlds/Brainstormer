@@ -1,6 +1,6 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=app --cov-report=term-missing --cov-fail-under=35 -q"
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=75 -q"
 asyncio_mode = "auto"
 markers = [
     "ui: browser tests (Playwright); run with `pytest -m ui`",

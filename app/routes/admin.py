@@ -197,34 +197,60 @@ def _prompts_health():
     from app.models import IdeaStatus, PromptRun
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-    report = []
     prompt_query = apply_scope(
         PromptConfig.query.filter_by(is_active=True), PromptConfig
     )
-    for prompt in prompt_query.order_by(PromptConfig.title).all():
-        runs_7d = PromptRun.query.filter(
-            PromptRun.prompt_config_id == prompt.id, PromptRun.created_at >= cutoff
-        ).count()
-        ideas_q = Idea.query.filter(
-            Idea.prompt_config_id == prompt.id, Idea.created_at >= cutoff
+    prompts = prompt_query.order_by(PromptConfig.title).all()
+    prompt_ids = [p.id for p in prompts]
+
+    # Batched aggregates: one query per metric instead of 4 per prompt.
+    runs_by_prompt = dict(
+        db.session.query(PromptRun.prompt_config_id, func.count(PromptRun.id))
+        .filter(PromptRun.prompt_config_id.in_(prompt_ids), PromptRun.created_at >= cutoff)
+        .group_by(PromptRun.prompt_config_id)
+        .all()
+    )
+    ideas_by_prompt = dict(
+        db.session.query(Idea.prompt_config_id, func.count(Idea.id))
+        .filter(Idea.prompt_config_id.in_(prompt_ids), Idea.created_at >= cutoff)
+        .group_by(Idea.prompt_config_id)
+        .all()
+    )
+    discarded_by_prompt = dict(
+        db.session.query(Idea.prompt_config_id, func.count(Idea.id))
+        .filter(
+            Idea.prompt_config_id.in_(prompt_ids),
+            Idea.created_at >= cutoff,
+            Idea.status == IdeaStatus.DROP,
         )
-        ideas_7d = ideas_q.count()
-        discarded = ideas_q.filter(Idea.status == IdeaStatus.DROP).count()
+        .group_by(Idea.prompt_config_id)
+        .all()
+    )
+    avg_net_by_prompt = dict(
+        db.session.query(Idea.prompt_config_id, func.avg(Idea.net_score))
+        .filter(Idea.prompt_config_id.in_(prompt_ids), Idea.created_at >= cutoff)
+        .group_by(Idea.prompt_config_id)
+        .all()
+    )
+    avg_feas_by_prompt = dict(
+        db.session.query(Idea.prompt_config_id, func.avg(Idea.feasibility_score))
+        .filter(
+            Idea.prompt_config_id.in_(prompt_ids),
+            Idea.created_at >= cutoff,
+            Idea.feasibility_score.isnot(None),
+        )
+        .group_by(Idea.prompt_config_id)
+        .all()
+    )
+
+    report = []
+    for prompt in prompts:
+        runs_7d = runs_by_prompt.get(prompt.id, 0)
+        ideas_7d = ideas_by_prompt.get(prompt.id, 0)
+        discarded = discarded_by_prompt.get(prompt.id, 0)
         discard_pct = round(discarded / ideas_7d * 100) if ideas_7d else None
-        avg_net = (
-            db.session.query(func.avg(Idea.net_score))
-            .filter(Idea.prompt_config_id == prompt.id, Idea.created_at >= cutoff)
-            .scalar()
-        )
-        avg_feas = (
-            db.session.query(func.avg(Idea.feasibility_score))
-            .filter(
-                Idea.prompt_config_id == prompt.id,
-                Idea.created_at >= cutoff,
-                Idea.feasibility_score.isnot(None),
-            )
-            .scalar()
-        )
+        avg_net = avg_net_by_prompt.get(prompt.id)
+        avg_feas = avg_feas_by_prompt.get(prompt.id)
 
         flags = []
         # Tuning needs the full picture including discarded ideas.

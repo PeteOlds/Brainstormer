@@ -68,12 +68,24 @@ def list_admins(user):
         or Membership.is_site_admin(user.id)
         or current_instance_role() in ("INSTANCE_ADMIN", "SITE_ADMIN")
     )
+
+    memberships = []
+    if instance_id is not None:
+        memberships = Membership.query.filter_by(instance_id=instance_id).all()
+    # Batch-load users to avoid an N+1 per membership row.
+    member_user_ids = {m.user_id for m in memberships}
+    member_users = {
+        u.id: u
+        for u in User.query.filter(User.id.in_(member_user_ids)).all()
+    } if member_user_ids else {}
+    site_admins = User.query.filter_by(role="ADMIN", is_active=True).all()
+
     if caller_is_admin:
         # Admins may message any active member (and site admins).
         if instance_id is not None:
-            for m in Membership.query.filter_by(instance_id=instance_id).all():
+            for m in memberships:
                 if m.user_id not in seen:
-                    u = User.query.get(m.user_id)
+                    u = member_users.get(m.user_id)
                     if u is not None and u.is_active and u.id != user.id:
                         seen.add(u.id)
                         admins.append(
@@ -85,7 +97,7 @@ def list_admins(user):
                                 "is_admin": m.role in ("INSTANCE_ADMIN", "SITE_ADMIN"),
                             }
                         )
-        for u in User.query.filter_by(role="ADMIN", is_active=True).all():
+        for u in site_admins:
             if u.id != user.id and u.id not in seen:
                 seen.add(u.id)
                 admins.append(
@@ -100,9 +112,9 @@ def list_admins(user):
     else:
         # Normal users may only message instance admins.
         if instance_id is not None:
-            for m in Membership.query.filter_by(instance_id=instance_id).all():
+            for m in memberships:
                 if m.role in ("INSTANCE_ADMIN", "SITE_ADMIN") and m.user_id not in seen:
-                    u = User.query.get(m.user_id)
+                    u = member_users.get(m.user_id)
                     if u is not None and u.is_active and u.id != user.id:
                         seen.add(u.id)
                         admins.append(
@@ -114,7 +126,7 @@ def list_admins(user):
                                 "is_admin": True,
                             }
                         )
-        for u in User.query.filter_by(role="ADMIN", is_active=True).all():
+        for u in site_admins:
             if u.id != user.id and u.id not in seen:
                 seen.add(u.id)
                 admins.append(
