@@ -7,6 +7,7 @@ release row records the SHA — once set, the release cannot be pushed
 again (further updates need a new release).
 """
 
+import base64
 import os
 import shutil
 import subprocess
@@ -27,8 +28,38 @@ def _now():
     return datetime.now(timezone.utc)
 
 
-def _run_git(args, cwd, timeout=300):
-    """git with output captured; raises RuntimeError in plain language."""
+def _git_env(pat: str | None = None) -> dict:
+    """Environment for git, with credentials passed out-of-band.
+
+    Putting the PAT in the clone URL exposes it in `ps` output to every
+    local user and persists it in the clone's `.git/config`. Passing it as
+    an `http.extraheader` via GIT_CONFIG_* keeps it in this process's
+    environment instead, which other users cannot read.
+    """
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    if pat:
+        token = base64.b64encode(
+            f"x-access-token:{pat}".encode("utf-8")
+        ).decode("ascii")
+        env["GIT_CONFIG_COUNT"] = "1"
+        env["GIT_CONFIG_KEY_0"] = "http.https://github.com/.extraheader"
+        env["GIT_CONFIG_VALUE_0"] = f"AUTHORIZATION: basic {token}"
+    return env
+
+
+def _scrub(text: str, secret: str | None) -> str:
+    if secret:
+        return text.replace(secret, "***")
+    return text
+
+
+def _run_git(args, cwd, timeout=300, pat=None):
+    """git with output captured; raises RuntimeError in plain language.
+
+    `pat` supplies the credential through the environment and is redacted
+    from any error text.
+    """
     try:
         proc = subprocess.run(
             ["git"] + args,
@@ -36,6 +67,7 @@ def _run_git(args, cwd, timeout=300):
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=_git_env(pat),
         )
     except FileNotFoundError:
         raise RuntimeError("git is not installed on this worker.")
@@ -43,8 +75,8 @@ def _run_git(args, cwd, timeout=300):
         raise RuntimeError("git took too long — try again.")
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "git failed").strip()
-        # Scrub any token that leaked into an error message.
-        raise RuntimeError(err[:300])
+        # Scrub the credential out of anything we surface or log.
+        raise RuntimeError(_scrub(err, pat)[:300])
     return (proc.stdout or "").strip()
 
 
@@ -157,10 +189,11 @@ def push_release_to_github(self, release_id: str):
     tmp = tempfile.mkdtemp(prefix="github-push-")
     label = str(release.id) if release is not None else f"idea:{idea.id}"
     try:
-        clone_url = f"https://x-access-token:{config.pat}@github.com/{config.repo}.git"
+        clone_url = f"https://github.com/{config.repo}.git"
         _run_git(
             ["clone", "--depth", "1", "--branch", config.branch, clone_url, "repo"],
             cwd=tmp,
+            pat=config.pat,
         )
         work = os.path.join(tmp, "repo")
         _sync_dir(src, work)
@@ -177,7 +210,7 @@ def push_release_to_github(self, release_id: str):
         else:
             message = f"{idea.reference_code}: initial Scale push ({len(status.splitlines())} files)"
         _run_git(["commit", "-m", message], cwd=work)
-        _run_git(["push", "origin", f"HEAD:{config.branch}"], cwd=work)
+        _run_git(["push", "origin", f"HEAD:{config.branch}"], cwd=work, pat=config.pat)
         sha = _run_git(["rev-parse", "HEAD"], cwd=work)
         if release is not None:
             release.github_sha = sha

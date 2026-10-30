@@ -358,7 +358,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 function activityApp() {
     return {
         runs: [],
@@ -387,7 +387,7 @@ function activityApp() {
         lastUpdated: '',
 
         async init() {
-            if (!localStorage.getItem('access_token')) { window.location.href = '/login'; return; }
+            if (!localStorage.getItem('user')) { window.location.href = '/login'; return; }
             const params = new URLSearchParams(window.location.search);
             this.statusFilter = (params.get('run_status') || '').toUpperCase();
             this.modelFilter = params.get('model') || '';

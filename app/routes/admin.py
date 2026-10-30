@@ -135,6 +135,8 @@ def admin_update_user(user, user_id):
         target_user.role = UserRole[data["role"].upper()]
     if "is_active" in data:
         target_user.is_active = data["is_active"]
+    if "can_create_ideas" in data:
+        target_user.can_create_ideas = bool(data["can_create_ideas"])
     if "name" in data:
         target_user.name = data["name"]
 

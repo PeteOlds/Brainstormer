@@ -199,7 +199,7 @@ def test_generation_seconds_admin_only(logged_in_client, app, client):
     # Admin sees generation_seconds
     res = admin_client.get(f"/api/v1/ideas/{idea_id}", headers=headers)
     assert res.status_code == 200
-    assert res.get_json()["data"]["generation_seconds"] == 42.0
+    assert res.get_json()["data"]["idea"]["generation_seconds"] == 42.0
 
     # Regular user does not
     reg = client.post(
@@ -211,7 +211,7 @@ def test_generation_seconds_admin_only(logged_in_client, app, client):
         f"/api/v1/ideas/{idea_id}", headers={"Authorization": f"Bearer {token}"}
     )
     assert res.status_code == 200
-    assert "generation_seconds" not in res.get_json()["data"]
+    assert "generation_seconds" not in res.get_json()["data"]["idea"]
 
 
 def test_secondary_action_creates_pending_run(logged_in_client, app):
@@ -252,7 +252,9 @@ def test_secondary_action_creates_pending_run(logged_in_client, app):
             headers=headers,
         )
     assert res.status_code == 202
-    assert res.get_json()["data"]["run"]["action_type"] == "REFINE"
+    data = res.get_json()["data"]
+    assert data["action_type"] == "REFINE"
+    assert data["run_id"]
 
     with app.app_context():
         from app.models import PromptRun

@@ -20,8 +20,8 @@ jobs:
           pip install bandit safety
       - name: SAST and dependency audit
         run: |
-          bandit -r app/ -f txt || true
-          safety check || true
+          bandit -r app/ -f txt
+          safety check
       - name: Guardrail scripts
         run: |
           python scripts/check_no_external_calls.py
@@ -48,6 +48,15 @@ jobs:
         env:
           DATABASE_URL: sqlite:////tmp/ci.db
         run: pytest
+      - name: Install Playwright
+        run: python -m playwright install chromium
+      - name: Browser UI tests
+        env:
+          DATABASE_URL: sqlite:////tmp/ci.db
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          JWT_SECRET_KEY: ${{ env.JWT_SECRET_KEY }}
+          FERNET_KEY: ${{ env.FERNET_KEY }}
+        run: pytest -m ui tests/ui/ --no-cov
 
   flutter-integration:
     runs-on: ubuntu-latest

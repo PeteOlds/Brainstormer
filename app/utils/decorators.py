@@ -143,7 +143,12 @@ def site_admin_required(fn):
             return gated
         from app.utils.tenancy import is_site_admin
 
-        if not is_site_admin(user):
+        # The legacy ADMIN role is treated as site-wide everywhere else
+        # (`_membership_allows_admin`), so it must pass here too — otherwise
+        # the first admin of an upgraded install is locked out of the
+        # site-level pages it can see in the navbar.
+        legacy_admin = getattr(user.role, "value", user.role) == "ADMIN"
+        if not legacy_admin and not is_site_admin(user):
             return (
                 jsonify(
                     {"error": "Forbidden", "message": "Site admin access required."}

@@ -236,3 +236,202 @@ def test_restore_site_rejects_instance_bundle(app, tmp_path):
             backup_svc.restore_site(bundle)
         db.session.delete(inst)
         db.session.commit()
+
+
+# --- Authorisation: site-wide backup is a site-admin operation ---------------
+
+SITE_BACKUP_ENDPOINTS = [
+    ("put", "/api/v1/admin/backup/settings"),
+    ("post", "/api/v1/admin/backup/site/run"),
+    ("get", "/api/v1/admin/backup/site/download"),
+    ("get", "/api/v1/admin/backup/files/anything.bundle"),
+    ("post", "/api/v1/admin/backup/site/verify"),
+    ("post", "/api/v1/admin/backup/site/restore"),
+]
+
+
+def _tenant_admin_headers(client, app):
+    """An INSTANCE_ADMIN scoped to their own tenant — not a site admin."""
+    from app.models import Instance, Membership, User, UserRole
+
+    with app.app_context():
+        inst = Instance.query.filter_by(number=901).first()
+        if inst is None:
+            inst = Instance(number=901, name="Tenant A")
+            db.session.add(inst)
+            db.session.flush()
+        user = User.query.filter_by(email="tenant-admin@test.com").first()
+        if user is None:
+            user = User(email="tenant-admin@test.com", role=UserRole.USER)
+            user.set_password("password123")
+            db.session.add(user)
+            db.session.flush()
+        if (
+            Membership.query.filter_by(
+                user_id=user.id, instance_id=inst.id
+            ).first()
+            is None
+        ):
+            db.session.add(
+                Membership(
+                    user_id=user.id,
+                    instance_id=inst.id,
+                    role="INSTANCE_ADMIN",
+                )
+            )
+        db.session.commit()
+        instance_id = str(inst.id)
+
+    res = client.post(
+        "/api/v1/login",
+        json={
+            "email": "tenant-admin@test.com",
+            "password": "password123",
+            "instance_id": instance_id,
+        },
+    )
+    assert res.status_code == 200, res.get_json()
+    return {"Authorization": f"Bearer {res.get_json()['data']['access_token']}"}
+
+
+@pytest.mark.parametrize("method,path", SITE_BACKUP_ENDPOINTS)
+def test_instance_admin_cannot_reach_site_backup(app, client, method, path):
+    """A tenant admin must not be able to export every tenant's data.
+
+    The site bundle contains all users, ideas and settings, so exposing
+    these endpoints to an instance admin is a cross-tenant data breach.
+    """
+    headers = _tenant_admin_headers(client, app)
+    kwargs = {"headers": headers}
+    if method in ("post", "put"):
+        kwargs["json"] = {}
+    res = getattr(client, method)(path, **kwargs)
+    assert res.status_code == 403, (path, res.status_code, res.get_data(as_text=True)[:200])
+
+
+# --- Authenticity: a bundle must be signed by this server -------------------
+
+def _tamper(bundle):
+    """Edit one idea title and recompute the (non-secret) checksum."""
+    import copy
+    import hashlib
+    import json
+
+    forged = copy.deepcopy(bundle)
+    row = forged["data"]["ideas"][0]
+    row["prompt_title"] = "Injected by an attacker"
+    manifest = {k: v for k, v in forged["manifest"].items() if k != "checksum"}
+    payload = json.dumps(
+        {"manifest": manifest, "data": forged["data"]},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    forged["manifest"]["checksum"] = hashlib.sha256(payload).hexdigest()
+    return forged
+
+
+def test_tampered_bundle_rejected_even_with_valid_checksum(app):
+    """A self-checksum proves nothing: anyone can recompute it."""
+    with app.app_context():
+        seed_site()
+        bundle = backup_svc.export_site()
+        forged = _tamper(bundle)
+        assert forged["manifest"]["checksum"] != bundle["manifest"]["checksum"]
+        with pytest.raises(BackupIntegrityError):
+            backup_svc.verify_bundle(forged)
+
+
+def test_unsigned_bundle_rejected(app):
+    with app.app_context():
+        seed_site()
+        bundle = backup_svc.export_site()
+        bundle["manifest"].pop("signature", None)
+        with pytest.raises(BackupIntegrityError):
+            backup_svc.verify_bundle(bundle)
+
+
+def test_bundle_signed_with_another_key_rejected(app):
+    """Bundles are only accepted from a server holding the same secret."""
+    import copy
+
+    with app.app_context():
+        seed_site()
+        bundle = backup_svc.export_site()
+        forged = _tamper(bundle)
+        forged["manifest"]["signature"] = "0" * 64
+        with pytest.raises(BackupIntegrityError):
+            backup_svc.verify_bundle(forged)
+        # Sanity: the untouched bundle still verifies.
+        backup_svc.verify_bundle(copy.deepcopy(bundle))
+
+
+# --- Restore must stay inside its tenant and must not grant privilege -------
+
+def test_instance_restore_rejects_rows_for_another_instance(app):
+    """A bundle relabelled for tenant A must not write tenant B's rows."""
+    from app.models import Instance
+
+    with app.app_context():
+        tenant_b = Instance(number=902, name="Tenant B")
+        db.session.add(tenant_b)
+        db.session.flush()
+        db.session.add(
+            Idea(
+                reference_code="IDEA-B001",
+                prompt_title="B idea",
+                raw_content="b",
+                instance_id=tenant_b.id,
+            )
+        )
+        db.session.commit()
+        bundle = backup_svc.export_instance(tenant_b.id)
+
+        tenant_a = Instance(number=903, name="Tenant A")
+        db.session.add(tenant_a)
+        db.session.commit()
+
+        # Re-signed by this server, so it passes authenticity; the manifest
+        # now claims tenant A while the rows still belong to B.
+        relabelled = backup_svc.rescope_bundle(
+            bundle, "instance", instance_id=str(tenant_a.id)
+        )
+        with pytest.raises(BackupIntegrityError):
+            backup_svc.restore_instance(relabelled)
+
+        assert (
+            Idea.query.filter_by(reference_code="IDEA-B001").one().instance_id
+            == tenant_b.id
+        )
+
+
+def test_instance_restore_cannot_promote_a_member_to_admin(app):
+    """Restoring an instance bundle must not rewrite global roles/passwords."""
+    from app.models import Instance, Membership
+
+    with app.app_context():
+        tenant = Instance(number=904, name="Tenant C")
+        db.session.add(tenant)
+        db.session.flush()
+        member = User(email="member-c@test.com", role=UserRole.USER)
+        member.set_password("memberpass123")
+        db.session.add(member)
+        db.session.flush()
+        db.session.add(
+            Membership(user_id=member.id, instance_id=tenant.id, role="USER")
+        )
+        db.session.commit()
+        original_hash = member.password_hash
+        bundle = backup_svc.export_instance(tenant.id)
+
+        for row in bundle["data"]["users"]:
+            if row.get("email") == "member-c@test.com":
+                row["role"] = "ADMIN"
+                row["password_hash"] = "forged-hash"
+        forged = backup_svc.rescope_bundle(
+            bundle, "instance", instance_id=str(tenant.id)
+        )
+        backup_svc.restore_instance(forged)
+
+        restored = User.query.filter_by(email="member-c@test.com").one()
+        assert restored.role == UserRole.USER
+        assert restored.password_hash == original_hash

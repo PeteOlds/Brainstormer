@@ -168,12 +168,11 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 document.addEventListener('DOMContentLoaded', async () => {
     // Load stats
     try {
-        const token = localStorage.getItem('access_token');
-        const res = await fetch('/api/v1/admin/stats', {
+        const res = await authFetch('/api/v1/admin/stats', {
             headers: { 'Authorization': 'Bearer ' + token }
         });
         if (res.ok) {
@@ -206,8 +205,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         label.className = 'text-sm text-red-600 dark:text-red-400';
     };
     try {
-        const token = localStorage.getItem('access_token');
-        const res = await fetch('/api/ready', {
+        const res = await authFetch('/api/ready', {
             headers: { 'Authorization': 'Bearer ' + token }
         });
         // NOTE: /api/ready returns 503 when anything is down, but the body
@@ -258,14 +256,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         + '</div></div>';
     const pctOf = (n, max) => Math.max(4, Math.round((n / Math.max(max, 1)) * 100));
     async function loadBreakdowns() {
-        const token = localStorage.getItem('access_token');
         let stats = null, activity = null;
         try {
-            const r1 = await fetch('/api/v1/admin/stats', { headers: { 'Authorization': 'Bearer ' + token } });
+            const r1 = await authFetch('/api/v1/admin/stats', { headers: { 'Authorization': 'Bearer ' + token } });
             if (r1.ok) stats = (await r1.json()).data;
         } catch (e) { console.error('Failed to load stats for breakdowns:', e); }
         try {
-            const r2 = await fetch('/api/v1/admin/activity/stats', { headers: { 'Authorization': 'Bearer ' + token } });
+            const r2 = await authFetch('/api/v1/admin/activity/stats', { headers: { 'Authorization': 'Bearer ' + token } });
             if (r2.ok) activity = (await r2.json()).data;
         } catch (e) { console.error('Failed to load activity for breakdowns:', e); }
         const empty = '<p class="text-sm text-slate-500">No data yet.</p>';

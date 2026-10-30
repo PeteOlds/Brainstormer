@@ -312,6 +312,26 @@ def _litellm_cost_cents(model: str, response: Any) -> int:
         return 0
 
 
+def _safe_endpoint(url: str | None) -> str | None:
+    """Re-validate a stored endpoint at call time.
+
+    The write path rejects private destinations, but rows created before
+    that check existed (or imported with a restore) would still be dialled.
+    """
+    if not url:
+        return None
+    from flask import current_app
+
+    from app.utils.net import UnsafeEndpoint, validate_llm_endpoint
+
+    try:
+        return validate_llm_endpoint(
+            url, allow_hosts={current_app.config.get("OLLAMA_BASE_URL", "")}
+        )
+    except UnsafeEndpoint as exc:
+        raise ProviderError(f"Unsafe endpoint: {exc}", retryable=False) from exc
+
+
 def _litellm_generate(
     model: str,
     prompt: str,
@@ -338,7 +358,7 @@ def _litellm_generate(
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
     if endpoint:
-        kwargs["api_base"] = endpoint
+        kwargs["api_base"] = _safe_endpoint(endpoint)
     if options.get("temperature") is not None:
         kwargs["temperature"] = options["temperature"]
     if options.get("num_predict"):
@@ -545,7 +565,7 @@ def embed_for_instance(text: str, instance_id: Any = None) -> list[float] | None
                     model=row.embedding_model,
                     input=[text],
                     api_key=row.api_key,
-                    **({"api_base": row.endpoint} if row.endpoint else {}),
+                    **({"api_base": _safe_endpoint(row.endpoint)} if row.endpoint else {}),
                 )
                 record_spend(
                     instance_id,

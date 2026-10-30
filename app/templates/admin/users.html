@@ -6,7 +6,7 @@
 <div class="space-y-6">
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold text-slate-900 dark:text-white">User Management</h1>
-        <button onclick="openCreateModal()" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+        <button id="create-user-btn" type="button" class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
             <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             Create User
         </button>
@@ -74,7 +74,7 @@
                     </td>
                     <td class="py-4 px-4 text-right">
                         <div class="flex items-center justify-end space-x-2">
-                            <button onclick="deleteUser('{{ u.id }}', '{{ u.email }}')" 
+                            <button data-action="delete-user" data-user-id="{{ u.id }}" data-user-email="{{ u.email }}" 
                                 class="inline-flex items-center min-h-[44px] text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm"
                                 {% if current_user is defined and u.id == current_user.id %}disabled class="opacity-50 cursor-not-allowed"{% endif %}>
                                 Deactivate
@@ -115,7 +115,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 document.addEventListener('DOMContentLoaded', () => {
     // Search with debounce
     let searchTimeout;
@@ -142,12 +142,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const userId = e.target.dataset.userId;
             const role = e.target.value;
             try {
-                const token = localStorage.getItem('access_token');
-                const res = await fetch('/api/v1/admin/users/' + userId, {
+                const res = await authFetch('/api/v1/admin/users/' + userId, {
                     method: 'PATCH',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ role })
                 });
@@ -168,12 +166,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const userId = e.target.dataset.userId;
             const isActive = e.target.checked;
             try {
-                const token = localStorage.getItem('access_token');
-                const res = await fetch('/api/v1/admin/users/' + userId, {
+                const res = await authFetch('/api/v1/admin/users/' + userId, {
                     method: 'PATCH',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ is_active: isActive })
                 });
@@ -192,8 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.deleteUser = async function(userId, email) {
         if (!confirm('Are you sure you want to deactivate ' + email + '?')) return;
         try {
-            const token = localStorage.getItem('access_token');
-            const res = await fetch('/api/v1/admin/users/' + userId, {
+            const res = await authFetch('/api/v1/admin/users/' + userId, {
                 method: 'DELETE',
                 headers: { 'Authorization': 'Bearer ' + token }
             });
@@ -217,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.setAttribute('aria-label', 'Create user');
         modal.innerHTML = `
             <div class="flex min-h-full items-center justify-center p-4">
-                <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" onclick="this.parentElement.remove()"></div>
+                <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" data-action="close-modal"></div>
                 <div class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-lg shadow-2xl border-2 border-slate-300 dark:border-slate-500 p-6">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-4">Create User</h2>
                     <form id="create-user-form">
@@ -241,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </select>
                         </div>
                         <div class="flex justify-end space-x-3 mt-6">
-                            <button type="button" onclick="this.closest('.fixed').remove()" class="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                            <button type="button" data-action="close-modal" class="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
                             <button type="submit" class="px-4 py-2 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">Create</button>
                         </div>
                     </form>
@@ -254,12 +249,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData);
             try {
-                const token = localStorage.getItem('access_token');
-                const res = await fetch('/api/v1/admin/users/create', {
+                const res = await authFetch('/api/v1/admin/users/create', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + token
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(data)
                 });
@@ -276,6 +269,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     };
+// CSP: inline onclick handlers are blocked (no 'unsafe-inline' in
+// script-src), so bind them here instead.
+document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-action]");
+    if (!trigger) return;
+    const action = trigger.dataset.action;
+    if (action === "close-modal") {
+        const modal = trigger.closest(".fixed");
+        if (modal) modal.remove();
+    } else if (action === "delete-user") {
+        window.deleteUser(trigger.dataset.userId, trigger.dataset.userEmail);
+    }
+});
+const createUserBtn = document.getElementById("create-user-btn");
+if (createUserBtn) {
+    createUserBtn.addEventListener("click", () => window.openCreateModal());
+}
 });
 </script>
 {% endblock %}

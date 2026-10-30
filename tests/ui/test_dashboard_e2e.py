@@ -1,148 +1,93 @@
-"""End-to-end tests for the ideas dashboard using Playwright.
+"""Ideas dashboard browser tests (ported from the script-style e2e file).
 
-Run against a live Brainstormer instance:
-    python tests/ui/test_dashboard_e2e.py
-
-Requires a running Brainstormer instance at http://localhost:8000.
+Every test drives the real UI against the seeded live server; nothing here
+depends on a running deployment.
 """
 
-import sys
-from playwright.sync_api import sync_playwright
+import pytest
 
-BASE = "http://localhost:8000"
+from tests.ui.conftest import assert_no_page_errors, goto
 
+pytestmark = pytest.mark.ui
 
-def login_as_admin(page, instance_number="90"):
-    """Login as admin scoped to an instance."""
-    page.goto(f"{BASE}/login?instance={instance_number}")
-    page.wait_for_timeout(1000)
-    page.fill("#email", "admin@example.com")
-    page.fill("#password", "admin123")
-    page.click("#submit-btn")
-    page.wait_for_url("**/ideas")
+DETAIL = "[data-testid='detail-modal']"
 
 
-def test_dashboard_ideas_load(page):
-    """Dashboard shows ideas after login."""
-    login_as_admin(page, "90")
-    page.wait_for_timeout(3000)
+def _open_first_card(page):
+    page.wait_for_selector("[data-testid='idea-card']", timeout=15000)
+    card = page.locator("[data-testid='idea-card']").first
+    reference = card.inner_text().split()[0]
+    card.click()
+    page.wait_for_selector(DETAIL, state="visible", timeout=10000)
+    return reference
 
-    idea_refs = page.locator("text=/^IDEA-/").all_inner_texts()
-    assert len(idea_refs) > 0, "No ideas rendered on dashboard"
-    print(f"PASS: Dashboard shows {len(idea_refs)} ideas")
+
+def test_checkbox_does_not_open_idea(admin_page):
+    admin_page.wait_for_selector("[data-testid='idea-card']", timeout=15000)
+    box = admin_page.locator(
+        'input[type="checkbox"][aria-label="Select idea"]'
+    ).first
+    box.click()
+    admin_page.wait_for_timeout(500)
+    assert admin_page.locator(DETAIL).is_visible() is False
+    assert box.is_checked()
+    assert_no_page_errors(admin_page)
 
 
-def test_checkbox_does_not_open_idea(page):
-    """Clicking the selection checkbox does not open the idea detail modal."""
-    login_as_admin(page, "90")
-    page.wait_for_timeout(5000)
-
-    # Get first idea reference code
-    first_ref = page.locator("text=/^IDEA-/").first.inner_text()
-
-    # Click the first checkbox
-    page.locator('input[type="checkbox"][aria-label="Select idea"]').first.click()
-    page.wait_for_timeout(1500)
-
-    # Check that detail modal did NOT open
-    modal_shows_idea = page.locator(f'[role="dialog"]:has-text("{first_ref}")').count()
-    assert modal_shows_idea == 0, (
-        f"Checkbox click opened detail modal for {first_ref}"
+def test_detail_modal_shows_content(admin_page):
+    reference = _open_first_card(admin_page)
+    dialog = admin_page.locator(DETAIL)
+    assert reference in dialog.inner_text()
+    # Content is fetched after the modal opens; wait for it to land rather
+    # than reading the placeholder (`x-html` renders "undefined" until then).
+    admin_page.wait_for_function(
+        """() => {
+            const el = document.querySelector(
+                "[data-testid='detail-modal'] .prose");
+            if (!el) return false;
+            const text = el.innerText.trim();
+            return text.length > 10 && text !== 'undefined';
+        }""",
+        timeout=15000,
     )
-
-    # Checkbox should be checked
-    assert page.locator('input[type="checkbox"][aria-label="Select idea"]').first.is_checked()
-
-    print("PASS: Checkbox does not open idea detail modal")
-
-
-def test_detail_modal_shows_content(page):
-    """Clicking an idea opens the detail modal with content visible."""
-    login_as_admin(page, "90")
-    page.wait_for_timeout(5000)
-
-    # Click on first idea card (not the checkbox)
-    page.locator("article").first.click()
-    page.wait_for_timeout(3000)
-
-    # Check Idea Content section has content
-    content_area = page.locator('[role="dialog"] .prose')
-    assert content_area.count() > 0, "Idea Content prose area not found"
-    content_text = content_area.inner_text()
-    assert len(content_text) > 10, f"Idea Content is empty (got: {content_text[:50]!r})"
-
-    # Check Idea Content heading is present
-    assert page.locator('[role="dialog"] h3:has-text("Idea Content")').count() > 0
-
-    print(f"PASS: Idea detail modal shows content ({len(content_text)} chars)")
+    prose = dialog.locator(".prose")
+    assert prose.count() > 0
+    assert len(prose.first.inner_text()) > 10
+    assert_no_page_errors(admin_page)
 
 
-def test_bulk_status_change(page):
-    """Select multiple ideas and bulk change their status."""
-    login_as_admin(page, "90")
-    page.wait_for_timeout(5000)
+def test_bulk_status_change(admin_page):
+    admin_page.wait_for_selector("[data-testid='idea-card']", timeout=15000)
+    cards = admin_page.locator("[data-testid='idea-card']")
+    assert cards.count() >= 2
+    references = [cards.nth(i).inner_text().split()[0] for i in range(2)]
 
-    # Select two ideas
-    checkboxes = page.locator('input[type="checkbox"][aria-label="Select idea"]')
-    assert checkboxes.count() >= 2, f"Expected at least 2 checkboxes, got {checkboxes.count()}"
-
-    checkboxes.first.click()
-    checkboxes.nth(1).click()
-    page.wait_for_timeout(1000)
-
-    # Bulk action bar should appear
-    assert page.locator("text=idea").first.is_visible() or page.locator("text=ideas").first.is_visible(), (
-        "Bulk action bar did not appear after selecting ideas"
+    boxes = admin_page.locator(
+        'input[type="checkbox"][aria-label="Select idea"]'
     )
+    boxes.nth(0).click()
+    boxes.nth(1).click()
+    admin_page.wait_for_timeout(500)
 
-    # Select a status from the dropdown
-    page.locator('select[x-model="bulkStatus"]').click()
-    page.wait_for_timeout(500)
-    page.locator('select[x-model="bulkStatus"]').select_option("SCOPE")
-    page.wait_for_timeout(500)
+    admin_page.select_option('select[x-model="bulkStatus"]', "SCOPE")
+    admin_page.click("button:has-text('Apply')")
+    admin_page.wait_for_selector("[data-testid='bulk-confirm-modal']", state="visible")
+    admin_page.click("button:has-text('Confirm & Apply')")
+    admin_page.wait_for_timeout(2000)
 
-    # Click Apply
-    page.locator("button:has-text('Apply')").click()
-    page.wait_for_timeout(2000)
-
-    # Confirm in modal
-    page.locator("button:has-text('Confirm & Apply')").click()
-    page.wait_for_timeout(2000)
-
-    # The ideas should now show SCOPE status
-    # (We can't easily read the status from the DOM text, but if no error
-    #  appeared and the modal closed, the action succeeded)
-    print("PASS: Bulk status change flow completed")
-
-
-def test_prompts_scoped_to_instance(page):
-    """Prompts page shows only the current instance's prompts."""
-    login_as_admin(page, "90")
-    page.wait_for_timeout(2000)
-
-    page.goto(f"{BASE}/prompts")
-    page.wait_for_timeout(5000)
-
-    prompt_rows = page.locator("tbody tr:visible").count()
-    print(f"Prompt rows visible: {prompt_rows}")
-
-    # Should not be an empty state
-    no_prompts = page.locator("text=No ideas found").count()
-    assert no_prompts == 0, "Prompts page shows empty state unexpectedly"
-
-    print(f"PASS: Prompts page shows {prompt_rows} prompts")
+    admin_page.reload(wait_until="domcontentloaded")
+    admin_page.wait_for_selector("[data-testid='idea-card']", timeout=15000)
+    for reference in references:
+        card = admin_page.locator(
+            f"[data-testid='idea-card']:has-text('{reference}')"
+        ).first
+        text = card.inner_text().upper()
+        assert "SCOPE" in text
+    assert_no_page_errors(admin_page)
 
 
-if __name__ == "__main__":
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page()
-        try:
-            test_dashboard_ideas_load(page)
-            test_checkbox_does_not_open_idea(page)
-            test_detail_modal_shows_content(page)
-            test_bulk_status_change(page)
-            test_prompts_scoped_to_instance(page)
-            print("\nAll dashboard E2E tests passed!")
-        finally:
-            browser.close()
+def test_prompts_page_lists_seeded_prompt(admin_page, live_server):
+    goto(admin_page, f"{live_server}/prompts")
+    admin_page.wait_for_timeout(1500)
+    assert "UI Seed Prompt" in admin_page.inner_text("body")
+    assert_no_page_errors(admin_page)

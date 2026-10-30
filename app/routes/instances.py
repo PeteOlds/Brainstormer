@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from flask import Blueprint, request
+from flask import Blueprint, current_app, request
 
 from app.extensions import db
 from app.models import Instance, Membership
@@ -149,6 +149,16 @@ def upsert_ai_config(user, instance_id):
             return api_error(
                 "endpoint must be a string up to 255 chars or null.", status_code=400
             )
+        if endpoint:
+            from app.utils.net import UnsafeEndpoint, validate_llm_endpoint
+
+            try:
+                validate_llm_endpoint(
+                    endpoint,
+                    allow_hosts={current_app.config.get("OLLAMA_BASE_URL", "")},
+                )
+            except UnsafeEndpoint as exc:
+                return api_error(f"endpoint is not allowed: {exc}", status_code=400)
         config.endpoint = endpoint or None
     if "model_allowlist" in data:
         allowlist = data["model_allowlist"]

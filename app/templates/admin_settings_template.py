@@ -124,7 +124,7 @@ SETTINGS_TEMPLATE = """
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
     function settingsForm(section) {
         return {
             form: {
@@ -138,7 +138,7 @@ SETTINGS_TEMPLATE = """
             async init() { await this.load(); },
             async load() {
                 try {
-                    const res = await fetch('/api/v1/admin/settings', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('access_token') } });
+                    const res = await authFetch('/api/v1/admin/settings', { headers: { } });
                     const data = await res.json();
                     if (data.data) {
                         const s = data.data;
@@ -156,7 +156,7 @@ SETTINGS_TEMPLATE = """
                     else if (section === 'location') { endpoint = '/api/v1/admin/settings/location'; payload = { country: this.form.country }; }
                     else if (section === 'builds') { endpoint = '/api/v1/admin/settings/builds'; payload = { default_root: this.form.default_root }; }
                     else { endpoint = '/api/v1/admin/settings/ai_connections'; payload = {}; }
-                    const res = await fetch(endpoint, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('access_token') }, body: JSON.stringify(payload) });
+                    const res = await authFetch(endpoint, { method: 'PATCH', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify(payload) });
                     const data = await res.json();
                     if (res.ok) { this.showToast('Saved successfully'); } else { this.showToast(data.message || 'Save failed', 'error'); }
                 } catch (e) { this.showToast('Save failed: ' + e.message, 'error'); } finally { this.saving = false; }

@@ -159,7 +159,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 function createPromptForm() {
     return {
         models: [],
@@ -175,7 +175,7 @@ function createPromptForm() {
         cronExpression: '',
         modelName: '',
         async init() {
-            if (!localStorage.getItem('access_token')) { window.location.href = '/login'; return; }
+            if (!localStorage.getItem('user')) { window.location.href = '/login'; return; }
             try {
                 const chk = await authFetch('/api/v1/admin/stats');
                 if (!chk.ok) { window.location.href = '/ideas'; return; }

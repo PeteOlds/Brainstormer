@@ -32,18 +32,17 @@
         </form>
     </div>
 </div>
-<script>
+<script nonce="{{ csp_nonce() }}">
 document.getElementById("register-form").addEventListener("submit", async (e)=>{
     e.preventDefault();
     const btn=document.getElementById("submit-btn"), txt=document.getElementById("btn-text"), spin=document.getElementById("btn-spinner"), err=document.getElementById("error-box"), succ=document.getElementById("success-box");
     err.classList.add("hidden"); succ.classList.add("hidden");
     btn.disabled=true; txt.textContent="Creating..."; spin.classList.remove("hidden");
     try{
-        const res=await fetch("/api/v1/register",{method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:document.getElementById("name").value, email:document.getElementById("email").value.trim(), password:document.getElementById("password").value})});
+        const res=await fetch("/api/v1/register",{method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:document.getElementById("name").value, email:document.getElementById("email").value.trim(), password:document.getElementById("password").value})});
         const data=await res.json();
         if(!res.ok||!data.success) throw new Error(data.message||data.msg||"Registration failed");
-        localStorage.setItem("access_token", data.data.access_token);
-        localStorage.setItem("refresh_token", data.data.refresh_token);
+        // Tokens stay in HttpOnly cookies; only the profile is cached.
         localStorage.setItem("user", JSON.stringify(data.data.user));
         succ.textContent="Account created — redirecting..."; succ.classList.remove("hidden");
         setTimeout(()=>window.location.href="/ideas",600);

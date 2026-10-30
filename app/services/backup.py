@@ -8,6 +8,7 @@ the same FERNET_KEY.
 """
 
 import hashlib
+import hmac
 import json
 import uuid
 from datetime import datetime, timezone
@@ -44,7 +45,7 @@ from app.models import (
 )
 from app.models.types import GUID
 
-EXPORT_SCHEMA_VERSION = 1
+EXPORT_SCHEMA_VERSION = 2
 
 # Parents before children so inserts never violate a foreign key on
 # Postgres (SQLite does not enforce FKs by default, but keep it portable).
@@ -161,6 +162,43 @@ def _canonical(payload: Any) -> bytes:
     return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
+def _signing_key() -> bytes:
+    """Key for bundle signatures: explicit env var, else derived from SECRET_KEY.
+
+    The checksum alone only proves a bundle is internally consistent —
+    an attacker who edits a row can recompute it. The HMAC is what proves
+    the bundle came from a server that holds this secret.
+    """
+    from flask import has_app_context
+
+    if has_app_context():
+        from flask import current_app
+
+        explicit = (current_app.config.get("BACKUP_SIGNING_KEY") or "").strip()
+        if explicit:
+            return explicit.encode("utf-8")
+        secret = current_app.config.get("SECRET_KEY") or ""
+    else:
+        from app.config import Config
+
+        explicit = (getattr(Config, "BACKUP_SIGNING_KEY", None) or "").strip()
+        if explicit:
+            return explicit.encode("utf-8")
+        secret = getattr(Config, "SECRET_KEY", "") or ""
+
+    return hashlib.sha256(b"brainstormer-backup-v2:" + str(secret).encode()).digest()
+
+
+def _signature(manifest: dict[str, Any], data: Any) -> str:
+    body = {
+        "manifest": {
+            k: v for k, v in manifest.items() if k not in ("checksum", "signature")
+        },
+        "data": data,
+    }
+    return hmac.new(_signing_key(), _canonical(body), hashlib.sha256).hexdigest()
+
+
 def table_fingerprint(rows: list[dict[str, Any]]) -> str:
     """Stable hash of a table's exported rows (order-independent)."""
     ordered = sorted(rows, key=lambda r: json.dumps(r, sort_keys=True, default=str))
@@ -230,19 +268,23 @@ def export_instance(instance_id: Any) -> dict:
 
 
 def rescope_bundle(bundle: dict[str, Any], scope: str, **extra: Any) -> dict[str, Any]:
-    """Relabel a bundle's manifest scope and recompute its checksum."""
+    """Relabel a bundle's manifest scope, then re-checksum and re-sign it."""
     bundle["manifest"]["scope"] = scope
     bundle["manifest"].update(extra)
+    bundle["manifest"].pop("signature", None)
     bundle["manifest"]["checksum"] = hashlib.sha256(
         _canonical(
             {
                 "manifest": {
-                    k: v for k, v in bundle["manifest"].items() if k != "checksum"
+                    k: v
+                    for k, v in bundle["manifest"].items()
+                    if k not in ("checksum", "signature")
                 },
                 "data": bundle["data"],
             }
         )
     ).hexdigest()
+    bundle["manifest"]["signature"] = _signature(bundle["manifest"], bundle["data"])
     return bundle
 
 
@@ -258,7 +300,9 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     actual = hashlib.sha256(
         _canonical(
             {
-                "manifest": {k: v for k, v in manifest.items() if k != "checksum"},
+                "manifest": {
+                    k: v for k, v in manifest.items() if k not in ("checksum", "signature")
+                },
                 "data": bundle.get("data", {}),
             }
         )
@@ -266,6 +310,22 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
     if expected != actual:
         raise BackupIntegrityError(
             "bundle checksum mismatch: file is corrupt or tampered with"
+        )
+
+    # Authenticity: the checksum is derivable from the file itself, so it
+    # only catches corruption. Restoring executes the bundle's contents
+    # against the live database, so it must carry a signature from a server
+    # holding our key.
+    signature = manifest.get("signature")
+    if not signature:
+        raise BackupIntegrityError(
+            "bundle is not signed: refusing to restore an unauthenticated file"
+        )
+    if not hmac.compare_digest(
+        str(signature), _signature(manifest, bundle.get("data", {}))
+    ):
+        raise BackupIntegrityError(
+            "bundle signature mismatch: not produced by this server"
         )
     return manifest
 
@@ -433,6 +493,33 @@ def restore_instance(bundle: dict[str, Any]) -> dict[str, int]:
     data: dict[str, Any] = dict(bundle["data"])
     instance_id = uuid.UUID(str(manifest["instance_id"]))
 
+    # A bundle is only trusted inside the tenant it names. Without this a
+    # bundle relabelled for tenant A can rewrite tenant B's rows (and even
+    # re-point B's instance shell at A's id).
+    for row in data.get("instances", []):
+        if str(row.get("id")) != str(instance_id):
+            raise BackupIntegrityError(
+                "bundle instance row does not match its manifest"
+            )
+    models_by_table = {m.__tablename__: m for m in EXPORT_TABLES}
+    for name, rows in data.items():
+        model = models_by_table.get(name)
+        if model is None or "instance_id" not in model.__table__.columns:
+            continue
+        for row in rows:
+            row_instance = row.get("instance_id")
+            if row_instance is None:
+                if name == "memberships":
+                    # A NULL-instance membership is a site-wide grant.
+                    raise BackupIntegrityError(
+                        "bundle contains a site-wide membership"
+                    )
+                continue
+            if str(row_instance) != str(instance_id):
+                raise BackupIntegrityError(
+                    f"bundle contains {name} rows for another instance"
+                )
+
     instance_rows = data.get("instances", [])
     if instance_rows:
         row = instance_rows[0]
@@ -469,7 +556,18 @@ def restore_instance(bundle: dict[str, Any]) -> dict[str, int]:
         if name in ("refresh_tokens", "slack_events"):
             continue
         if name in ("instances", "users", "oauth_identities", "memberships"):
-            _upsert_rows(model, data.get(name, []))
+            if name == "users":
+                _restore_users(data.get(name, []))
+            elif name == "oauth_identities":
+                # Insert-only: an existing identity must never be re-pointed
+                # at a different account by a tenant restore.
+                _upsert_rows(model, data.get(name, []), update_columns=set())
+            elif name == "memberships":
+                _upsert_rows(
+                    model, data.get(name, []), update_columns={"role"}
+                )
+            else:
+                _upsert_rows(model, data.get(name, []))
         elif "instance_id" in model.__table__.columns:
             _import_rows(model, data.get(name, []))
     _recompute_counters(instance_id)
@@ -479,8 +577,44 @@ def restore_instance(bundle: dict[str, Any]) -> dict[str, int]:
     return {name: len(data.get(name, [])) for name in data}
 
 
-def _upsert_rows(model: Any, rows: list[dict[str, Any]]) -> None:
-    """Insert rows, replacing on PK conflict (idempotent restores)."""
+def _restore_users(rows: list[dict[str, Any]]) -> None:
+    """Restore users without letting a tenant bundle rewrite credentials.
+
+    `users` is a global table: the same row is shared by every instance.
+    An instance-scoped restore may create a missing user, but it must never
+    change an existing user's role, password or enabled flag — otherwise an
+    instance admin could promote themselves site-wide by editing a bundle.
+    """
+    from app.models import User, UserRole
+
+    columns = {c.name: c for c in User.__table__.columns}
+    for row in rows:
+        email = (row.get("email") or "").strip().lower()
+        if not email:
+            continue
+        existing = User.query.filter_by(email=email).first()
+        if existing is not None:
+            if row.get("name"):
+                existing.name = row["name"]
+            continue
+        obj = User()
+        for name, value in row.items():
+            if name in columns:
+                setattr(obj, name, _deserialise_value(columns[name], value))
+        # A tenant restore never grants a site-wide role.
+        obj.role = UserRole.USER
+        db.session.add(obj)
+    db.session.flush()
+
+
+def _upsert_rows(
+    model: Any, rows: list[dict[str, Any]], update_columns: set[str] | None = None
+) -> None:
+    """Insert rows, replacing on PK conflict (idempotent restores).
+
+    `update_columns` limits which columns may be overwritten on conflict;
+    pass an empty set for insert-only semantics.
+    """
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
@@ -497,25 +631,34 @@ def _upsert_rows(model: Any, rows: list[dict[str, Any]]) -> None:
         }
         for row in rows
     ]
+    if update_columns is None:
+        writable = {c.name for c in table.columns if c.name != _row_key(model)}
+    else:
+        writable = set(update_columns) - {_row_key(model)}
+
     if bind.dialect.name == "postgresql":
         pg_base = pg_insert(table).values(values)
-        stmt: Any = pg_base.on_conflict_do_update(
-            index_elements=[table.c[_row_key(model)]],
-            set_={
-                c.name: pg_base.excluded[c.name]
-                for c in table.columns
-                if c.name != _row_key(model)
-            },
+        stmt: Any = (
+            pg_base.on_conflict_do_update(
+                index_elements=[table.c[_row_key(model)]],
+                set_={c.name: pg_base.excluded[c.name] for c in table.columns if c.name in writable},
+            )
+            if writable
+            else pg_base.on_conflict_do_nothing(
+                index_elements=[table.c[_row_key(model)]]
+            )
         )
     else:
         lite_base = sqlite_insert(table).values(values)
-        stmt = lite_base.on_conflict_do_update(
-            index_elements=[table.c[_row_key(model)]],
-            set_={
-                c.name: lite_base.excluded[c.name]
-                for c in table.columns
-                if c.name != _row_key(model)
-            },
+        stmt = (
+            lite_base.on_conflict_do_update(
+                index_elements=[table.c[_row_key(model)]],
+                set_={c.name: lite_base.excluded[c.name] for c in table.columns if c.name in writable},
+            )
+            if writable
+            else lite_base.on_conflict_do_nothing(
+                index_elements=[table.c[_row_key(model)]]
+            )
         )
     db.session.execute(stmt)
     db.session.flush()

@@ -23,7 +23,7 @@ from flask import Blueprint, current_app, request, send_file
 from app.extensions import db
 from app.models import Instance, Membership, SystemSettings
 from app.services import backup as backup_svc
-from app.utils.decorators import admin_required, token_required
+from app.utils.decorators import admin_required, site_admin_required, token_required
 from app.utils.responses import api_error, api_ok
 from app.utils.tenancy import is_site_admin
 
@@ -167,7 +167,7 @@ def backup_overview(user):
 
 
 @bp.route("/admin/backup/settings", methods=["PUT"])
-@admin_required
+@site_admin_required
 def update_backup_settings(user):
     """Turn the daily site backup automation on or off."""
     data = request.get_json(silent=True) or {}
@@ -185,7 +185,7 @@ def update_backup_settings(user):
 
 
 @bp.route("/admin/backup/site/run", methods=["POST"])
-@admin_required
+@site_admin_required
 def run_site_backup(user):
     """Create a site backup file now (same path the daily task uses)."""
     target = _backup_dir()
@@ -210,7 +210,7 @@ def run_site_backup(user):
 
 
 @bp.route("/admin/backup/site/download", methods=["GET"])
-@admin_required
+@site_admin_required
 def download_site_backup(user):
     """Export and download a fresh site bundle without keeping a copy."""
     import tempfile
@@ -240,7 +240,7 @@ def download_site_backup(user):
 
 
 @bp.route("/admin/backup/files/<path:name>", methods=["GET"])
-@admin_required
+@site_admin_required
 def download_backup_file(user, name):
     """Download one stored backup file (name only, no path traversal)."""
     if os.path.basename(name) != name or not name.endswith(".json"):
@@ -252,7 +252,7 @@ def download_backup_file(user, name):
 
 
 @bp.route("/admin/backup/site/verify", methods=["POST"])
-@admin_required
+@site_admin_required
 def verify_site_backup(user):
     """Checksum + manifest preview of an uploaded site bundle."""
     bundle, error = _read_upload()
@@ -265,7 +265,7 @@ def verify_site_backup(user):
 
 
 @bp.route("/admin/backup/site/restore", methods=["POST"])
-@admin_required
+@site_admin_required
 def restore_site_backup(user):
     """Verify, wipe and restore the whole site from an uploaded bundle."""
     if (request.form.get("confirm") or "").strip().upper() != "RESTORE":

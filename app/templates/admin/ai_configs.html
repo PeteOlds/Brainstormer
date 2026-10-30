@@ -242,7 +242,7 @@
         </table>
     </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 function aiSettingsApp() {
     return {
         instances: [],
@@ -282,14 +282,13 @@ function aiSettingsApp() {
 
         tokenInstanceId() {
             try {
-                const tok = localStorage.getItem('access_token') || '';
                 const part = ((tok.split('.')[1] || '').replace(/-/g, '+').replace(/_/g, '/'));
                 return (JSON.parse(atob(part + '='.repeat((4 - part.length % 4) % 4))).instance_id || '').toString() || '';
             } catch (e) { return ''; }
         },
 
         async init() {
-            if (!localStorage.getItem('access_token')) { window.location.href = '/login'; return; }
+            if (!localStorage.getItem('user')) { window.location.href = '/login'; return; }
             try {
                 const res = await authFetch('/api/v1/instances');
                 if (!res.ok) throw new Error('forbidden');

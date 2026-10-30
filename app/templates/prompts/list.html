@@ -302,7 +302,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 function initPromptsPage() {
     return {
         prompts: [],
@@ -574,7 +574,7 @@ function initPromptsPage() {
         },
         
         async init() {
-            if (!localStorage.getItem('access_token')) { window.location.href = '/login'; return; }
+            if (!localStorage.getItem('user')) { window.location.href = '/login'; return; }
             this.$watch('filters.status', () => { this.currentPage = 1; this.applyFilters(); });
             this.$watch('filters.search', () => { this.currentPage = 1; this.applyFilters(); });
             await this.loadPrompts();

@@ -1,5 +1,6 @@
 """Compatibility layer over flask-appkit auth with refresh token rotation."""
 
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -14,6 +15,32 @@ def get_refresh_token_model():
     return RefreshToken
 
 
+def _access_payload(user_id, role, email, instance_id) -> tuple[dict, str]:
+    """Access-token claims plus the CSRF value the cookie client must echo.
+
+    flask_jwt_extended's cookie mode refuses state-changing requests unless
+    the `csrf` claim matches the X-CSRF-TOKEN header. Tokens are minted with
+    PyJWT here, so the claim has to be added by hand — without it every
+    cookie-authenticated write was rejected.
+    """
+    access_expires = current_app.config.get(
+        "JWT_ACCESS_TOKEN_EXPIRES", timedelta(minutes=15)
+    )
+    csrf = secrets.token_urlsafe(32)
+    payload = {
+        "sub": str(user_id),
+        "role": role,
+        "csrf": csrf,
+        "exp": datetime.now(timezone.utc) + access_expires,
+        "iat": datetime.now(timezone.utc),
+    }
+    if email:
+        payload["email"] = email
+    if instance_id:
+        payload["instance_id"] = str(instance_id)
+    return payload, csrf
+
+
 def create_tokens(
     user_id: str,
     role: str = "USER",
@@ -22,23 +49,10 @@ def create_tokens(
     instance_id: str | None = None,
 ) -> dict:
     """Create access and refresh tokens for a user with refresh token rotation."""
-    access_expires = current_app.config.get(
-        "JWT_ACCESS_TOKEN_EXPIRES", timedelta(minutes=15)
-    )
-
     # Create access token with role claim using PyJWT directly
-    access_payload = {
-        "sub": str(user_id),
-        "role": role,
-        "exp": datetime.now(timezone.utc) + access_expires,
-        "iat": datetime.now(timezone.utc),
-    }
-    if email:
-        access_payload["email"] = email
-    if instance_id:
-        # Callers enforce membership first; the claim is scoping, not proof.
-        access_payload["instance_id"] = str(instance_id)
-
+    access_payload, csrf_token = _access_payload(
+        user_id, role, email, instance_id
+    )
     access_token = jwt.encode(
         access_payload,
         current_app.config["JWT_SECRET_KEY"],
@@ -62,6 +76,7 @@ def create_tokens(
     return {
         "access_token": access_token,
         "refresh_token": raw_refresh_token,
+        "csrf_token": csrf_token,
     }
 
 
@@ -107,17 +122,9 @@ def rotate_refresh_token(
     if not user:
         return None
 
-    access_expires = current_app.config.get(
-        "JWT_ACCESS_TOKEN_EXPIRES", timedelta(minutes=15)
+    access_payload, csrf_token = _access_payload(
+        user_id, user.role.value, user.email, instance_id
     )
-    access_payload = {
-        "sub": str(user_id),
-        "role": user.role.value,
-        "exp": datetime.now(timezone.utc) + access_expires,
-        "iat": datetime.now(timezone.utc),
-    }
-    if instance_id:
-        access_payload["instance_id"] = str(instance_id)
     access_token = jwt.encode(
         access_payload,
         current_app.config["JWT_SECRET_KEY"],
@@ -130,7 +137,28 @@ def rotate_refresh_token(
     return {
         "access_token": access_token,
         "refresh_token": raw_refresh_token_new,
+        "csrf_token": csrf_token,
     }
+
+
+def revoke_refresh_token(raw_refresh_token: str) -> bool:
+    """Revoke one refresh token by its raw value. Returns True if revoked.
+
+    Unknown or already-revoked tokens return False rather than raising:
+    logout must stay idempotent and must not leak whether a token existed.
+    """
+    if not raw_refresh_token:
+        return False
+    RefreshToken = get_refresh_token_model()
+    token_obj = RefreshToken.verify_token(raw_refresh_token)
+    if token_obj is None:
+        return False
+    if not token_obj.is_revoked:
+        token_obj.revoke()
+        from app.extensions import db
+
+        db.session.commit()
+    return True
 
 
 def refresh_access_token(
@@ -166,6 +194,7 @@ __all__ = [
     "create_tokens",
     "decode_token",
     "rotate_refresh_token",
+    "revoke_refresh_token",
     "refresh_access_token",
     "generate_access_token",
 ]

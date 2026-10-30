@@ -102,7 +102,7 @@
     <div class="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
         <div class="divide-y divide-slate-200 dark:divide-slate-700">
             <template x-for="idea in paginatedIdeas" :key="idea.id">
-                <article @click="openDetailModal(idea)" class="p-2 space-y-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors" :aria-label="'Open idea ' + idea.reference_code" role="button" tabindex="0" @keydown.enter="openDetailModal(idea)" @keydown.space.prevent="openDetailModal(idea)">
+                <article data-testid="idea-card" @click="openDetailModal(idea)" class="p-2 space-y-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors" :aria-label="'Open idea ' + idea.reference_code" role="button" tabindex="0" @keydown.enter="openDetailModal(idea)" @keydown.space.prevent="openDetailModal(idea)">
                     <!-- Header row: reference + status + actions -->
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2 flex-shrink-0">
@@ -250,7 +250,7 @@
         </div>
 
         <!-- Bulk Action Confirmation Modal -->
-        <div x-show="showBulkConfirm" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeBulkConfirm()" aria-labelledby="bulk-confirm-modal-title" role="dialog" aria-modal="true" style="display: none;">
+        <div x-show="showBulkConfirm" x-cloak data-testid="bulk-confirm-modal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeBulkConfirm()" aria-labelledby="bulk-confirm-modal-title" role="dialog" aria-modal="true" style="display: none;">
             <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
             <div class="relative flex min-h-full items-center justify-center p-4">
                 <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-slate-300 dark:border-slate-500">
@@ -289,7 +289,7 @@
         </div>
 
     <!-- Detail Modal -->
-    <div x-show="detailModalOpen" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="if (!runDialogOpen && !confirmModalOpen && !promptModalOpen) closeDetailModal()" aria-labelledby="detail-modal-title" role="dialog" aria-modal="true">
+    <div x-show="detailModalOpen" x-cloak data-testid="detail-modal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="if (!runDialogOpen && !confirmModalOpen && !promptModalOpen) closeDetailModal()" aria-labelledby="detail-modal-title" role="dialog" aria-modal="true">
         <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
         <div class="relative flex min-h-full items-end sm:items-center justify-center sm:p-4">
             <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full sm:max-w-4xl bg-white dark:bg-slate-800 sm:rounded-xl rounded-t-2xl shadow-2xl border-2 border-slate-300 dark:border-slate-500 border-b-0 sm:border-b-2 max-h-[92vh] sm:max-h-[90vh] flex flex-col outline-none" tabindex="-1">
@@ -1249,7 +1249,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 function ideasApp() {
     return {
         ideas: [],
@@ -4171,14 +4171,14 @@ function ideasApp() {
                         const sv = v[k];
                         const inner = (sv && typeof sv === 'object')
                             ? esc(JSON.stringify(sv))
-                            : (/^(https?:\/\/)/.test(String(sv ?? '')) ? esc(String(sv)) : this.renderMarkdown(esc(String(sv ?? ''))));
+                            : (/^(https?:\/\/)/.test(String(sv ?? '')) ? esc(String(sv)) : this.renderMarkdown(String(sv ?? '')));
                         if (sv && typeof sv === 'object' && 'score' in sv) {
                             return '<li><strong>' + esc(label(k)) + ' ' + esc(String(sv.score)) + '/10:</strong> ' + esc(String(sv.reasoning ?? '')) + '</li>';
                         }
                         return '<li><strong>' + esc(label(k)) + ':</strong> ' + inner + '</li>';
                     }).join('') + '</ul>';
                 }
-                return this.renderMarkdown(esc(String(v ?? '')));
+                return this.renderMarkdown(String(v ?? ''));
             };
             return Object.keys(obj).map((k) => {
                 return '<div class="mb-3"><div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">'
@@ -4205,7 +4205,7 @@ function ideasApp() {
                 const v = obj[k];
                 const body = (v && typeof v === 'object')
                     ? '<code>' + esc(JSON.stringify(v, null, 2)) + '</code>'
-                    : this.renderMarkdown(esc(String(v ?? '')));
+                    : this.renderMarkdown(String(v ?? ''));
                 return '<div class="mb-3"><div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">'
                     + esc(label(k)) + '</div><div class="text-sm text-slate-700 dark:text-slate-300">'
                     + body + '</div></div>';
@@ -4242,8 +4242,16 @@ function ideasApp() {
 
         renderMarkdown(text) {
             if (!text) return '';
-            // Simple markdown rendering for display
-            return text
+            // The result is injected with x-html, so escape first and only
+            // then apply the inline markdown transforms. Escaping at every
+            // call site was the bug: most of them passed raw idea content.
+            const escaped = String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            return escaped
                 .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.+?)\*/g, '<em>$1</em>')
                 .replace(/`(.+?)`/g, '<code>$1</code>')

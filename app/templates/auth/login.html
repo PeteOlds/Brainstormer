@@ -45,7 +45,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 // Optional workspace scoping for this browser session. Deep link:
 // /login?instance=90 (site number or UUID). Falls back to auto-scope
 // when the account belongs to exactly one instance, else stays unscoped.
@@ -54,13 +54,14 @@
 // replaces the auth cookies — page loads authenticate by cookie, and a
 // refresh-only swap would leave them unscoped. Any failure keeps the
 // unscoped session rather than blocking login.
-async function tryScopeWorkspace(email, password, remember, accessToken, refreshToken) {
-    const fallback = (warning) => ({accessToken: accessToken, refreshToken: refreshToken, warning: warning});
+async function tryScopeWorkspace(email, password, remember) {
+    // Session lives in HttpOnly cookies set by /login, so no token juggling.
+    const fallback = (warning) => ({user: null, warning: warning});
     const params = new URLSearchParams(window.location.search);
     const wanted = (params.get("instance") || "").trim().toLowerCase();
     try {
         const listRes = await fetch("/api/v1/instances", {
-            headers: {"Authorization": "Bearer " + accessToken}
+            credentials: "same-origin"
         });
         const listData = await listRes.json();
         if (!listRes.ok || !listData.success) {
@@ -87,6 +88,7 @@ async function tryScopeWorkspace(email, password, remember, accessToken, refresh
         }
         const scopeRes = await fetch("/api/v1/login", {
             method: "POST",
+            credentials: "same-origin",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({email: email, password: password, remember: remember, instance_id: target.id})
         });
@@ -94,9 +96,7 @@ async function tryScopeWorkspace(email, password, remember, accessToken, refresh
         if (!scopeRes.ok || !scopeData.success) {
             return fallback(wanted ? "Could not scope to '" + wanted + "' — continuing unscoped." : null);
         }
-        return {accessToken: scopeData.data.access_token,
-                refreshToken: scopeData.data.refresh_token,
-                warning: null};
+        return {user: scopeData.data.user || null, warning: null};
     } catch (err) {
         const params = new URLSearchParams(window.location.search);
         const wanted = (params.get("instance") || "").trim();
@@ -124,6 +124,7 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
         const remember = document.getElementById('remember_me').checked;
         const res = await fetch("/api/v1/login", {
             method: "POST",
+            credentials: "same-origin",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({email, password, remember: remember})
         });
@@ -131,18 +132,15 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
         if (!res.ok || !data.success) {
             throw new Error(data.message || data.msg || "Login failed");
         }
-        let accessToken = data.data.access_token;
-        let refreshToken = data.data.refresh_token;
-        const scoped = await tryScopeWorkspace(email, password, remember, accessToken, refreshToken);
-        accessToken = scoped.accessToken;
-        refreshToken = scoped.refreshToken;
+        let user = data.data.user;
+        const scoped = await tryScopeWorkspace(email, password, remember);
+        if (scoped.user) user = scoped.user;
         if (scoped.warning) {
             errBox.textContent = scoped.warning;
             errBox.classList.remove("hidden");
         }
-        localStorage.setItem("access_token", accessToken);
-        localStorage.setItem("refresh_token", refreshToken);
-        localStorage.setItem("user", JSON.stringify(data.data.user));
+        // Only the non-secret profile is cached; tokens stay in cookies.
+        localStorage.setItem("user", JSON.stringify(user));
         succBox.textContent = "Login successful — redirecting...";
         succBox.classList.remove("hidden");
         setTimeout(() => { window.location.href = "/ideas"; }, scoped.warning ? 1800 : 600);

@@ -1,7 +1,7 @@
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required, unset_jwt_cookies
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import User
 from app.utils import auth
 from app.utils.decorators import token_required
@@ -33,6 +33,18 @@ def _set_auth_cookies(resp, tokens, remember=False):
         samesite=samesite,
         path="/",
     )
+    # Readable by JS on purpose: the double-submit pattern needs the client
+    # to echo this value in X-CSRF-TOKEN. It is useless without the
+    # HttpOnly access cookie it is paired with.
+    resp.set_cookie(
+        current_app.config.get("JWT_ACCESS_CSRF_COOKIE_NAME", "csrf_access_token"),
+        tokens.get("csrf_token", ""),
+        max_age=access_max_age,
+        httponly=False,
+        secure=secure,
+        samesite=samesite,
+        path="/",
+    )
     resp.set_cookie(
         current_app.config.get("JWT_REFRESH_COOKIE_NAME", "refresh_token"),
         tokens["refresh_token"],
@@ -46,6 +58,7 @@ def _set_auth_cookies(resp, tokens, remember=False):
 
 
 @bp.route("/register", methods=["POST"])
+@limiter.limit("3 per hour")
 def register():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
@@ -81,6 +94,7 @@ def register():
 
 
 @bp.route("/login", methods=["POST"])
+@limiter.limit("5 per minute")
 def login():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
@@ -129,9 +143,14 @@ def login():
 
 
 @bp.route("/refresh", methods=["POST"])
+@limiter.limit("20 per minute")
 def refresh():
-    # Get refresh token from request body
+    # Body token (API clients) or the HttpOnly cookie (browser UI).
     refresh_token = request.json.get("refresh_token") if request.is_json else None
+    if not refresh_token:
+        refresh_token = request.cookies.get(
+            current_app.config.get("JWT_REFRESH_COOKIE_NAME", "refresh_token")
+        )
     if not refresh_token:
         return api_error("Refresh token required.", 400)
 
@@ -153,7 +172,9 @@ def refresh():
     if not tokens:
         return api_error("Invalid or expired refresh token.", 401)
 
-    return api_ok(tokens)
+    resp, code = api_ok(tokens)
+    _set_auth_cookies(resp, tokens)
+    return resp, code
 
 
 def _scoped_instance_id(user, raw):
@@ -188,21 +209,29 @@ def _scoped_instance_id(user, raw):
 @bp.route("/me", methods=["GET"])
 @token_required
 def me(current_user):
-    return api_ok({"user": current_user.to_dict()})
+    from flask import g
+
+    return api_ok(
+        {"user": current_user.to_dict(), "instance_id": getattr(g, "instance_id", None)}
+    )
 
 
 @bp.route("/me/settings", methods=["PATCH"])
 @token_required
 def update_user_settings(current_user):
-    """Update user-specific settings."""
+    """Update user-specific settings.
+
+    Deliberately does not accept `can_create_ideas`: that is an admin
+    control, and letting users set it here made the restriction on idea
+    creation self-service. Admins grant it via PATCH /admin/users/<id>.
+    """
     data = request.get_json(silent=True) or {}
 
     if "can_create_ideas" in data:
-        value = data["can_create_ideas"]
-        if not isinstance(value, bool):
-            return api_error("can_create_ideas must be a boolean.", status_code=400)
-        current_user.can_create_ideas = value
-        db.session.commit()
+        return api_error(
+            "can_create_ideas is an admin setting; ask an administrator.",
+            status_code=403,
+        )
 
     return api_ok({"user": current_user.to_dict()})
 
@@ -210,6 +239,18 @@ def update_user_settings(current_user):
 @bp.route("/logout", methods=["POST"])
 @token_required
 def logout(current_user):
+    """Log out and revoke the presented refresh token.
+
+    Clearing cookies alone left the refresh token usable until it expired
+    (7 days, 30 with "remember"), so a copied token survived logout.
+    """
+    data = request.get_json(silent=True) or {}
+    raw_refresh = data.get("refresh_token") or request.cookies.get(
+        current_app.config.get("JWT_REFRESH_COOKIE_NAME", "refresh_token")
+    )
+    if raw_refresh:
+        auth.revoke_refresh_token(raw_refresh)
+
     # api_ok returns a (response, status) tuple; unset cookies on the
     # Response object itself (passing the tuple 500'd every logout).
     response, code = api_ok({"message": "Logged out successfully"})

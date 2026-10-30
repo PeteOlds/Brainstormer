@@ -13,7 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="/static/js/alpine.min.js" defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script>
+    <script nonce="{{ csp_nonce() }}">
         tailwind.config = {
             darkMode: "class",
             theme: {
@@ -24,18 +24,32 @@
             }
         }
     </script>
-    <script>
-    function getToken(){return localStorage.getItem("access_token");}
+    <script nonce="{{ csp_nonce() }}">
+    // Session tokens live in HttpOnly cookies: JavaScript cannot read them,
+    // so an XSS payload cannot exfiltrate a session. State-changing calls
+    // must echo the readable CSRF cookie in X-CSRF-TOKEN (double submit).
+    function getCsrfToken(){
+        const match = document.cookie.match(/(?:^|;\s*)csrf_access_token=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : '';
+    }
     function authFetch(url, opts={}){
-        const tok=getToken();
-        opts.headers=opts.headers||{};
-        if(tok) opts.headers["Authorization"]="Bearer "+tok;
+        opts.credentials = opts.credentials || 'same-origin';
+        opts.headers = opts.headers || {};
+        const method = (opts.method || 'GET').toUpperCase();
+        if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+            const csrf = getCsrfToken();
+            if (csrf) opts.headers['X-CSRF-TOKEN'] = csrf;
+        }
         // FormData must set its own multipart boundary — forcing JSON here
         // made file uploads arrive with an empty request.files.
         const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
         if(!isForm && !opts.headers["Content-Type"] && opts.body) opts.headers["Content-Type"]="application/json";
         return fetch(url, opts).then(r=>{
-            if(r.status===401){ localStorage.removeItem("access_token"); localStorage.removeItem("refresh_token"); if(!location.pathname.startsWith("/login") && !location.pathname.startsWith("/register")) location.href="/login"; throw new Error("Unauthorized");}
+            if(r.status===401){
+                localStorage.removeItem("user");
+                if(!location.pathname.startsWith("/login") && !location.pathname.startsWith("/register")) location.href="/login";
+                throw new Error("Unauthorized");
+            }
             return r;
         });
     }
@@ -44,13 +58,13 @@
     async function streamPromptTest(payload, onToken, signal) {
         const res = await fetch('/api/v1/prompts/test-stream', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
             body: JSON.stringify(payload),
             signal: signal
         });
         if (res.status === 401) {
-            localStorage.removeItem("access_token");
-            localStorage.removeItem("refresh_token");
+            localStorage.removeItem("user");
             window.location.href = "/login";
             throw new Error("Unauthorized");
         }
@@ -103,42 +117,48 @@
     {% block scripts %}{% endblock %}
 
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 function updateNavbarFromToken() {
-    const token = localStorage.getItem('access_token');
+    // Identity is a display cache; authority comes from the HttpOnly cookie.
+    let user = null;
+    try { user = JSON.parse(localStorage.getItem('user') || 'null'); } catch (e) { user = null; }
     const guestArea = document.getElementById('guest-area');
     const userArea = document.getElementById('user-area');
     const loginLinks = document.querySelectorAll('a[href="/login"], a[href="/register"]');
-    if (token) {
-        loginLinks.forEach(function(link) { link.style.display = 'none'; });
-        if (guestArea) guestArea.style.display = 'none';
-        if (userArea) {
-            userArea.style.display = 'flex';
-            try {
-                const u = JSON.parse(localStorage.getItem('user') || '{}');
+    const apply = (u) => {
+        if (u) {
+            loginLinks.forEach(function(link) { link.style.display = 'none'; });
+            if (guestArea) guestArea.style.display = 'none';
+            if (userArea) {
+                userArea.style.display = 'flex';
                 const nameEl = document.getElementById('nav-username');
                 if (nameEl) nameEl.textContent = u.name || u.email || '';
                 const adminLink = document.getElementById('nav-admin-link');
                 if (adminLink) adminLink.style.display = (u.role === 'ADMIN' || u.is_site_admin || ((u.admin_instance_ids || []).length > 0)) ? '' : 'none';
-            } catch (e) { /* ignore malformed stored user */ }
+            }
+        } else {
+            loginLinks.forEach(function(link) { link.style.display = ''; });
+            if (guestArea) guestArea.style.display = 'flex';
+            if (userArea) userArea.style.display = 'none';
         }
-    } else {
-        loginLinks.forEach(function(link) { link.style.display = ''; });
-        if (guestArea) guestArea.style.display = 'flex';
-        if (userArea) userArea.style.display = 'none';
-    }
+    };
+    if (user) { apply(user); return; }
+    // No cached profile: ask the server (cookie-authenticated) once.
+    fetch('/api/v1/me', { credentials: 'same-origin' })
+        .then(function(res) { return res.ok ? res.json() : null; })
+        .then(function(body) {
+            const u = body ? ((body.data || body).user || null) : null;
+            if (u) { try { localStorage.setItem('user', JSON.stringify(u)); } catch (e) {} }
+            apply(u);
+        })
+        .catch(function() { apply(null); });
 }
 function wireLogoutButton() {
     const btn = document.getElementById('logout-btn');
     if (btn && !btn.dataset.wired) {
         btn.dataset.wired = '1';
         btn.addEventListener('click', async () => {
-            try {
-                const tok = localStorage.getItem('access_token');
-                if (tok) await fetch('/api/v1/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tok } });
-            } catch (e) { /* logout best-effort */ }
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+            try { await authFetch('/api/v1/logout', { method: 'POST' }); } catch (e) { /* logout best-effort */ }
             localStorage.removeItem('user');
             window.location.href = '/login';
         });
@@ -151,12 +171,12 @@ async function updateNavScope() {
     if (!chip) return;
     const show = (text) => { chip.textContent = text; chip.style.display = text ? '' : 'none'; };
     try {
-        const tok = localStorage.getItem('access_token');
-        if (!tok) { show(''); return; }
-        const part = ((tok.split('.')[1] || '').replace(/-/g, '+').replace(/_/g, '/'));
-        const iid = (JSON.parse(atob(part + '='.repeat((4 - part.length % 4) % 4))).instance_id || '').toString();
+        const me = await fetch('/api/v1/me', { credentials: 'same-origin' });
+        if (!me.ok) { show(''); return; }
+        const meBody = await me.json();
+        const iid = ((meBody.data || meBody).instance_id || '').toString();
         if (!iid) { show('Unscoped'); return; }
-        const res = await fetch('/api/v1/instances', { headers: { 'Authorization': 'Bearer ' + tok } });
+        const res = await fetch('/api/v1/instances', { credentials: 'same-origin' });
         if (!res.ok) { show(''); return; }
         const data = await res.json();
         const inst = ((data.data || data).instances || []).find((i) => String(i.id) === iid);

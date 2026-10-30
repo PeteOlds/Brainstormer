@@ -14,6 +14,7 @@ from app.models import (
     Idea,
     IdeaEdit,
     IdeaStatusHistory,
+    PromptRun,
     SecondaryActionResult,
     User,
     Vote,
@@ -328,7 +329,28 @@ def get_idea(user, idea_id):
         .all()
     ]
 
-    return api_ok({"idea": idea.to_dict(user_vote=user.id, include_content=True), "actions": actions, "parent": parent_context_data, "child_count": child_count, "edit_history": edit_history})
+    payload = {
+        "idea": idea.to_dict(user_vote=user.id, include_content=True),
+        "actions": actions,
+        "parent": parent_context_data,
+        "child_count": child_count,
+        "edit_history": edit_history,
+    }
+
+    # Per-idea generation time is an operational metric: admins only.
+    # `duration_seconds` is recorded on the PromptRun that produced the idea.
+    from app.utils.decorators import _membership_allows_admin
+
+    if _membership_allows_admin(user):
+        last_run = (
+            PromptRun.query.filter_by(idea_id=idea.id)
+            .order_by(PromptRun.started_at.desc())
+            .first()
+        )
+        if last_run is not None and last_run.duration_seconds is not None:
+            payload["idea"]["generation_seconds"] = last_run.duration_seconds
+
+    return api_ok(payload)
 
 
 @bp.route("/ideas/<uuid:idea_id>/status", methods=["PATCH"])

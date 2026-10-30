@@ -23,7 +23,7 @@ def setup_paid_instance(number=70, free=False):
     inst = Instance(number=number, name=f"Ent {number}", is_free=free)
     db.session.add(inst)
     db.session.flush()
-    admin = User(email=f"ent{number}@t.test", role=UserRole.ADMIN)
+    admin = User(email=f"ent{number}@t.test", role=UserRole.USER)
     admin.set_password("password123")
     db.session.add(admin)
     db.session.flush()

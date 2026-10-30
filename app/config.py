@@ -96,6 +96,8 @@ class Config:
     JWT_COOKIE_SAMESITE = "Strict"
     JWT_ACCESS_COOKIE_NAME = "access_token"
     JWT_REFRESH_COOKIE_NAME = "refresh_token"
+    JWT_ACCESS_CSRF_COOKIE_NAME = "csrf_access_token"
+    JWT_REFRESH_CSRF_COOKIE_NAME = "csrf_refresh_token"
 
     # Encryption (Fernet)
     FERNET_KEY = get_env("FERNET_KEY", required=True)
