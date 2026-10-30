@@ -63,3 +63,13 @@ def login():
 @bp.route("/register", methods=["GET"])
 def register():
     return render_template("auth/register.html")
+
+
+@bp.route("/forgot-password", methods=["GET"])
+def forgot_password_page():
+    return render_template("auth/forgot_password.html")
+
+
+@bp.route("/reset-password", methods=["GET"])
+def reset_password_page():
+    return render_template("auth/reset_password.html")

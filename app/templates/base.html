@@ -164,7 +164,43 @@ function wireLogoutButton() {
         });
     }
 }
-document.addEventListener('DOMContentLoaded', () => { updateNavbarFromToken(); updateNavScope(); wireLogoutButton(); });
+function wireInstanceSwitcher() {
+    const sel = document.getElementById('instance-switcher');
+    if (!sel || sel.dataset.wired) return;
+    sel.dataset.wired = '1';
+    fetch('/api/v1/me/instances', { credentials: 'same-origin' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((body) => {
+            const insts = body ? ((body.data || body).instances || []) : [];
+            if (insts.length < 2) { sel.style.display = 'none'; return; }
+            sel.style.display = '';
+            sel.innerHTML = '';
+            insts.forEach((inst) => {
+                const opt = document.createElement('option');
+                opt.value = inst.id;
+                opt.textContent = 'Site ' + (inst.number != null ? inst.number : '?') + ' · ' + (inst.name || '');
+                sel.appendChild(opt);
+            });
+            // Pre-select current scope from /me.
+            fetch('/api/v1/me', { credentials: 'same-origin' })
+                .then((r) => r.ok ? r.json() : null)
+                .then((b) => {
+                    const iid = b ? ((b.data || b).instance_id) : null;
+                    if (iid) sel.value = iid;
+                }).catch(() => {});
+        }).catch(() => {});
+    sel.addEventListener('change', async () => {
+        try {
+            const res = await fetch('/api/v1/switch-instance', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrfToken()},
+                body: JSON.stringify({instance_id: sel.value}),
+            });
+            if (res.ok) window.location.reload();
+        } catch (e) { /* ignore */ }
+    });
+}
 window.addEventListener('storage', () => { updateNavbarFromToken(); updateNavScope(); });
 async function updateNavScope() {
     const chip = document.getElementById('nav-scope');

@@ -342,7 +342,7 @@
                             <button @click="activeTab = 'REFINE'" role="tab" :aria-selected="activeTab === 'REFINE'" aria-label="Refine this idea with AI" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'REFINE' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">Refine Idea</button>
                         </template>
                         <template x-for="tab in actionTabs()" :key="tab.key">
-                            <button @click="activeTab = tab.key; if (tab.key === 'BUILD_CODE') loadManagedApp()" role="tab" :aria-selected="activeTab === tab.key" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === tab.key ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">
+                            <button @click="activeTab = tab.key; if (tab.key === 'BUILD_CODE') loadManagedApp(); if (tab.key === 'TESTS') loadIdeaTests()" role="tab" :aria-selected="activeTab === tab.key" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === tab.key ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">
                                 <span x-text="tab.label"></span>
                                 <span x-show="actionLoading === tab.key" class="ml-1 inline-block align-middle"><svg class="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span>
                             </button>
@@ -749,7 +749,75 @@
                                     </span>
                                 </span>
                             </div>
-                            <div class="prose prose-sm prose-slate dark:prose-invert max-w-none" x-show="tab.key !== 'BUILD_CODE'" x-html="docViewResult(tab.key)?.rendered_output"></div>
+                            <div class="prose prose-sm prose-slate dark:prose-invert max-w-none" x-show="tab.key !== 'BUILD_CODE' && tab.key !== 'TESTS'" x-html="docViewResult(tab.key)?.rendered_output"></div>
+                            <template x-if="tab.key === 'TESTS'">
+                                <div class="space-y-4">
+                                    <!-- Summary -->
+                                    <div class="flex flex-wrap items-center gap-3 text-sm">
+                                        <span class="font-semibold" x-text="(testSummary?.total || 0) + ' tests'"></span>
+                                        <span class="text-green-700 dark:text-green-400" x-text="(testSummary?.counts?.passed || 0) + ' passed'"></span>
+                                        <span class="text-red-700 dark:text-red-400" x-text="(testSummary?.counts?.failed || 0) + ' failed'"></span>
+                                        <span class="text-slate-500" x-text="(testSummary?.counts?.not_run || 0) + ' not run'"></span>
+                                        <template x-if="testSummary?.coverage_pct != null">
+                                            <span class="text-slate-600 dark:text-slate-300" x-text="'coverage ' + (testSummary.coverage_pct || 0).toFixed(0) + '%'"></span>
+                                        </template>
+                                    </div>
+                                    <!-- Filter -->
+                                    <div class="flex gap-2">
+                                        <template x-for="f in ['all','passed','failed','not_run','skipped']" :key="f">
+                                            <button @click="testStatusFilter = f" class="px-2 py-1 text-xs rounded border" :class="testStatusFilter === f ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600'" x-text="f.replace('_',' ')"></button>
+                                        </template>
+                                    </div>
+                                    <!-- Add test -->
+                                    <div class="flex gap-2 items-end">
+                                        <input x-model="newTestName" placeholder="Test name" class="flex-1 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700" />
+                                        <select x-model="newTestType" class="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                                            <option value="unit">Unit</option>
+                                            <option value="integration">Integration</option>
+                                            <option value="e2e">E2E</option>
+                                            <option value="manual">Manual</option>
+                                            <option value="performance">Performance</option>
+                                        </select>
+                                        <button @click="addIdeaTest()" :disabled="!newTestName.trim()" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg disabled:opacity-50">Add</button>
+                                    </div>
+                                    <!-- List -->
+                                    <div x-show="testsLoading" class="text-sm text-slate-500">Loading...</div>
+                                    <table class="w-full text-sm" x-show="!testsLoading">
+                                        <thead>
+                                            <tr class="text-left text-xs text-slate-500 uppercase">
+                                                <th class="py-2">Name</th>
+                                                <th class="py-2">Type</th>
+                                                <th class="py-2">Status</th>
+                                                <th class="py-2">Coverage</th>
+                                                <th class="py-2">Last run</th>
+                                                <th class="py-2"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="t in filteredIdeaTests()" :key="t.id">
+                                                <tr class="border-t border-slate-200 dark:border-slate-700">
+                                                    <td class="py-2" x-text="t.name"></td>
+                                                    <td class="py-2 text-xs" x-text="t.test_type"></td>
+                                                    <td class="py-2">
+                                                        <select :value="t.status" @change="setTestStatus(t, $event.target.value)" class="text-xs border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 bg-white dark:bg-slate-700">
+                                                            <option value="not_run">not run</option>
+                                                            <option value="passed">passed</option>
+                                                            <option value="failed">failed</option>
+                                                            <option value="skipped">skipped</option>
+                                                        </select>
+                                                    </td>
+                                                    <td class="py-2 text-xs" x-text="t.coverage_pct != null ? t.coverage_pct.toFixed(0) + '%' : '—'"></td>
+                                                    <td class="py-2 text-xs text-slate-500" x-text="t.last_run_at ? new Date(t.last_run_at).toLocaleDateString() : '—'"></td>
+                                                    <td class="py-2 text-right">
+                                                        <button @click="deleteIdeaTest(t)" class="text-red-600 hover:text-red-800 text-xs">Delete</button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                    <p x-show="!testsLoading && filteredIdeaTests().length === 0" class="text-sm text-slate-500">No tests yet. Add one above.</p>
+                                </div>
+                            </template>
                             <template x-if="tab.key === 'PRD_DOC' || tab.key === 'DESIGN_DOC'">
                                 <div>
                                 <div class="mt-3 flex flex-wrap items-center gap-2">

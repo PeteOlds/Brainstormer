@@ -154,7 +154,13 @@ class Config:
     # the pages blueprint answer 410 pointing at the Flutter client.
     LEGACY_WEB_ENABLED = get_env("LEGACY_WEB_ENABLED", "True") == "True"
 
-    # Rate Limiting — Flask-Limiter reads RATELIMIT_* (not RATE_LIMIT_*).
+    # Email (password reset). SMTP_HOST unset => console logging in dev.
+    SMTP_HOST = get_env("SMTP_HOST", None)
+    SMTP_PORT = get_env("SMTP_PORT", "587")
+    SMTP_USER = get_env("SMTP_USER", None)
+    SMTP_PASSWORD = get_env("SMTP_PASSWORD", None)
+    SMTP_FROM = get_env("SMTP_FROM", None)
+    SMTP_USE_TLS = get_env("SMTP_USE_TLS", "true")
     # Wrong keys are silently ignored and the limiter falls back to
     # in-memory storage, so limits aren't shared across web workers.
     # Default to the app's own REDIS_URL so the host always resolves; the

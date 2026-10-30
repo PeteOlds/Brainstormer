@@ -130,11 +130,27 @@ def login():
         ).all()
         if m.instance_id is not None
     ]
+    # Include the user's instances so the UI can show a picker when there
+    # is more than one, without an extra round-trip.
+    from app.models import Membership as _Membership
+
+    memberships = _Membership.query.filter_by(user_id=user.id).all()
+    instances = []
+    for m in memberships:
+        if m.instance_id is None:
+            continue
+        from app.models import Instance as _Instance
+
+        inst = _Instance.query.get(m.instance_id)
+        if inst is not None:
+            instances.append({"id": str(inst.id), "number": inst.number, "name": inst.name, "role": m.role})
+
     resp, code = api_ok(
         {
             "user": user_payload,
             "access_token": tokens["access_token"],
             "refresh_token": tokens["refresh_token"],
+            "instances": instances,
         }
     )
     # Also set JWT cookies so plain browser navigation (admin HTML pages) carries auth.
@@ -204,6 +220,147 @@ def _scoped_instance_id(user, raw):
     if Membership.get_role(user.id, iid) is None:
         return False
     return str(iid)
+
+
+@bp.route("/forgot-password", methods=["POST"])
+@limiter.limit("3 per hour")
+def forgot_password():
+    """Request a password reset link. Always 200 (no user enumeration)."""
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        return api_error("Email is required.", 400)
+
+    user = User.query.filter_by(email=email).first()
+    if user is not None and user.is_active:
+        from app.models import PasswordResetToken
+        from app.services import email as email_svc
+
+        raw, _row = PasswordResetToken.create(user.id)
+        base = current_app.config.get("APP_BASE_URL", "http://localhost:8000")
+        link = f"{base.rstrip('/')}/reset-password?token={raw}"
+        email_svc.send_email(
+            to=user.email,
+            subject="Reset your Brainstormer password",
+            text_body=(
+                "You requested a password reset.\n\n"
+                f"Reset your password: {link}\n\n"
+                "This link expires in 1 hour. If you did not request this, "
+                "ignore this email."
+            ),
+            html_body=(
+                f"<p>You requested a password reset.</p>"
+                f'<p><a href="{link}">Reset your password</a></p>'
+                "<p>This link expires in 1 hour. If you did not request this, "
+                "ignore this email.</p>"
+            ),
+        )
+
+    return api_ok(
+        {"message": "If an account exists for that email, a reset link has been sent."}
+    )
+
+
+@bp.route("/reset-password/validate", methods=["GET"])
+def validate_reset_token():
+    token = request.args.get("token", "")
+    if not token:
+        return api_error("Token is required.", 400)
+    from app.models import PasswordResetToken
+
+    row = PasswordResetToken.query.filter_by(
+        token_hash=PasswordResetToken.hash_token(token)
+    ).first()
+    if row is None or not row.is_valid():
+        return api_error("Invalid or expired reset token.", 400)
+    return api_ok({"valid": True})
+
+
+@bp.route("/reset-password", methods=["POST"])
+@limiter.limit("5 per hour")
+def reset_password():
+    data = request.get_json(silent=True) or {}
+    token = data.get("token") or ""
+    new_password = data.get("password") or ""
+    if not token:
+        return api_error("Token is required.", 400)
+    if len(new_password) < 8:
+        return api_error("Password must be at least 8 characters.", 400)
+
+    from app.models import PasswordResetToken
+
+    row = PasswordResetToken.query.filter_by(
+        token_hash=PasswordResetToken.hash_token(token)
+    ).first()
+    if row is None or not row.is_valid():
+        return api_error("Invalid or expired reset token.", 400)
+
+    user = User.query.get(row.user_id)
+    if user is None or not user.is_active:
+        return api_error("Invalid or expired reset token.", 400)
+
+    user.set_password(new_password)
+    row.mark_used()
+
+    # Revoke all refresh tokens so stolen sessions die.
+    from app.models import RefreshToken
+
+    for rt in RefreshToken.query.filter_by(user_id=user.id).all():
+        if not rt.is_revoked:
+            rt.revoke()
+    db.session.commit()
+
+    return api_ok({"message": "Password reset successfully."})
+@bp.route("/me/instances", methods=["GET"])
+@token_required
+def my_instances(current_user):
+    """Instances the caller is a member of (for the switcher)."""
+    from app.models import Instance, Membership
+
+    memberships = Membership.query.filter_by(user_id=current_user.id).all()
+    result = []
+    for m in memberships:
+        if m.instance_id is None:
+            continue
+        inst = Instance.query.get(m.instance_id)
+        if inst is None:
+            continue
+        result.append(
+            {
+                "id": str(inst.id),
+                "number": inst.number,
+                "name": inst.name,
+                "role": m.role,
+            }
+        )
+    return api_ok({"instances": result})
+
+
+@bp.route("/switch-instance", methods=["POST"])
+@token_required
+def switch_instance(current_user):
+    """Re-issue a token scoped to a different instance the user belongs to."""
+    data = request.get_json(silent=True) or {}
+    instance_id = data.get("instance_id")
+    if not instance_id:
+        return api_error("instance_id is required.", 400)
+
+    if _scoped_instance_id(current_user, instance_id) is False:
+        return api_error("No membership for this instance.", 403)
+
+    remember = False
+    tokens = auth.create_tokens(
+        current_user.id, current_user.role.value, current_user.email, remember, instance_id
+    )
+    resp, code = api_ok(
+        {
+            "user": current_user.to_dict(),
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+        }
+    )
+    _set_auth_cookies(resp, tokens, remember)
+    return resp, code
 
 
 @bp.route("/me", methods=["GET"])

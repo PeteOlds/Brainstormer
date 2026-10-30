@@ -50,6 +50,19 @@ function ideasApp() {
         scaleChildren: [],
         scaleReleases: [],
         buildStatus: {},
+        // Test tab state (manual + imported test cases).
+        ideaTests: [],
+        testsLoading: false,
+        testSummary: null,
+        newTestName: '',
+        newTestType: 'unit',
+        newTestDescription: '',
+        editingTestId: null,
+        editTestName: '',
+        editTestStatus: 'not_run',
+        editTestCoverage: '',
+        editTestOutput: '',
+        testStatusFilter: 'all',
         buildPollTimer: null,
         relAiDraft: {},
         childModalOpen: false,
@@ -514,6 +527,91 @@ function ideasApp() {
             } catch (e) {
                 console.error('Failed to load comments:', e);
             }
+        },
+
+        async loadIdeaTests() {
+            if (!this.selectedIdea) return;
+            this.testsLoading = true;
+            try {
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests`);
+                const data = await res.json();
+                if (res.ok) {
+                    this.ideaTests = (data.data || data).tests || [];
+                }
+                const s = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/summary`);
+                const sd = await s.json();
+                if (s.ok) this.testSummary = (sd.data || sd);
+            } catch (e) {
+                console.error('Failed to load tests:', e);
+            } finally {
+                this.testsLoading = false;
+            }
+        },
+
+        async addIdeaTest() {
+            if (!this.selectedIdea || !this.newTestName.trim()) return;
+            try {
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: this.newTestName.trim(),
+                        test_type: this.newTestType,
+                        description: this.newTestDescription.trim() || null,
+                    }),
+                });
+                if (res.ok) {
+                    this.newTestName = '';
+                    this.newTestDescription = '';
+                    await this.loadIdeaTests();
+                }
+            } catch (e) {
+                console.error('Failed to add test:', e);
+            }
+        },
+
+        async updateIdeaTest(test) {
+            if (!this.selectedIdea) return;
+            const body = { name: test.name, test_type: test.test_type, description: test.description };
+            try {
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/${test.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(body),
+                });
+                if (res.ok) await this.loadIdeaTests();
+            } catch (e) {
+                console.error('Failed to update test:', e);
+            }
+        },
+
+        async setTestStatus(test, status) {
+            if (!this.selectedIdea) return;
+            try {
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/${test.id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status }),
+                });
+                if (res.ok) await this.loadIdeaTests();
+            } catch (e) {
+                console.error('Failed to set test status:', e);
+            }
+        },
+
+        async deleteIdeaTest(test) {
+            if (!this.selectedIdea) return;
+            if (!confirm('Delete this test?')) return;
+            try {
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/${test.id}`, {
+                    method: 'DELETE',
+                });
+                if (res.ok) await this.loadIdeaTests();
+            } catch (e) {
+                console.error('Failed to delete test:', e);
+            }
+        },
+
+        filteredIdeaTests() {
+            if (this.testStatusFilter === 'all') return this.ideaTests;
+            return this.ideaTests.filter((t) => t.status === this.testStatusFilter);
         },
 
         flatComments() {
@@ -1996,6 +2094,11 @@ function ideasApp() {
                     const label = reg ? reg.label : a.action_type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
                     seen.push({ key: a.action_type, label });
                 }
+            }
+            // Tests tab: only once the idea has been built.
+            const hasBuild = (this.selectedIdea?.actions || []).some((a) => a.action_type === 'BUILD_CODE');
+            if (hasBuild && !seen.find((t) => t.key === 'TESTS')) {
+                seen.push({ key: 'TESTS', label: 'Tests' });
             }
             return seen;
         },

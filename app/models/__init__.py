@@ -43,6 +43,8 @@ from .roles import (
     role_permissions,
 )
 from .secondary_action import ActionType, SecondaryActionResult
+from .idea_test import IdeaTest, TestStatus, TestType
+from .password_reset import PasswordResetToken
 from .slack import SlackEvent, SlackPost
 from .message import Message
 from .stage_config import STAGES, StageAIConfig, resolve_stage
@@ -66,6 +68,10 @@ __all__ = [
     "SlackEvent",
     "Message",
     "SecondaryActionResult",
+    "IdeaTest",
+    "TestType",
+    "TestStatus",
+    "PasswordResetToken",
     "ActionType",
     "IdeaStatusHistory",
     "SystemSettings",

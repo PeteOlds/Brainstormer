@@ -4,7 +4,7 @@ import string
 import uuid
 from datetime import datetime, timezone
 
-from flask import Blueprint, request
+from flask import Blueprint, g, request
 from flask_jwt_extended import get_jwt_identity
 from sqlalchemy import asc, desc, func, or_
 
@@ -1705,3 +1705,182 @@ def edit_action_result(user, result_id):
     db.session.commit()
 
     return api_ok({"action_result": result.to_dict(), "version": result.version})
+
+
+# ---------------------------------------------------------------------------
+# Idea tests: manual + imported test cases tracked against a built idea.
+# ---------------------------------------------------------------------------
+
+@bp.route("/ideas/<uuid:idea_id>/tests", methods=["GET"])
+@token_required
+def list_idea_tests(user, idea_id):
+    from app.models import IdeaTest, TestStatus, TestType
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+
+    status_filter = request.args.get("status")
+    type_filter = request.args.get("type")
+    q = IdeaTest.query.filter_by(idea_id=idea.id)
+    if status_filter:
+        try:
+            q = q.filter(IdeaTest.status == TestStatus(status_filter))
+        except ValueError:
+            return api_error("Unknown status filter.", 400)
+    if type_filter:
+        try:
+            q = q.filter(IdeaTest.test_type == TestType(type_filter))
+        except ValueError:
+            return api_error("Unknown type filter.", 400)
+    rows = q.order_by(IdeaTest.created_at.asc()).all()
+    return api_ok({"tests": [r.to_dict() for r in rows]})
+
+
+@bp.route("/ideas/<uuid:idea_id>/tests", methods=["POST"])
+@token_required
+def create_idea_test(user, idea_id):
+    from app.models import IdeaTest, TestStatus, TestType
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return api_error("name is required.", 400)
+    test_type = data.get("test_type", TestType.UNIT.value)
+    try:
+        test_type = TestType(test_type)
+    except ValueError:
+        return api_error(f"Unknown test_type {test_type!r}.", 400)
+    status = data.get("status", TestStatus.NOT_RUN.value)
+    try:
+        status = TestStatus(status)
+    except ValueError:
+        return api_error(f"Unknown status {status!r}.", 400)
+
+    coverage = data.get("coverage_pct")
+    if coverage is not None:
+        try:
+            coverage = float(coverage)
+        except (TypeError, ValueError):
+            return api_error("coverage_pct must be a number.", 400)
+        if coverage < 0 or coverage > 100:
+            return api_error("coverage_pct must be 0-100.", 400)
+
+    row = IdeaTest(
+        idea_id=idea.id,
+        instance_id=getattr(g, "instance_id", None),
+        name=name,
+        description=data.get("description"),
+        test_type=test_type,
+        status=status,
+        coverage_pct=coverage,
+        created_by_id=user.id,
+    )
+    if status != TestStatus.NOT_RUN:
+        row.last_run_at = datetime.now(timezone.utc)
+        row.last_run_output = data.get("last_run_output")
+    db.session.add(row)
+    db.session.commit()
+    return api_ok({"test": row.to_dict()}, "Created.", 201)
+
+
+@bp.route("/ideas/<uuid:idea_id>/tests/<uuid:test_id>", methods=["PUT", "PATCH"])
+@token_required
+def update_idea_test(user, idea_id, test_id):
+    from app.models import IdeaTest, TestStatus, TestType
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    row = IdeaTest.query.filter_by(id=test_id, idea_id=idea.id).first()
+    if row is None:
+        return api_error("Test not found.", 404)
+
+    data = request.get_json(silent=True) or {}
+    if "name" in data:
+        name = (data.get("name") or "").strip()
+        if not name:
+            return api_error("name cannot be empty.", 400)
+        row.name = name
+    if "description" in data:
+        row.description = data.get("description")
+    if "test_type" in data:
+        try:
+            row.test_type = TestType(data["test_type"])
+        except ValueError:
+            return api_error(f"Unknown test_type {data['test_type']!r}.", 400)
+    if "status" in data:
+        try:
+            row.status = TestStatus(data["status"])
+        except ValueError:
+            return api_error(f"Unknown status {data['status']!r}.", 400)
+        row.last_run_at = datetime.now(timezone.utc)
+    if "coverage_pct" in data:
+        cov = data["coverage_pct"]
+        if cov is None:
+            row.coverage_pct = None
+        else:
+            try:
+                cov = float(cov)
+            except (TypeError, ValueError):
+                return api_error("coverage_pct must be a number.", 400)
+            if cov < 0 or cov > 100:
+                return api_error("coverage_pct must be 0-100.", 400)
+            row.coverage_pct = cov
+    if "last_run_output" in data:
+        row.last_run_output = data.get("last_run_output")
+    db.session.commit()
+    return api_ok({"test": row.to_dict()})
+
+
+@bp.route("/ideas/<uuid:idea_id>/tests/<uuid:test_id>", methods=["DELETE"])
+@token_required
+def delete_idea_test(user, idea_id, test_id):
+    from app.models import IdeaTest
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    row = IdeaTest.query.filter_by(id=test_id, idea_id=idea.id).first()
+    if row is None:
+        return api_error("Test not found.", 404)
+    db.session.delete(row)
+    db.session.commit()
+    return api_ok({"message": "Deleted."})
+
+
+@bp.route("/ideas/<uuid:idea_id>/tests/summary", methods=["GET"])
+@token_required
+def idea_tests_summary(user, idea_id):
+    from app.models import IdeaTest, TestStatus
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+
+    rows = IdeaTest.query.filter_by(idea_id=idea.id).all()
+    counts = {s.value: 0 for s in TestStatus}
+    for r in rows:
+        counts[r.status.value] += 1
+    coverages = [r.coverage_pct for r in rows if r.coverage_pct is not None]
+    return api_ok(
+        {
+            "total": len(rows),
+            "counts": counts,
+            "coverage_pct": (sum(coverages) / len(coverages)) if coverages else None,
+            "last_run_at": max(
+                (r.last_run_at for r in rows if r.last_run_at), default=None
+            ).isoformat()
+            if any(r.last_run_at for r in rows)
+            else None,
+        }
+    )

@@ -871,6 +871,40 @@ def list_members(user, instance_id):
     return api_ok({"members": [_member_entry(m) for m in memberships]})
 
 
+@bp.route("/instances/<uuid:instance_id>/members", methods=["POST"])
+@token_required
+def add_member(user, instance_id):
+    """Add an existing user to an instance (by email)."""
+    from app.models import (
+        ASSIGNABLE_ROLES,
+        Membership as MembershipModel,
+        User as UserModel,
+    )
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        return api_error("email is required.", 400)
+    target = UserModel.query.filter_by(email=email).first()
+    if target is None:
+        return api_error("No user with that email.", 404)
+    role = data.get("role", "USER")
+    if role not in ASSIGNABLE_ROLES:
+        return api_error(f"role must be one of {ASSIGNABLE_ROLES}.", 400)
+    existing = MembershipModel.query.filter_by(
+        user_id=target.id, instance_id=instance.id
+    ).first()
+    if existing is not None:
+        return api_error("User is already a member of this instance.", 409)
+    m = MembershipModel(user_id=target.id, instance_id=instance.id, role=role)
+    db.session.add(m)
+    db.session.commit()
+    return api_ok({"member": _member_entry(m)}, "Added.", 201)
+
+
 def _last_admin_guard(instance_id, target_user_id):
     from app.models import Membership as MembershipModel
     from app.models import ROLE_INSTANCE_ADMIN

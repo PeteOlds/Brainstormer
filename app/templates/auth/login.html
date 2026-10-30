@@ -34,6 +34,7 @@
                     <input type="checkbox" name="remember_me" id="remember_me" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
                     <span class="text-sm text-slate-700 dark:text-slate-300">Remember me</span>
                 </label>
+                <a href="/forgot-password" class="text-sm text-indigo-600 hover:underline">Forgot password?</a>
             </div>
             <button id="submit-btn" type="submit" class="w-full flex justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50">
                 <span id="btn-text">Sign in</span>
@@ -42,6 +43,10 @@
                 </span>
             </button>
         </form>
+        <div id="instance-picker" class="hidden mt-6 space-y-2">
+            <p class="text-sm font-medium">Choose a workspace:</p>
+            <div id="instance-list" class="space-y-2"></div>
+        </div>
     </div>
 </div>
 
@@ -104,6 +109,30 @@ async function tryScopeWorkspace(email, password, remember) {
     }
 }
 
+function showInstancePicker(instances) {
+    const picker = document.getElementById('instance-picker');
+    const list = document.getElementById('instance-list');
+    list.innerHTML = '';
+    instances.forEach((inst) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full px-4 py-2 text-left border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700';
+        btn.textContent = 'Site ' + (inst.number != null ? inst.number : '?') + ' · ' + (inst.name || '');
+        btn.addEventListener('click', async () => {
+            const res = await fetch('/api/v1/switch-instance', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({instance_id: inst.id}),
+            });
+            if (res.ok) window.location.href = '/ideas';
+            else alert('Could not switch workspace.');
+        });
+        list.appendChild(btn);
+    });
+    picker.classList.remove('hidden');
+}
+
 document.getElementById("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = document.getElementById("submit-btn");
@@ -141,6 +170,12 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
         }
         // Only the non-secret profile is cached; tokens stay in cookies.
         localStorage.setItem("user", JSON.stringify(user));
+        const instances = (data.data && data.data.instances) || [];
+        if (instances.length > 1 && !scoped.warning) {
+            // Show instance picker.
+            showInstancePicker(instances);
+            return;
+        }
         succBox.textContent = "Login successful — redirecting...";
         succBox.classList.remove("hidden");
         setTimeout(() => { window.location.href = "/ideas"; }, scoped.warning ? 1800 : 600);
