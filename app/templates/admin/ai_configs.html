@@ -549,7 +549,7 @@ function aiSettingsApp() {
                 const data = await res.json();
                 const payload = data.data || data;
                 const raw = payload.models || [];
-                this.models = raw.map((m) => (typeof m === 'string' ? m : m.name || m.model || m.id)).filter(Boolean);
+                this.models = raw.map((m) => (typeof m === 'string' ? m : m.id || m.modelID || m.model || m.name)).filter(Boolean);
             } catch (e) {
                 this.models = [];
             }

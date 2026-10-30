@@ -1202,6 +1202,18 @@ def upsert_stage_config(user, instance_id):
         row.provider = provider
     if "model_name" in data:
         row.model_name = model_name
+        # OpenCode models are addressed as "provider/model" (e.g.
+        # "opencode/beam-free"). Storing a bare display name ("Beam Free")
+        # makes the CLI reject the run with "Invalid model reference".
+        if (
+            model_name is not None
+            and (data.get("provider") or row.provider) == "opencode"
+            and "/" not in model_name
+        ):
+            return api_error(
+                "OpenCode model_name must be 'provider/model' (e.g. 'opencode/beam-free').",
+                status_code=400,
+            )
     if "temperature" in data:
         row.temperature = temperature
     if "top_p" in data:
