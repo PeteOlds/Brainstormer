@@ -398,6 +398,11 @@ def opencode_generate(
     if not model:
         raise ProviderError("OpenCode requires a model.", retryable=False)
 
+    if timeout is None:
+        timeout = float(_config("OPENCODE_TIMEOUT", 1500) or 1500)
+
+    attach_url = _attach_url(endpoint)
+
     # Tolerate a stored display name ("Beam Free") instead of the model
     # id ("opencode/beam-free"): resolve against the server catalog so a
     # misconfigured stage config can't break every run.
@@ -413,11 +418,6 @@ def opencode_generate(
                 model = f"opencode/{slug}"
         except Exception:
             pass
-
-    if timeout is None:
-        timeout = float(_config("OPENCODE_TIMEOUT", 1500) or 1500)
-
-    attach_url = _attach_url(endpoint)
     workspace = workspace or "sandbox"
     argv = [resolved, "run", "--format", "json", "--model", model]
     server_dir: str | None = None
