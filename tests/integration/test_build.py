@@ -252,6 +252,36 @@ def _mock_manifest(monkeypatch=None):
     return GenerationResult(text=json.dumps(MANIFEST), model="llama3:8b")
 
 
+class TestBuildTargetResolution:
+    """Which repo a BUILD_CODE run writes into."""
+
+    def test_prefers_repo_named_after_idea(self, app, tmp_path):
+        from app.routes.ideas import _resolve_build_target
+
+        with app.app_context():
+            inst = make_instance(74, "BR")
+            idea = seed_idea(db, inst.id, email="br@t.test")
+            other = seed_target(inst.id, name="IDEA-9603", path=str(tmp_path / "a"))
+            own = seed_target(
+                inst.id, name=idea.reference_code, path=str(tmp_path / "b")
+            )
+            db.session.commit()
+            # The per-idea repo wins over the instance's other repo.
+            assert _resolve_build_target(idea, None).id == own.id
+            # An explicit choice is still honoured.
+            assert _resolve_build_target(idea, str(other.id)).id == other.id
+
+    def test_falls_back_to_only_repo(self, app, tmp_path):
+        from app.routes.ideas import _resolve_build_target
+
+        with app.app_context():
+            inst = make_instance(75, "BR2")
+            idea = seed_idea(db, inst.id, email="br2@t.test")
+            only = seed_target(inst.id, name="shared", path=str(tmp_path / "c"))
+            db.session.commit()
+            assert _resolve_build_target(idea, None).id == only.id
+
+
 class TestBuildTask:
     def test_preview_saves_manifest_unwritten(self, celery_app, tmp_path):
         celery_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
@@ -339,6 +369,58 @@ class TestBuildTask:
             assert rows[1].result_data["written"] is True
             assert rows[1].result_data["write_report"]
             assert rows[1].result_data.get("target_path") == str(tmp_path)
+
+    def test_confirm_refuses_unrunnable_manifest(self, celery_app, tmp_path):
+        """No entry point -> fail before writing, so Built means runnable."""
+        celery_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
+        manifest = {
+            "summary": "Notes about the build with no runnable entry point.",
+            "files": [{"path": "README.md", "content": "hi\n"}],
+        }
+        with celery_app.app_context():
+            inst = make_instance(73, "BU")
+            idea = seed_idea(db, inst.id, email="bu@t.test")
+            seed_design(idea)
+            target = seed_target(inst.id, path=str(tmp_path))
+            tid, idea_id = target.id, idea.id
+            run = PromptRun(
+                prompt_config_id=None,
+                action_type="BUILD_CODE",
+                idea_id=idea.id,
+                triggered_by="manual",
+            )
+            db.session.add(run)
+            db.session.commit()
+            rid = run.id
+
+            from app.tasks.ollama_tasks import run_secondary_action
+
+            with patch("app.tasks.ollama_tasks.OllamaClient") as mock_cls:
+                mock_cls.return_value.generate_sync.return_value = {
+                    "response": json.dumps(manifest)
+                }
+                run_secondary_action(
+                    str(idea_id),
+                    "BUILD_CODE",
+                    extra_context={"target_id": str(tid)},
+                )
+                run_secondary_action(
+                    str(idea_id),
+                    "BUILD_CODE",
+                    extra_context={"target_id": str(tid), "confirm_build": True},
+                    run_id=str(rid),
+                )
+            db.session.expire_all()
+            failed = db.session.get(PromptRun, rid)
+            assert failed.status.value == "FAILED"
+            assert "runnable entry point" in (failed.error or "")
+            # Nothing was written, and no version claims to be Built.
+            assert not (tmp_path / "README.md").exists()
+            rows = SecondaryActionResult.query.filter_by(
+                idea_id=idea_id, action_type="BUILD_CODE"
+            ).all()
+            assert len(rows) == 1
+            assert rows[0].result_data["written"] is False
 
     def test_confirm_without_preview_fails(self, celery_app, tmp_path):
         celery_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
@@ -611,6 +693,67 @@ class TestBuildRuntimeInfo:
         assert info["port"] is None
         assert info["start_command"] is None
         assert info["run_notes"] is None
+
+    def test_infers_flask_entry_without_dockerfile(self):
+        from app.tasks.ollama_tasks import _extract_runtime_info
+
+        info = _extract_runtime_info(
+            [
+                {
+                    "path": "app.py",
+                    "content": "from flask import Flask\napp = Flask(__name__)\n",
+                },
+                {"path": "templates/index.html", "content": "<h1>hi</h1>"},
+            ]
+        )
+        assert info["start_command"] == (
+            "python3 -m flask --app app run --host 0.0.0.0 --port 5000"
+        )
+        assert info["port"] == 5000
+        assert info["app_url"].endswith(":5000")
+        assert "inferred from app.py" in (info["run_notes"] or "")
+        # No requirements.txt shipped: say so instead of failing at start.
+        assert "install flask" in (info["run_notes"] or "")
+
+    def test_infers_fastapi_entry_under_src(self):
+        from app.tasks.ollama_tasks import _extract_runtime_info
+
+        info = _extract_runtime_info(
+            [
+                {
+                    "path": "src/main.py",
+                    "content": "from fastapi import FastAPI\napp = FastAPI()\n",
+                },
+                {"path": "requirements.txt", "content": "fastapi\nuvicorn\n"},
+            ]
+        )
+        assert info["start_command"] == (
+            "python3 -m uvicorn src.main:app --host 0.0.0.0 --port 8000"
+        )
+        assert info["port"] == 8000
+
+    def test_infers_plain_script_entry(self):
+        from app.tasks.ollama_tasks import _extract_runtime_info
+
+        info = _extract_runtime_info(
+            [{"path": "src/app.py", "content": "print('hello')\n"}]
+        )
+        assert info["start_command"] == "python3 src/app.py"
+        assert info["port"] is None
+
+    def test_dockerfile_cmd_wins_over_inference(self):
+        from app.tasks.ollama_tasks import _extract_runtime_info
+
+        info = _extract_runtime_info(
+            [
+                {"path": "Dockerfile", "content": 'FROM x\nCMD ["node", "server.js"]\n'},
+                {
+                    "path": "app.py",
+                    "content": "from flask import Flask\napp = Flask(__name__)\n",
+                },
+            ]
+        )
+        assert info["start_command"] == '["node", "server.js"]'
 
 
 def _hold_port():
@@ -918,6 +1061,69 @@ class TestDeriveRunbook:
         assert rb["run_argv"] == ["python3", "src/app.py"]
         assert rb["setup_argv"] == []
 
+    def test_bare_runner_and_flask_argv(self):
+        from app.tasks.ollama_tasks import _derive_runbook
+
+        files = [
+            {
+                "path": "app.py",
+                "content": "from flask import Flask\napp = Flask(__name__)\n",
+            },
+            {"path": "requirements.txt", "content": "flask\n"},
+        ]
+        # `python -m flask --app app run` resolves the app module.
+        rb = _derive_runbook(
+            files,
+            "python3 -m flask --app app run --host 0.0.0.0 --port 5000",
+            "/h",
+            "/c",
+        )
+        assert rb is not None
+        assert rb["workdir_container"] == "/c"
+        assert rb["run_argv"] == [
+            "/c/.venv/bin/python",
+            "-m",
+            "flask",
+            "--app",
+            "app",
+            "run",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "5000",
+        ]
+        # Bare `uvicorn` (no python prefix) still gets an argv.
+        rb = _derive_runbook(files, "uvicorn app:app --port 8000", "/h")
+        assert rb is not None
+        assert rb["run_argv"] == [
+            "/h/.venv/bin/python",
+            "-m",
+            "uvicorn",
+            "app:app",
+            "--port",
+            "8000",
+        ]
+
+    def test_npm_start_gets_argv_and_install(self):
+        from app.tasks.ollama_tasks import _derive_runbook
+
+        rb = _derive_runbook(
+            [
+                {
+                    "path": "package.json",
+                    "content": '{"scripts": {"start": "node server.js"}}',
+                },
+                {"path": "server.js", "content": "x"},
+            ],
+            "npm start",
+            "/h",
+        )
+        assert rb is not None
+        assert rb["run_argv"] == ["npm", "start"]
+        assert rb["setup"] == 'cd "/h" && npm install'
+        assert rb["setup_argv"] == ["npm", "install"]
+        assert rb["pip_argv"] == []
+
     def test_pretty_cmd(self):
         from app.tasks.ollama_tasks import _pretty_cmd
 
@@ -1053,6 +1259,37 @@ class TestManagedApps:
         assert err is None
         from app.tasks.ollama_tasks import _host_network_ip
         assert spec["open_url"] == f"http://{_host_network_ip()}:8001"
+
+    def test_spec_rederives_command_for_legacy_row(self, tmp_path):
+        """Rows written before entry-point inference still become runnable."""
+        from types import SimpleNamespace
+
+        from app.routes.instances import _spec_from_build_version
+
+        version_row = SimpleNamespace(
+            result_data={
+                "written": True,
+                "target_path": str(tmp_path),
+                "target_host_path": str(tmp_path),
+                "start_command": None,
+                "port": None,
+                "runbook": None,
+                "files": [
+                    {
+                        "path": "app.py",
+                        "content": "from flask import Flask\napp = Flask(__name__)\n",
+                    },
+                    {"path": "templates/index.html", "content": "<h1>hi</h1>"},
+                ],
+            }
+        )
+        target = SimpleNamespace(path=str(tmp_path))
+        spec, display, err = _spec_from_build_version(version_row, target, "IDEA-1")
+        assert err is None
+        assert spec["run_argv"][:3] == ["python3", "-m", "flask"]
+        assert "--port" in spec["run_argv"]
+        # The inferred port keeps the open URL honest.
+        assert spec["open_url"].endswith(":5000")
 
     def test_upsert_requires_written_version(self, app, client, tmp_path):
         with app.app_context():

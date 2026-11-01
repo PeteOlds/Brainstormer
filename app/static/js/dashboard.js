@@ -145,6 +145,7 @@ function ideasApp() {
         runDialogTarget: '',
         runDialogTargets: [],
         runDialogTargetDefaults: {},
+        runDialogIdeaRef: '',
         runDialogNewRepo: false,
         runDialogNewRepoName: '',
         runDialogNewRepoPath: '',
@@ -1655,6 +1656,7 @@ function ideasApp() {
             this.runDialogTarget = '';
             this.runDialogTargets = [];
             this.runDialogTargetDefaults = {};
+            this.runDialogIdeaRef = (idea && idea.reference_code) || '';
             this.runDialogNewRepo = false;
             this.runDialogNewRepoName = '';
             this.runDialogNewRepoPath = '';
@@ -1680,9 +1682,20 @@ function ideasApp() {
             // Build tab's choice, else the first registered. A blank select
             // silently failed the run with "Unknown build target".
             if (actionType === 'BUILD_CODE') {
+                const ref = (this.runDialogIdeaRef || '').trim().toLowerCase();
+                // A repo named after this idea wins: reusing the instance's
+                // only repo (often another idea's folder) mixed files.
+                const byRef = ref
+                    ? this.runDialogTargets.find((t) => String(t.name || '').trim().toLowerCase() === ref)
+                    : null;
                 const prior = (last && last.target_id) || this.buildTargetChoice;
                 const match = this.runDialogTargets.find((t) => String(t.id) === String(prior));
-                this.runDialogTarget = match ? match.id : ((this.runDialogTargets[0] || {}).id || '');
+                this.runDialogTarget = byRef
+                    ? byRef.id
+                    : (match ? match.id : ((this.runDialogTargets[0] || {}).id || ''));
+                // No repo for this idea yet: open the (prefilled) new-repo
+                // form instead of silently building into someone else's.
+                if (!byRef && this.runDialogTargets.length) this.runDialogNewRepo = true;
             }
             // Assign Recreate defaults AFTER the option lists render: an
             // x-model value set before its <option>s exist stays blank.
@@ -1708,6 +1721,7 @@ function ideasApp() {
             this.runDialogTarget = '';
             this.runDialogTargets = [];
             this.runDialogTargetDefaults = {};
+            this.runDialogIdeaRef = '';
             this.runDialogNewRepo = false;
             this.runDialogNewRepoName = '';
             this.runDialogNewRepoPath = '';
@@ -1769,6 +1783,22 @@ function ideasApp() {
             if (size < 3000000000) return ' 🚀';
             if (size < 7000000000) return ' 🐇';
             return ' 🐢';
+        },
+
+        runDialogSelectedTarget() {
+            return (this.runDialogTargets || []).find(
+                (t) => String(t.id) === String(this.runDialogTarget)
+            ) || null;
+        },
+
+        // Name of the selected repo when it is not this idea's own repo
+        // (empty string when it matches or nothing is selected).
+        runDialogTargetMismatch() {
+            const target = this.runDialogSelectedTarget();
+            const ref = (this.runDialogIdeaRef || '').trim();
+            if (!target || !ref) return '';
+            const name = String(target.name || '').trim();
+            return name.toLowerCase() === ref.toLowerCase() ? '' : name;
         },
 
         async loadBuildTargets(instanceId) {
@@ -1861,12 +1891,18 @@ function ideasApp() {
 
         async confirmRunDialog() {
             const extra = {};
-            const model = this.runDialogUnrestricted
-                ? (this.runDialogFreeModel || '').trim()
-                : this.runDialogModel;
-            if (model) extra.model_override = model;
-            if (this.runDialogProvider && this.runDialogProvider !== this.runDialogBaseProvider) {
-                extra.provider_override = this.runDialogProvider;
+            // Simple mode ("Run with recommended settings") must not override
+            // the model or provider. The backend resolves stage/release config
+            // and the idea's prompt defaults. Only advanced mode sends explicit
+            // overrides chosen by the user.
+            if (this.runDialogAdvanced) {
+                const model = this.runDialogUnrestricted
+                    ? (this.runDialogFreeModel || '').trim()
+                    : this.runDialogModel;
+                if (model) extra.model_override = model;
+                if (this.runDialogProvider && this.runDialogProvider !== this.runDialogBaseProvider) {
+                    extra.provider_override = this.runDialogProvider;
+                }
             }
             if (this.runDialogSkills.length) extra.skills = [...this.runDialogSkills];
             if (this.runDialogGuidelines.length) extra.guidelines = [...this.runDialogGuidelines];

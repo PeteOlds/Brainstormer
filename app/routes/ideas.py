@@ -719,10 +719,11 @@ def _child_default_target(idea):
 def _resolve_build_target(idea, target_id):
     """Repo a BUILD_CODE run writes into.
 
-    Order: explicit id (must belong to the idea's instance), the repo its
-    last build used, the release's repo, then the instance's only repo.
-    An explicit id that does not resolve never falls back — writing into a
-    different repo than the caller asked for would be worse than failing.
+    Order: explicit id (must belong to the idea's instance), a repo named
+    after the idea's reference code, the repo its last build used, the
+    release's repo, then the instance's only repo. An explicit id that does
+    not resolve never falls back — writing into a different repo than the
+    caller asked for would be worse than failing.
     """
     from app.models import InstanceBuildTarget, SecondaryActionResult
 
@@ -733,6 +734,17 @@ def _resolve_build_target(idea, target_id):
             ).first()
         except (ValueError, TypeError, AttributeError):
             return None
+
+    # Per-idea repos are named after the idea (IDEA-1234). Without this the
+    # fallback below happily reuses whatever single repo the instance has,
+    # so a new idea's build lands in another idea's folder and mixes files.
+    ref = str(getattr(idea, "reference_code", "") or "").strip().lower()
+    if ref:
+        for cand in InstanceBuildTarget.query.filter_by(
+            instance_id=idea.instance_id
+        ).all():
+            if str(cand.name or "").strip().lower() == ref:
+                return cand
 
     prior = (
         SecondaryActionResult.query.filter_by(

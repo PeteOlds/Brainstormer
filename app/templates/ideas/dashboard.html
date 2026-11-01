@@ -1140,6 +1140,8 @@
                                 </template>
                             </select>
                             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="!runDialogTargets.length">No repos registered yet — create the first one below.</p>
+                            <p class="mt-1 text-xs text-amber-600 dark:text-amber-400" x-show="runDialogTargetMismatch()"
+                               x-text="'Heads up: this repo is registered as ' + runDialogTargetMismatch() + ', not ' + runDialogIdeaRef + '. Builds write into that folder and can mix with its files — use “+ New repo” for a per-idea folder.'"></p>
                             <div class="mt-2">
                                 <button type="button" @click="runDialogNewRepo = !runDialogNewRepo" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="runDialogNewRepo ? 'Hide new repo form' : '+ New repo'"></button>
                             </div>

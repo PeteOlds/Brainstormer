@@ -442,13 +442,26 @@ def _spec_from_build_version(version_row, target, idea_ref):
         if isinstance(f, dict) and f.get("path")
     ]
     runbook = out.get("runbook") if isinstance(out.get("runbook"), dict) else None
+    start_command = out.get("start_command")
+    inferred_port = None
+    if not start_command:
+        # Builds recorded before entry-point inference existed: derive a
+        # command from the stored manifest so they can still be run.
+        from app.tasks.ollama_tasks import _infer_entry_command
+
+        try:
+            start_command, inferred_port, _note = _infer_entry_command(
+                {str(f.get("path")): f.get("content", "") for f in manifest}
+            )
+        except Exception:
+            start_command = None
     if runbook is None or not (runbook or {}).get("workdir_container"):
         # Missing or pre-container-shape runbook: re-derive so argv is
         # container-native. Stored display strings stay untouched.
         try:
             runbook = _derive_runbook(
                 manifest,
-                out.get("start_command"),
+                start_command,
                 host_root,
                 out.get("target_path") or (target.path if target else ""),
             )
@@ -482,6 +495,9 @@ def _spec_from_build_version(version_row, target, idea_ref):
         port = int(out.get("port")) if out.get("port") else None
     except (TypeError, ValueError):
         port = None
+    if port is None and inferred_port:
+        # Older rows never stored the inferred port; keep the URL honest.
+        port = int(inferred_port)
     from app.tasks.ollama_tasks import _host_network_ip
 
     def _network_url(url):
@@ -493,6 +509,8 @@ def _spec_from_build_version(version_row, target, idea_ref):
         return re.sub(r"^(https?://)(?:localhost|127\.0\.0\.1)(?=[:/])", r"\g<1>" + ip, url.strip(), count=1)
 
     app_url = _network_url(out.get("app_url")) or (out.get("app_url") or "").strip() or None
+    if app_url is None and port:
+        app_url = f"http://{_host_network_ip()}:{port}"
     frontend_url = _network_url(out.get("frontend_url")) or (out.get("frontend_url") or "").strip() or None
     try:
         frontend_port = int(out.get("frontend_port")) if out.get("frontend_port") else None

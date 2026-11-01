@@ -600,6 +600,65 @@ def _accumulate_answers(idea_id, action_type, new_answers):
     return list(keyed.values()) + unkeyed
 
 
+def _infer_entry_command(by_path: dict, known_port=None):
+    """Guess a start command when the manifest has no Dockerfile/compose/package.json.
+
+    Returns ``(start_command, port, note)`` or ``(None, None, None)``. Only
+    fires on a recognisable Python entry file, so an unrelated manifest
+    (README-only) stays unrunnable — and the build confirm refuses it
+    rather than reporting a build nobody can start.
+    """
+    import re as _re
+
+    def _module(rel: str) -> str:
+        return rel[:-3].replace("/", ".") if rel.endswith(".py") else rel
+
+    has_requirements = any(
+        _re.search(r"(^|/)requirements[^/]*\.txt$", path or "") for path in by_path
+    )
+    for prefix in ("", "src/", "backend/", "app/", "api/"):
+        for name in ("app.py", "main.py", "server.py", "run.py", "wsgi.py", "asgi.py"):
+            rel = prefix + name
+            text = by_path.get(rel)
+            if text is None:
+                continue
+            text = str(text)
+            mod = _module(rel)
+            if "FastAPI(" in text or "fastapi import" in text:
+                port = known_port or 8000
+                note = f"Start command inferred from {rel} (FastAPI)."
+                if not has_requirements:
+                    note += (
+                        "\nNo requirements.txt in this build — install uvicorn "
+                        "and fastapi before running."
+                    )
+                return (
+                    f"python3 -m uvicorn {mod}:app --host 0.0.0.0 --port {port}",
+                    port,
+                    note,
+                )
+            if _re.search(r"\bFlask\s*\(", text) or "flask import" in text:
+                port = known_port or 5000
+                note = f"Start command inferred from {rel} (Flask)."
+                if not has_requirements:
+                    note += (
+                        "\nNo requirements.txt in this build — install flask "
+                        "before running."
+                    )
+                if _re.search(r"(?m)^\s*app\s*=\s*Flask\s*\(", text):
+                    return (
+                        f"python3 -m flask --app {mod} run --host 0.0.0.0 --port {port}",
+                        port,
+                        note,
+                    )
+                return f"python3 {rel}", port, note
+            # Canonical script names run as scripts even without a
+            # __main__ guard; wsgi/asgi modules only when they have one.
+            if name in ("app.py", "main.py", "server.py", "run.py") or "__main__" in text:
+                return f"python3 {rel}", known_port, f"Start command inferred from {rel}."
+    return None, None, None
+
+
 def _extract_runtime_info(files: list) -> dict:
     """Infer how to run a built app from its manifest files.
 
@@ -765,6 +824,16 @@ def _extract_runtime_info(files: list) -> dict:
                 pass
             break
 
+    # No Dockerfile CMD / package.json start script: infer from the app's
+    # own entry file so a plain Flask/FastAPI app still gets a runbook.
+    inferred_note = None
+    if not start_command:
+        start_command, inferred_port, inferred_note = _infer_entry_command(
+            by_path, port
+        )
+        if inferred_port:
+            port = inferred_port
+
     credentials = None
     for path, content in by_path.items():
         low = path.lower()
@@ -788,6 +857,8 @@ def _extract_runtime_info(files: list) -> dict:
                 break
 
     notes = []
+    if inferred_note:
+        notes.append(inferred_note)
     # No "Start command:" note: the How-to-run panel already shows it as a
     # copyable Run row, and models restate it here verbatim (noise).
     # Browser step goes last: open the app only after starting it.
@@ -997,6 +1068,12 @@ def _derive_runbook(
                 if not appm:
                     return None
                 return _resolve_module(appm.group(1))
+            if mod.split(".")[0] == "flask":
+                # `python -m flask --app pkg.mod run`: --app names the app.
+                appm = _re.search(r"--app[\s=]+([\w.]+)", cmd)
+                if not appm:
+                    return ""  # CLI discovery from the workdir
+                return _resolve_module(appm.group(1).split(":")[0])
             return _resolve_module(mod)
         if m and m.group(2):
             script = m.group(2).lstrip("./")
@@ -1009,7 +1086,10 @@ def _derive_runbook(
             # path (never cd into its dir: that would double the path).
             return ""
         # `uvicorn|gunicorn dotted.mod:app ...`
-        m = _re.search(r"(?:^|&&\s*|;\s*)\s*(?:uvicorn|gunicorn)\s+([\w.]+):\S+", cmd)
+        m = _re.search(
+            r"(?:^|&&\s*|;\s*)\s*(?:uvicorn|gunicorn|hypercorn|daphne)\s+([\w.]+):\S+",
+            cmd,
+        )
         if m:
             mod_path = m.group(1).replace(".", "/") + ".py"
             hit = next(
@@ -1018,6 +1098,20 @@ def _derive_runbook(
             if hit is None:
                 return None
             return hit[: len(hit) - len(mod_path)].rstrip("/")
+        # `flask --app pkg.mod run ...` (bare CLI, no python prefix)
+        m = _re.search(r"(?:^|&&\s*|;\s*)\s*flask\b[^&;]*--app[\s=]+([\w.]+)", cmd)
+        if m:
+            return _resolve_module(m.group(1).split(":")[0])
+        # `npm start`, `npm run dev`, `node server.js`, `npx ...`
+        m = _re.search(r"(?:^|&&\s*|;\s*)\s*(?:npm|npx|yarn|pnpm|node)\b", cmd)
+        if m:
+            pkg = next(
+                (p for p in paths if p == "package.json" or p.endswith("/package.json")),
+                None,
+            )
+            if pkg is None:
+                return None
+            return pkg[: -len("package.json")].rstrip("/")
         return None
 
     appdir = _resolve_dir()
@@ -1027,6 +1121,20 @@ def _derive_runbook(
         host_root.rstrip("/") if not appdir else host_root.rstrip("/") + "/" + appdir
     )
     quoted = f'cd "{workdir}"'
+    pretty = _pretty_cmd(start_command).strip()
+    import shlex as _shlex
+
+    try:
+        args = _shlex.split(pretty, posix=True)
+    except ValueError:
+        args = None
+    if args:
+        # `cd /dir && cmd` (models sometimes paste their own cd): workdir
+        # already covers the cd, so drop it and keep the real head.
+        while len(args) > 2 and args[0] == "cd" and "&&" in args:
+            args = args[args.index("&&") + 1:]
+    head = _os.path.basename(args[0]) if args else ""
+    node_cmd = head in ("npm", "npx", "yarn", "pnpm", "node")
     setup = None
     req = next(
         (p for p in paths if _re.search(r"(^|/)requirements[^/]*\.txt$", p or "")),
@@ -1040,6 +1148,16 @@ def _derive_runbook(
                 f'&& . .venv/bin/activate && .venv/bin/pip install -r {rel}'
             )
     use_venv = setup is not None
+    # Node projects install their own way; only when no venv already owns
+    # the setup step (a manifest with both is a Python app with a frontend).
+    npm_pkg = next(
+        (p for p in paths if p == "package.json" or p.endswith("/package.json")),
+        None,
+    )
+    npm_setup = None
+    if node_cmd and npm_pkg is not None and not use_venv:
+        npm_setup = f"{quoted} && npm install"
+        setup = npm_setup
     # Supervised processes run inside worker containers, where host paths
     # do not exist: argv uses the container twin when one was provided.
     # Display strings above stay host-native for pasting.
@@ -1058,18 +1176,23 @@ def _derive_runbook(
     venv_dir = workdir.rstrip("/") + "/.venv" if use_venv else ""
     venv_python = venv_dir + "/bin/python" if use_venv else "/usr/bin/python3"
     run_argv = None
-    pretty = _pretty_cmd(start_command).strip()
-    m = _re.match(r"^python3?\s+(.*)$", pretty)
-    if m:
-        import shlex as _shlex
-
-        try:
-            args = _shlex.split(m.group(1), posix=True)
-        except ValueError:
-            args = None
-        if args is not None:
-            run_argv = [epython] + args
-    setup_argv = ["python3", "-m", "venv", "--upgrade", evenv] if use_venv else []
+    if args:
+        rest = args[1:]
+        if _re.match(r"^python3?(\.\d+)?$", head):
+            run_argv = [epython] + rest
+        elif head in _RUNNERS:
+            # Bare runner (`uvicorn pkg.mod:app`): invoke it as a module so
+            # the venv (or the runner's PATH) interpreter resolves it.
+            run_argv = [epython, "-m", head] + rest
+        elif head == "flask":
+            run_argv = [epython, "-m", "flask"] + rest
+        elif head in ("npm", "npx", "yarn", "pnpm", "node"):
+            run_argv = [head] + rest
+    setup_argv = (
+        ["python3", "-m", "venv", "--upgrade", evenv]
+        if use_venv
+        else (["npm", "install"] if npm_setup else [])
+    )
     pip_argv = [evenv + "/bin/pip", "install", "-r", rel] if use_venv else []
     # Fallback for newer Pythons the pinned versions no longer build on:
     # same packages, unpinned. Parsed from the requirements content so it
@@ -1273,9 +1396,11 @@ def _allocate_build_port(runtime: dict, files: list) -> tuple[dict, list, list]:
 def _write_confirmed_build(idea, build_target, build_root, run_id):
     """Write a previewed manifest to its target (confirm run, no LLM).
 
-    Loads the current unwritten BUILD_CODE preview for this target, writes
-    its stored files, and appends a new version carrying the write report.
-    Every failure marks the run failed with a plain message and returns.
+    Loads the current unwritten BUILD_CODE preview for this target, derives
+    the runbook, then writes its stored files and appends a new version
+    carrying the write report. A build with no runnable command is refused
+    before anything is written, so "Built" always means runnable. Every
+    failure marks the run failed with a plain message and returns.
     """
     from app.models import SecondaryActionResult
     from app.schemas.ollama_schemas import BuildCodeOutput
@@ -1308,6 +1433,31 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
         runtime, manifest_files, port_report = _allocate_build_port(
             runtime, manifest_files
         )
+    except BuildError as exc:
+        _record_failure(run_id, str(exc))
+        return
+    # Derive the runbook BEFORE writing: a build with no runnable command
+    # is not runnable, so it must fail here rather than write files, report
+    # success, and only refuse later at one-click run time.
+    try:
+        runbook = _derive_runbook(
+            manifest_files,
+            runtime.get("start_command"),
+            server_path(str(build_root)),
+            str(build_root),
+        )
+    except Exception:
+        runbook = None
+    if not runbook or not runbook.get("run_argv"):
+        _record_failure(
+            run_id,
+            "This build has no runnable entry point — no Dockerfile CMD, "
+            "package.json start script, or recognised app file (app.py, "
+            "main.py, …) to run. Nothing was written. Re-run the preview "
+            "and ask for a runnable app with an entry point.",
+        )
+        return
+    try:
         written, skipped = write_manifest(
             build_root,
             manifest_files,
@@ -1318,15 +1468,6 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
     report = [f"wrote {w['path']} ({w['bytes']} B)" for w in written]
     report += [f"skipped {s['path']}: {s['reason']}" for s in skipped]
     report += port_report
-    try:
-        runbook = _derive_runbook(
-            manifest_files,
-            runtime.get("start_command"),
-            server_path(str(build_root)),
-            str(build_root),
-        )
-    except Exception:
-        runbook = None
     current = SecondaryActionResult.query.filter_by(
         idea_id=idea.id, action_type="BUILD_CODE", is_current=True
     ).all()
