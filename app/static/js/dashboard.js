@@ -904,6 +904,14 @@ function ideasApp() {
                 releaseId ? String(k.release_id) === String(releaseId) : !k.release_id);
         },
 
+        // The releases API appends a pseudo "No release yet" entry (id
+        // null) for the unassigned bucket. The tab renders that bucket in
+        // its own block, so release cards and movers must skip the pseudo
+        // entry or every unassigned child appears twice.
+        realReleases() {
+            return (this.scaleReleases || []).filter((r) => r && r.id);
+        },
+
         openChildModal(kind) {
             this.childKind = kind;
             this.childTitle = '';

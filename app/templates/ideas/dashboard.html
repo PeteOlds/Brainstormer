@@ -541,8 +541,8 @@
                                                     <span x-show="isAdmin" class="flex items-center gap-1 ml-auto">
                                                         <select @change="moveChildToRelease(k.id, $event.target.value)" :disabled="releaseBusy" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-1 py-1" aria-label="Move to release">
                                                             <option value="">Move to…</option>
-                                                            <template x-for="r2 in scaleReleases" :key="r2.id || 'none'">
-                                                                <option x-show="r2.id" :value="r2.id" x-text="r2.name"></option>
+                                                            <template x-for="r2 in realReleases()" :key="r2.id">
+                                                                <option :value="r2.id" x-text="r2.name"></option>
                                                             </template>
                                                         </select>
                                                     </span>
@@ -585,7 +585,7 @@
                                     </div>
                                 </div>
                             </template>
-                            <template x-for="rel in scaleReleases" :key="rel.id || 'none'">
+                            <template x-for="rel in realReleases()" :key="rel.id">
                                 <div class="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3">
                                     <div class="flex flex-wrap items-center gap-2 mb-2">
                                         <span class="text-sm font-semibold text-slate-900 dark:text-white" x-text="rel.name"></span>
@@ -612,8 +612,8 @@
                                                     <span x-show="isAdmin" class="flex items-center gap-1 ml-auto">
                                                         <select @change="moveChildToRelease(k.id, $event.target.value)" :disabled="releaseBusy" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-1 py-1" aria-label="Move to release">
                                                             <option value="">Move to…</option>
-                                                            <template x-for="r2 in scaleReleases" :key="r2.id || 'none'">
-                                                                <option x-show="r2.id" :value="r2.id" x-text="r2.name"></option>
+                                                            <template x-for="r2 in realReleases()" :key="r2.id">
+                                                                <option :value="r2.id" x-text="r2.name"></option>
                                                             </template>
                                                         </select>
                                                         <button x-show="k.release_id" @click="removeChildFromRelease(k)" :disabled="releaseBusy" class="text-xs text-slate-500 hover:underline" title="Move back to No release yet">Remove</button>
@@ -851,6 +851,7 @@
                                 <template x-if="tab.key === 'BUILD_CODE' && buildRunInfo(tab.key)">
                                     <div class="mt-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4">
                                         <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-1">How to run <span class="font-normal text-slate-500 dark:text-slate-400" x-text="'· ' + (buildRunInfo(tab.key)?.target || '')"></span></h4>
+                                        <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">Setup uses its own <code class="font-mono">.venv-local</code> folder, so pasting these never disturbs the one-click run.</p>
                                         <dl class="space-y-2 text-sm">
                                             <template x-for="(line, i) in (buildRunInfo(tab.key)?.lines || [])" :key="i">
                                                 <div class="flex flex-wrap items-center gap-2">
@@ -940,7 +941,7 @@
                                     <template x-if="tab.key === 'BUILD_CODE' && buildRunInfo(tab.key)">
                                         <div class="mt-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4">
                                             <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-1">How to run <span class="font-normal text-slate-500 dark:text-slate-400" x-text="'· ' + (buildRunInfo(tab.key)?.target || '')"></span></h4>
-                                            <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">Steps to start the app yourself — each command has a Copy button. Easiest is Run on this machine below.</p>
+                                            <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">Steps to start the app yourself — each command has a Copy button. Easiest is Run on this machine below. Setup uses its own <code class="font-mono">.venv-local</code> folder, so it never disturbs the one-click run.</p>
                                             <dl class="space-y-2 text-sm">
                                                 <template x-for="(line, i) in (buildRunInfo(tab.key)?.lines || [])" :key="i">
                                                     <div class="flex flex-wrap items-center gap-2">

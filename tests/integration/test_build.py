@@ -980,13 +980,17 @@ class TestDeriveRunbook:
         )
         assert rb is not None
         assert rb["workdir"] == "/mnt/host/IDEA-1/backend"
+        # Display strings use their own venv so pasting them on the host
+        # cannot replace the supervised `.venv` with a foreign interpreter.
         assert rb["setup"] == (
-            'cd "/mnt/host/IDEA-1/backend" && rm -rf .venv && python3 -m venv .venv '
-            "&& . .venv/bin/activate && .venv/bin/pip install fastapi"
+            'cd "/mnt/host/IDEA-1/backend" && rm -rf .venv-local && '
+            "python3 -m venv .venv-local "
+            "&& . .venv-local/bin/activate && .venv-local/bin/pip install fastapi"
         )
         assert rb["setup_fallback"] == (
-            'cd "/mnt/host/IDEA-1/backend" && rm -rf .venv && python3 -m venv .venv '
-            "&& . .venv/bin/activate && .venv/bin/pip install -r requirements.txt"
+            'cd "/mnt/host/IDEA-1/backend" && rm -rf .venv-local && '
+            "python3 -m venv .venv-local "
+            "&& . .venv-local/bin/activate && .venv-local/bin/pip install -r requirements.txt"
         )
         assert rb["workdir"] == "/mnt/host/IDEA-1/backend"
         assert rb["venv_dir"] == "/mnt/host/IDEA-1/backend/.venv"
@@ -1019,9 +1023,14 @@ class TestDeriveRunbook:
             "8001",
         ]
         assert rb["run"] == (
-            'cd "/mnt/host/IDEA-1/backend" && . .venv/bin/activate '
+            'cd "/mnt/host/IDEA-1/backend" && . .venv-local/bin/activate '
             "&& python3 -m uvicorn src.main:app --host 0.0.0.0 --port 8001"
         )
+        # The supervised interpreter stays in `.venv`; only the pasteable
+        # commands move to `.venv-local`.
+        for display in (rb["setup"], rb["setup_fallback"], rb["run"]):
+            assert ".venv/bin" not in display
+            assert " .venv " not in display
 
     def test_container_argv_uses_container_root(self):
         from app.tasks.ollama_tasks import _derive_runbook

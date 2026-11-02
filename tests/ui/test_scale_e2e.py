@@ -35,6 +35,45 @@ def test_scale_tab_shows_collaboration_controls(scale_idea_page):
     assert_no_page_errors(scale_idea_page)
 
 
+def test_unassigned_child_listed_once_before_any_release(
+    admin_page, live_server, live_app, seeded
+):
+    """The releases API appends a pseudo 'No release yet' entry (id null).
+    The tab draws that bucket in its own block, so an unassigned child must
+    not also appear under a release card."""
+    from app.extensions import db
+    from app.models import Idea
+
+    ref = "IDEA-9101"
+    with live_app.app_context():
+        parent = Idea.query.filter_by(reference_code=SCALE_REF).first()
+        parent_id = str(parent.id)
+        if Idea.query.filter_by(reference_code=ref).first() is None:
+            db.session.add(
+                Idea(
+                    reference_code=ref,
+                    prompt_title="Add a map view",
+                    raw_content="## Add a map view\n\nShow jobs on a map.",
+                    status="SCOPE",
+                    instance_id=parent.instance_id,
+                    created_by_id=parent.created_by_id,
+                    parent_id=parent.id,
+                    child_kind="enhancement",
+                )
+            )
+            db.session.commit()
+
+    page = admin_page
+    page.goto(f"{live_server}/ideas?idea={parent_id}", wait_until="domcontentloaded")
+    page.wait_for_selector(DETAIL, state="visible", timeout=15000)
+    page.locator(DETAIL).locator("button:has-text('Scale')").first.click()
+    page.wait_for_timeout(1500)
+
+    detail = page.locator(DETAIL)
+    assert detail.get_by_text(ref, exact=True).count() == 1
+    assert_no_page_errors(page)
+
+
 def test_create_child_idea_appears_in_scale_tab(scale_idea_page, live_server, seeded):
     page = scale_idea_page
     page.locator(DETAIL).locator("button:has-text('Suggest an improvement')").first.click()

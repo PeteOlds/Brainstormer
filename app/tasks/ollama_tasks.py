@@ -1135,6 +1135,12 @@ def _derive_runbook(
             args = args[args.index("&&") + 1:]
     head = _os.path.basename(args[0]) if args else ""
     node_cmd = head in ("npm", "npx", "yarn", "pnpm", "node")
+    # Display commands are pasted on the reader's own machine, while the
+    # supervised process owns `.venv` inside its container. A separate
+    # folder for the pasteable setup means running it can never replace
+    # the supervised interpreter with one the container cannot execute
+    # (seen live: a host-built 3.14 venv broke the next Start).
+    dvenv = ".venv-local"
     setup = None
     req = next(
         (p for p in paths if _re.search(r"(^|/)requirements[^/]*\.txt$", p or "")),
@@ -1144,8 +1150,8 @@ def _derive_runbook(
         rel = _os.path.relpath(req, appdir) if appdir else req
         if not rel.startswith(".."):
             setup = (
-                f'{quoted} && rm -rf .venv && python3 -m venv .venv '
-                f'&& . .venv/bin/activate && .venv/bin/pip install -r {rel}'
+                f"{quoted} && rm -rf {dvenv} && python3 -m venv {dvenv} "
+                f"&& . {dvenv}/bin/activate && {dvenv}/bin/pip install -r {rel}"
             )
     use_venv = setup is not None
     # Node projects install their own way; only when no venv already owns
@@ -1221,8 +1227,9 @@ def _derive_runbook(
             # reproducibility fallback.
             pinned = setup
             setup = (
-                f'{quoted} && rm -rf .venv && python3 -m venv .venv '
-                f'&& . .venv/bin/activate && .venv/bin/pip install {" ".join(names)}'
+                f"{quoted} && rm -rf {dvenv} && python3 -m venv {dvenv} "
+                f"&& . {dvenv}/bin/activate && {dvenv}/bin/pip install "
+                + " ".join(names)
             )
             setup_fallback = pinned
             pip_fallback_argv = [evenv + "/bin/pip", "install"] + names
@@ -1234,7 +1241,7 @@ def _derive_runbook(
         # Display form stays pasteable; argv form is resolved by the
         # runner inside its own container (absolute host python paths do
         # not exist there).
-        run = f"{quoted} && . .venv/bin/activate && {cmd}"
+        run = f"{quoted} && . {dvenv}/bin/activate && {cmd}"
     else:
         run = f"{quoted} && {cmd}"
     return {
