@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/ai_controls.html" import ai_model %}
 
 {% block title %}Create Prompt - Brainstormer{% endblock %}
 
@@ -61,13 +62,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label for="model_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Model <span class="text-red-500">*</span></label>
-                        <select id="model_name" name="model_name" x-model="modelName" :disabled="loadingModels" class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
-                            <option value="" disabled x-show="loadingModels">Loading models...</option>
-                            <option value="" disabled x-show="!loadingModels">Select Model</option>
-                            <template x-for="model in models" :key="modelNameOf(model)">
-                                <option :value="modelNameOf(model)" x-text="modelNameOf(model) + ' ' + modelBadge(model)"></option>
-                            </template>
-                        </select>
+                        {{ ai_model("modelName", "modelOptions", "customModel", "onCreateModelPick($event.target.value)", "modelName", "Select model", "md") }}
                         <p class="mt-1 text-xs text-red-600 dark:text-red-400" x-show="!loadingModels && models.length === 0" x-text="modelsError || 'No models available — check Ollama'"></p>
                     </div>
                     
@@ -163,6 +158,8 @@
 function createPromptForm() {
     return {
         models: [],
+        modelOptions: [],
+        customModel: false,
         modelsError: '',
         loadingModels: true,
         saving: false,
@@ -223,8 +220,20 @@ function createPromptForm() {
                 console.error('Failed to load models:', error);
                 this.modelsError = 'Failed to load models — check Ollama';
             } finally {
+                // Shared control (static/js/ai_controls.js).
+                this.modelOptions = AIControls.normalise(this.models);
+                this.customModel = AIControls.isCustom(this.modelName, this.modelOptions);
                 this.loadingModels = false;
             }
+        },
+
+        onCreateModelPick(value) {
+            if (value === AIControls.CUSTOM) {
+                this.customModel = true;
+                return;
+            }
+            this.customModel = false;
+            this.modelName = value;
         },
         async testRun() {
             this.testResult = '';

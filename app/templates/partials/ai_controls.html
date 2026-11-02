@@ -1,0 +1,78 @@
+{# Shared AI-selection fields.
+
+   Every surface that picks a model or attaches skills/guidelines renders
+   these macros, so the interaction is identical in Admin -> AI Settings,
+   the run dialog, the release override and the prompt editor. Behaviour
+   lives in static/js/ai_controls.js; this file only owns the markup.
+
+   Callers pass Alpine expressions (not values), e.g.
+       {{ ai_model("stageDraft.model_name", "models", "stageCustomModel",
+                   "onModelSelect($event.target.value)", "stageDraft.model_name") }}
+       {{ ai_model("relAiDraft[rel.id].model_name",
+                   "relAiModels[relAiDraft[rel.id].provider] || []",
+                   "relAiCustom[rel.id]",
+                   "onRelAiModelPick(rel.id, $event.target.value)",
+                   "relAiDraft[rel.id].model_name", "Stage default", "sm") }}
+#}
+
+{% macro ai_model(value, models, custom, on_change, input_model, inherit='Inherit', size='md', testid='') %}
+{% if size == 'sm' %}
+  {% set select_cls = 'w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500' %}
+  {% set input_cls = 'mt-1 w-full px-2 py-1.5 text-xs font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500' %}
+  {% set note_cls = 'mt-1 text-[11px] text-slate-500 dark:text-slate-400' %}
+{% else %}
+  {% set select_cls = 'block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500' %}
+  {% set input_cls = 'mt-2 block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500' %}
+  {% set note_cls = 'mt-1 text-xs text-slate-500 dark:text-slate-400' %}
+{% endif %}
+<select :value="AIControls.selectValue({{ value }}, {{ models }})"
+        @change="{{ on_change }}"
+        {% if testid %}data-testid="{{ testid }}"{% endif %} class="{{ select_cls }}">
+    <option value="">{{ inherit }}</option>
+    <template x-for="m in {{ models }}" :key="m.value">
+        <option :value="m.value" x-text="m.label"></option>
+    </template>
+    <option value="__custom__">Custom model&hellip;</option>
+</select>
+<input x-show="{{ custom }}" x-model="{{ input_model }}" type="text"
+       placeholder="model id, e.g. qwen3:32b" class="{{ input_cls }}">
+<p class="{{ note_cls }}" x-show="{{ custom }}">
+    Type the exact model id &mdash; it is sent as-is.
+</p>
+{% endmacro %}
+
+
+{% macro ai_multiselect(label, options, selected, open, desc='', empty='None', size='md', empty_text='None available.', testid='') %}
+{% if size == 'sm' %}
+  {% set btn_cls = 'w-full flex items-center justify-between gap-2 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-left' %}
+  {% set item_cls = 'flex items-start gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700 text-xs' %}
+  {% set name_cls = 'block text-xs text-slate-700 dark:text-slate-300' %}
+  {% set desc_cls = 'block text-[11px] text-slate-500 dark:text-slate-400' %}
+{% else %}
+  {% set btn_cls = 'w-full flex items-center justify-between gap-2 px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-left' %}
+  {% set item_cls = 'flex items-start gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700' %}
+  {% set name_cls = 'block text-sm text-slate-700 dark:text-slate-300' %}
+  {% set desc_cls = 'block text-xs text-slate-500 dark:text-slate-400' %}
+{% endif %}
+<label class="block text-[11px] text-slate-400 dark:text-slate-500 mb-1">{{ label }}</label>
+<button type="button" @click="{{ open }} = !{{ open }}" :aria-expanded="{{ open }}"
+        {% if testid %}data-testid="{{ testid }}"{% endif %} class="{{ btn_cls }}">
+    <span x-text="AIControls.summary({{ selected }}, '{{ empty }}')"></span>
+    <svg class="w-4 h-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+</button>
+<div x-show="{{ open }}" x-transition.opacity
+     class="mt-1 max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800">
+    <p x-show="!({{ options }}).length" class="text-xs text-slate-500 dark:text-slate-400">{{ empty_text }}</p>
+    <template x-for="s in {{ options }}" :key="s.name">
+        <label class="{{ item_cls }}">
+            <input type="checkbox" :checked="({{ selected }}).includes(s.name)"
+                   @change="AIControls.toggle({{ selected }}, s.name)"
+                   class="mt-1 w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
+            <span>
+                <span class="{{ name_cls }}" x-text="s.name"></span>
+                {% if desc %}<span class="{{ desc_cls }}" x-text="{{ desc }}"></span>{% endif %}
+            </span>
+        </label>
+    </template>
+</div>
+{% endmacro %}

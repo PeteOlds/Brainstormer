@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/ai_controls.html" import ai_model, ai_multiselect %}
 
 {% block title %}Ideas Dashboard - Brainstormer{% endblock %}
 
@@ -668,12 +669,12 @@
                                             <button x-show="isAdmin && rel.id" @click="regenReleaseNotes(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50">Rebuild</button>
                                         </div>
                                     </div>
-                                    <div x-show="isAdmin && rel.id" class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                    <div x-show="isAdmin && rel.id" data-testid="release-ai" class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                                         <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">AI settings for this release <span class="font-normal">(override the stage defaults for every idea in it)</span></p>
                                         <div class="grid grid-cols-2 gap-2">
                                             <div>
                                                 <label class="block text-[11px] text-slate-400 dark:text-slate-500">Provider</label>
-                                                <select x-model="relAiDraft[rel.id].provider" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                                                <select x-model="relAiDraft[rel.id].provider" @change="onRelAiProvider(rel.id)" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                                                     <option value="">Stage default</option>
                                                     <option value="ollama">Ollama</option>
                                                     <option value="openai">OpenAI</option>
@@ -684,7 +685,7 @@
                                             </div>
                                             <div>
                                                 <label class="block text-[11px] text-slate-400 dark:text-slate-500">Model</label>
-                                                <input x-model="relAiDraft[rel.id].model_name" type="text" placeholder="Stage default" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                                                {{ ai_model("relAiDraft[rel.id].model_name", "relAiModels[relAiDraft[rel.id].provider] || []", "relAiCustom[rel.id]", "onRelAiModelPick(rel.id, $event.target.value)", "relAiDraft[rel.id].model_name", "Stage default", "sm", "release-ai-model") }}
                                             </div>
                                             <div>
                                                 <label class="block text-[11px] text-slate-400 dark:text-slate-500">Temperature</label>
@@ -699,13 +700,11 @@
                                                 <input x-model="relAiDraft[rel.id].num_predict" type="number" step="100" min="100" placeholder="—" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                                             </div>
                                             <div>
-                                                <label class="block text-[11px] text-slate-400 dark:text-slate-500">Skills <span class="font-normal">(comma separated)</span></label>
-                                                <input x-model="relAiDraft[rel.id].skills" type="text" placeholder="—" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                                                {{ ai_multiselect("Skills", "discoverySkills", "relAiDraft[rel.id].skills", "relAiOpen['skills-' + rel.id]", "s.description", "Stage default", "sm", "None available.", "release-ai-skills") }}
                                             </div>
                                         </div>
                                         <div class="mt-2">
-                                            <label class="block text-[11px] text-slate-400 dark:text-slate-500">Guidelines <span class="font-normal">(comma separated)</span></label>
-                                            <input x-model="relAiDraft[rel.id].guidelines" type="text" placeholder="—" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                                            {{ ai_multiselect("Guidelines", "discoveryGuidelines", "relAiDraft[rel.id].guidelines", "relAiOpen['guidelines-' + rel.id]", "", "Stage default", "sm", "No guideline files in guidelines/ yet.", "release-ai-guidelines") }}
                                         </div>
                                         <div class="mt-2 flex gap-2">
                                             <button @click="saveReleaseAi(rel.id)" :disabled="releaseBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50">Save</button>
@@ -1080,7 +1079,7 @@
     </div>
     
     <!-- Run Action Dialog (model + skills + guidelines per run) -->
-    <div x-show="runDialogOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeRunDialog()" aria-labelledby="run-dialog-title" role="dialog" aria-modal="true" style="display: none;">
+    <div x-show="runDialogOpen" data-testid="run-dialog" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 overflow-y-auto" @click.outside="closeRunDialog()" aria-labelledby="run-dialog-title" role="dialog" aria-modal="true" style="display: none;">
         <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70" aria-hidden="true"></div>
         <div class="relative flex min-h-full items-center justify-center p-4">
             <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-slate-300 dark:border-slate-500">
@@ -1117,20 +1116,7 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">AI Model <span class="font-normal text-slate-500 dark:text-slate-400">(blank = idea default)</span></label>
-                            <template x-if="!runDialogUnrestricted">
-                                <select x-model="runDialogModel" class="block w-full px-3 py-2 min-h-[44px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                    <option value="">Idea default</option>
-                                    <template x-for="m in ollamaModels" :key="runDialogModelValue(m)">
-                                        <option :value="runDialogModelValue(m)" x-text="runDialogModelLabel(m)"></option>
-                                    </template>
-                                </select>
-                            </template>
-                            <template x-if="runDialogUnrestricted">
-                                <div>
-                                    <input type="text" x-model="runDialogFreeModel" placeholder="Type any model id for this engine" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">No allowlist configured — any model id is accepted (opencode ids come from <span class="font-mono">opencode models</span> on the server host).</p>
-                                </div>
-                            </template>
+                            {{ ai_model("runDialogModel", "ollamaModels", "runDialogCustom", "onRunDialogModelPick($event.target.value)", "runDialogModel", "Idea default", "md") }}
                         </div>
                         <div x-show="runDialogActionType === 'BUILD_CODE'">
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Target repo <span class="text-red-500">*</span></label>
@@ -1159,28 +1145,10 @@
                             </div>
                         </div>
                         <div>
-                            <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Skills</span>
-                            <p x-show="!discoverySkills.length" class="text-xs text-slate-500 dark:text-slate-400">No skills available — none are installed in the server's skill folders yet.</p>
-                            <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
-                                <template x-for="s in discoverySkills" :key="s.name">
-                                    <label class="flex items-start gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
-                                        <input type="checkbox" :checked="runDialogSkills.includes(s.name)" @change="toggleRunList(runDialogSkills, s.name)" class="mt-1 w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
-                                        <span><span class="block text-sm font-medium text-slate-700 dark:text-slate-300" x-text="s.name"></span><span class="block text-xs text-slate-500 dark:text-slate-400" x-text="s.description"></span></span>
-                                    </label>
-                                </template>
-                            </div>
+                            {{ ai_multiselect("Skills", "discoverySkills", "runDialogSkills", "runAiOpen.skills", "s.description", "Idea default", "md", "No skills available — none are installed in the server's skill folders yet.") }}
                         </div>
                         <div>
-                            <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Guidelines</span>
-                            <p x-show="!discoveryGuidelines.length" class="text-xs text-slate-500 dark:text-slate-400">No guideline files in <span class="font-mono">guidelines/</span> yet.</p>
-                            <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
-                                <template x-for="g in discoveryGuidelines" :key="g.name">
-                                    <label class="flex items-center gap-2 cursor-pointer px-1 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-700">
-                                        <input type="checkbox" :checked="runDialogGuidelines.includes(g.name)" @change="toggleRunList(runDialogGuidelines, g.name)" class="w-4 h-4 text-primary-600 border-slate-300 rounded focus:ring-primary-500">
-                                        <span class="text-sm text-slate-700 dark:text-slate-300" x-text="g.name"></span>
-                                    </label>
-                                </template>
-                            </div>
+                            {{ ai_multiselect("Guidelines", "discoveryGuidelines", "runDialogGuidelines", "runAiOpen.guidelines", "", "Idea default", "md", "No guideline files in guidelines/ yet.") }}
                         </div>
                     </div>
                 </div>

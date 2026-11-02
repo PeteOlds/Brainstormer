@@ -12,6 +12,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="/static/js/alpine.min.js" defer></script>
+    <!-- Shared AI model/skills/guideline controls: one catalogue fetch and
+         one interaction for every AI settings surface. -->
+    <script nonce="{{ csp_nonce() }}" src="/static/js/ai_controls.js?v={{ config.VERSION }}"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script nonce="{{ csp_nonce() }}">
         tailwind.config = {

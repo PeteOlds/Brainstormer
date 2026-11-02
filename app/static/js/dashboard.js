@@ -65,6 +65,12 @@ function ideasApp() {
         testStatusFilter: 'all',
         buildPollTimer: null,
         relAiDraft: {},
+        // Model catalogue per provider (one fetch shared by every release
+        // card), plus per-release UI state for the custom-model input and
+        // the skills/guidelines panels.
+        relAiModels: {},
+        relAiCustom: {},
+        relAiOpen: {},
         childModalOpen: false,
         childKind: 'enhancement',
         childTitle: '',
@@ -140,8 +146,8 @@ function ideasApp() {
         runDialogBaseProvider: 'ollama',
         runDialogProviders: ['ollama', 'openai', 'anthropic', 'gemini', 'opencode'],
         runDialogModel: '',
-        runDialogFreeModel: '',
-        runDialogUnrestricted: false,
+        runDialogCustom: false,
+        runAiOpen: {},
         runDialogTarget: '',
         runDialogTargets: [],
         runDialogTargetDefaults: {},
@@ -803,6 +809,9 @@ function ideasApp() {
                     this.scaleParent = payload.parent || null;
                     this.selectedIdea.child_kind = payload.idea?.child_kind || this.selectedIdea.child_kind;
                 } else if (idea.status === 'SCALE') {
+                    this.relAiDraft = {};
+                    this.relAiCustom = {};
+                    this.relAiOpen = {};
                     const [ch, rel] = await Promise.all([
                         authFetch(`/api/v1/ideas/${idea.id}/children?limit=100`),
                         authFetch(`/api/v1/ideas/${idea.id}/releases`),
@@ -826,9 +835,21 @@ function ideasApp() {
                                 temperature: ai.temperature ?? '',
                                 top_p: ai.top_p ?? '',
                                 num_predict: ai.num_predict ?? '',
-                                skills: (ai.skills || []).join(', '),
-                                guidelines: (ai.guidelines || []).join(', '),
+                                // Arrays end to end: the multiselect control
+                                // edits them directly, no comma round-trip.
+                                skills: Array.isArray(ai.skills) ? [...ai.skills] : [],
+                                guidelines: Array.isArray(ai.guidelines) ? [...ai.guidelines] : [],
                             };
+                            this.relAiCustom[r.id] = false;
+                        }
+                        // Skills/guidelines options and the provider's model
+                        // catalogue must exist before the panels open. The
+                        // panels are admin-only, so members skip the calls.
+                        if (this.isAdmin) {
+                            await Promise.all([
+                                this.loadDiscovery(),
+                                this.loadReleaseAiModels(),
+                            ]);
                         }
                     }
                     await this.refreshBuildStatus();
@@ -910,6 +931,53 @@ function ideasApp() {
         // entry or every unassigned child appears twice.
         realReleases() {
             return (this.scaleReleases || []).filter((r) => r && r.id);
+        },
+
+        // ---- Per-release AI settings -------------------------------------
+        // The catalogue is cached per provider and shared by every release
+        // card; the shared controls in ai_controls.js decide what a saved
+        // model looks like when it is (or is not) in that catalogue.
+        async loadAiModels(provider) {
+            if (!provider || this.relAiModels[provider]) return;
+            const { models } = await AIControls.fetchModels(provider);
+            this.relAiModels[provider] = models;
+        },
+
+        async loadReleaseAiModels() {
+            const providers = new Set(
+                (this.scaleReleases || [])
+                    .map((r) => (this.relAiDraft[r.id] || {}).provider)
+                    .filter(Boolean));
+            await Promise.all([...providers].map((p) => this.loadAiModels(p)));
+            // A saved model outside the catalogue stays visible through the
+            // Custom model… input rather than silently reading as "default".
+            for (const r of this.scaleReleases || []) {
+                const draft = this.relAiDraft[r.id];
+                if (!draft) continue;
+                this.relAiCustom[r.id] = AIControls.isCustom(
+                    draft.model_name, this.relAiModels[draft.provider] || []);
+            }
+        },
+
+        onRelAiProvider(relId) {
+            const draft = this.relAiDraft[relId];
+            if (!draft) return;
+            // Model ids differ per provider: drop the old one and load the
+            // new catalogue (same rule as Admin → AI Settings).
+            draft.model_name = '';
+            this.relAiCustom[relId] = false;
+            this.loadAiModels(draft.provider);
+        },
+
+        onRelAiModelPick(relId, value) {
+            const draft = this.relAiDraft[relId];
+            if (!draft) return;
+            if (value === AIControls.CUSTOM) {
+                this.relAiCustom[relId] = true;
+                return;
+            }
+            this.relAiCustom[relId] = false;
+            draft.model_name = value;
         },
 
         openChildModal(kind) {
@@ -1304,12 +1372,8 @@ function ideasApp() {
                 temperature: draft.temperature === '' ? null : Number(draft.temperature),
                 top_p: draft.top_p === '' ? null : Number(draft.top_p),
                 num_predict: draft.num_predict === '' ? null : Number(draft.num_predict),
-                skills: draft.skills
-                    ? draft.skills.split(',').map((s) => s.trim()).filter(Boolean)
-                    : [],
-                guidelines: draft.guidelines
-                    ? draft.guidelines.split(',').map((s) => s.trim()).filter(Boolean)
-                    : [],
+                skills: Array.isArray(draft.skills) ? [...draft.skills] : [],
+                guidelines: Array.isArray(draft.guidelines) ? [...draft.guidelines] : [],
             };
             this.releaseBusy = true;
             try {
@@ -1658,7 +1722,8 @@ function ideasApp() {
             this.runDialogBaseProvider = (last && last.provider_used) || ideaProvider;
             this.runDialogProvider = this.runDialogBaseProvider;
             this.runDialogModel = '';
-            this.runDialogFreeModel = '';
+            this.runDialogCustom = false;
+            this.runAiOpen = {};
             this.runDialogSkills = [];
             this.runDialogGuidelines = [];
             this.runDialogTarget = '';
@@ -1724,8 +1789,8 @@ function ideasApp() {
             this.runDialogProvider = 'ollama';
             this.runDialogBaseProvider = 'ollama';
             this.runDialogModel = '';
-            this.runDialogFreeModel = '';
-            this.runDialogUnrestricted = false;
+            this.runDialogCustom = false;
+            this.runAiOpen = {};
             this.runDialogTarget = '';
             this.runDialogTargets = [];
             this.runDialogTargetDefaults = {};
@@ -1739,58 +1804,33 @@ function ideasApp() {
             this.runDialogAdvanced = false;
         },
 
+        // Same catalogue + normaliser as every other AI settings surface
+        // (static/js/ai_controls.js); the template renders the shared
+        // model field, including the Custom model... escape hatch.
         async loadRunDialogModels(resetModel) {
             const provider = this.runDialogProvider || 'ollama';
-            try {
-                const url = provider === 'ollama'
-                    ? '/api/v1/ollama/models'
-                    : `/api/v1/ollama/models?provider=${encodeURIComponent(provider)}`;
-                const res = await authFetch(url);
-                const data = await res.json();
-                const payload = data.data || data;
-                const raw = payload.models || [];
-                this.ollamaModels = raw.filter((m) => m && (typeof m === 'string' || m.name || m.model || m.id));
-                this.runDialogUnrestricted = provider !== 'ollama' && !!payload.unrestricted && !this.ollamaModels.length;
-                if (resetModel) {
-                    this.runDialogModel = '';
-                    this.runDialogFreeModel = '';
-                }
-                // Never clear on initial load: a pre-filled Recreate default
-                // survives even if the model list fails to load or changed.
-            } catch (e) {
-                console.error('Failed to load models:', e);
-                this.ollamaModels = [];
-                this.runDialogUnrestricted = false;
+            const { models } = await AIControls.fetchModels(provider);
+            this.ollamaModels = models;
+            if (resetModel) this.runDialogModel = '';
+            // No catalogue for this engine (no allowlist, server unreachable)
+            // must still be usable: open the custom id input.
+            if (!models.length && provider !== 'ollama' && !this.runDialogModel) {
+                this.runDialogCustom = true;
             }
+            if (this.runDialogModel) {
+                this.runDialogCustom = AIControls.isCustom(this.runDialogModel, models);
+            }
+            // Never clear on initial load: a pre-filled Recreate default
+            // survives even if the model list fails to load or changed.
         },
 
-        runDialogModelName(m) {
-            return this.runDialogModelValue(m);
-        },
-        // Submitted slug. Catalog entries carry {id, name}: the id runs,
-        // the name is display-only (never submitted).
-        runDialogModelValue(m) {
-            if (typeof m === 'string') return m;
-            return m.model || m.id || m.name || JSON.stringify(m);
-        },
-        // Display label: server display name first ("Muse Spark 1.3 Free"),
-        // slug kept so entries stay distinguishable, plus speed badge.
-        runDialogModelLabel(m) {
-            const value = this.runDialogModelValue(m);
-            const pretty = (typeof m !== 'string' && m.name && m.name !== value) ? m.name + ' · ' : '';
-            const badge = this.runDialogModelBadge(m);
-            return pretty + value + (badge ? ' ' + badge : '');
-        },
-        // Speed badge mirrors the prompt-configuration dropdown
-        // (prompts/list.html): rocket < 3GB, rabbit 3-7GB, turtle above.
-        // Plain strings (hosted allowlists) carry no size: no badge.
-        runDialogModelBadge(m) {
-            if (typeof m === 'string') return '';
-            if (m.size == null) return '';
-            const size = m.size || 0;
-            if (size < 3000000000) return ' 🚀';
-            if (size < 7000000000) return ' 🐇';
-            return ' 🐢';
+        onRunDialogModelPick(value) {
+            if (value === AIControls.CUSTOM) {
+                this.runDialogCustom = true;
+                return;
+            }
+            this.runDialogCustom = false;
+            this.runDialogModel = value;
         },
 
         runDialogSelectedTarget() {
@@ -1891,12 +1931,6 @@ function ideasApp() {
             }
         },
 
-        toggleRunList(list, name) {
-            const i = list.indexOf(name);
-            if (i === -1) list.push(name);
-            else list.splice(i, 1);
-        },
-
         async confirmRunDialog() {
             const extra = {};
             // Simple mode ("Run with recommended settings") must not override
@@ -1904,9 +1938,7 @@ function ideasApp() {
             // and the idea's prompt defaults. Only advanced mode sends explicit
             // overrides chosen by the user.
             if (this.runDialogAdvanced) {
-                const model = this.runDialogUnrestricted
-                    ? (this.runDialogFreeModel || '').trim()
-                    : this.runDialogModel;
+                const model = (this.runDialogModel || '').trim();
                 if (model) extra.model_override = model;
                 if (this.runDialogProvider && this.runDialogProvider !== this.runDialogBaseProvider) {
                     extra.provider_override = this.runDialogProvider;

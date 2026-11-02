@@ -59,6 +59,7 @@ def test_member_login_and_navigation(page, live_server, seeded):
         ("/admin/users", "User"),
         ("/admin/activity", "Activit"),
         ("/admin/backup", "Backup"),
+        ("/admin/ai", "AI"),
     ],
 )
 def test_admin_pages_render_without_js_errors(admin_page, live_server, path, expected):

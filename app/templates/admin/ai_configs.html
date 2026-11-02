@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/ai_controls.html" import ai_model, ai_multiselect %}
 
 {% block title %}AI Settings - Brainstormer{% endblock %}
 
@@ -165,15 +166,8 @@
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Model</label>
-                    <select :value="modelSelectValue()" @change="onModelSelect($event.target.value)" :disabled="!stageDraft.provider" class="block w-full px-3 py-2 min-h-[36px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 disabled:opacity-50">
-                        <option value="">inherit</option>
-                        <template x-for="m in models" :key="m">
-                            <option :value="m" x-text="m"></option>
-                        </template>
-                        <option value="__custom__">Custom model…</option>
-                    </select>
-                    <input x-show="stageCustomModel" x-model="stageDraft.model_name" type="text" placeholder="model id, e.g. qwen3:32b" class="mt-2 block w-full px-3 py-2 min-h-[36px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="stageDraft.provider && !models.length">No models listed for this provider — pick Custom model… and type an id.</p>
+                    {{ ai_model("stageDraft.model_name", "models", "stageCustomModel", "onModelSelect($event.target.value)", "stageDraft.model_name", "inherit", "md", "stage-ai-model") }}
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="stageDraft.provider && !models.length">No models listed for this provider — pick Custom model&hellip; and type an id.</p>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
@@ -190,20 +184,10 @@
                     <input x-model="stageDraft.num_predict" type="number" min="1" max="4096" class="block w-full px-3 py-2 min-h-[36px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Skills</label>
-                    <select x-model="stageDraft.skills" multiple class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 min-h-[80px]">
-                        <template x-for="s in discoverySkills" :key="s.name">
-                            <option :value="s.name" x-text="s.name"></option>
-                        </template>
-                    </select>
+                    {{ ai_multiselect("Skills", "discoverySkills", "stageDraft.skills", "stageAiOpen.skills", "s.description", "inherit", "md", "None available.", "stage-ai-skills") }}
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Guidelines</label>
-                    <select x-model="stageDraft.guidelines" multiple class="block w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 min-h-[80px]">
-                        <template x-for="g in discoveryGuidelines" :key="g.name">
-                            <option :value="g.name" x-text="g.name"></option>
-                        </template>
-                    </select>
+                    {{ ai_multiselect("Guidelines", "discoveryGuidelines", "stageDraft.guidelines", "stageAiOpen.guidelines", "", "inherit", "md", "No guideline files in guidelines/ yet.", "stage-ai-guidelines") }}
                 </div>
             </div>
             <div class="flex gap-2 mt-3">
@@ -277,6 +261,7 @@ function aiSettingsApp() {
         discoverySkills: [],
         discoveryGuidelines: [],
         stageCustomModel: false,
+        stageAiOpen: {},
         ghDraft: { repo: '', branch: 'main', pat: '' },
         ghHasPat: false,
         ghConfigured: false,
@@ -547,6 +532,9 @@ function aiSettingsApp() {
             return this.stageConfigs.find((s) => s && String(s.stage) === String(stageId)) || {};
         },
 
+        // Shared catalogue loader (static/js/ai_controls.js): one normaliser
+        // for every AI settings surface, so the dropdown reads the same here,
+        // in the run dialog, on a release and in the prompt editor.
         async loadModels() {
             const provider = this.stageDraft.provider;
             if (!provider) {
@@ -554,34 +542,12 @@ function aiSettingsApp() {
                 this.stageCustomModel = false;
                 return;
             }
-            try {
-                const url = provider === 'ollama'
-                    ? '/api/v1/ollama/models'
-                    : `/api/v1/ollama/models?provider=${encodeURIComponent(provider)}`;
-                const res = await authFetch(url);
-                if (!res.ok) {
-                    this.models = [];
-                    return;
-                }
-                const data = await res.json();
-                const payload = data.data || data;
-                const raw = payload.models || [];
-                this.models = raw.map((m) => (typeof m === 'string' ? m : m.id || m.modelID || m.model || m.name)).filter(Boolean);
-            } catch (e) {
-                this.models = [];
-            }
+            const { models } = await AIControls.fetchModels(provider);
+            this.models = models;
             // A saved/typed model outside the catalogue stays visible and
             // editable via the Custom model… input.
-            const cur = this.stageDraft.model_name || '';
-            this.stageCustomModel = !!cur && !this.models.includes(cur);
-        },
-
-        // Value shown in the model <select>: a catalogue entry, blank
-        // (inherit), or the custom escape hatch.
-        modelSelectValue() {
-            const cur = this.stageDraft.model_name || '';
-            if (!cur) return '';
-            return this.models.includes(cur) ? cur : '__custom__';
+            this.stageCustomModel = AIControls.isCustom(
+                this.stageDraft.model_name, models);
         },
 
         onModelSelect(value) {

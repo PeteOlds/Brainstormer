@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/ai_controls.html" import ai_model %}
 
 {% block title %}Prompt Configurations - Brainstormer{% endblock %}
 
@@ -209,19 +210,8 @@
                         </div>
                         <div>
                             <label for="model_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Model <span class="text-red-500">*</span></label>
-<select id="model_name" x-model="form.model_name" :disabled="loadingModels" class="mt-1 block w-full px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
-                                <option value="" disabled x-show="loadingModels">Loading models...</option>
-                                <option value="" disabled x-show="!loadingModels">Select Model</option>
-                                <template x-for="model in models" :key="modelNameOf(model)">
-                                    <option :value="modelNameOf(model)" x-text="modelBadge(model) ? modelNameOf(model) + ' ' + modelBadge(model) : modelNameOf(model)"></option>
-                                </template>
-                            </select>
-                            <template x-if="form.provider && form.provider !== 'ollama' && providerUnrestricted">
-                                <div class="mt-2">
-                                    <input type="text" x-model="form.model_name" placeholder="Type any model id for this engine" class="block w-full px-3 py-2 min-h-[44px] text-sm font-mono border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">No allowlist configured — any model id is accepted (opencode ids come from <span class="font-mono">opencode models</span> on the server host).</p>
-                                </div>
-                            </template>
+                            {{ ai_model("form.model_name", "modelOptions", "promptCustomModel", "onPromptModelPick($event.target.value)", "form.model_name", "Select model", "md") }}
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="form.provider && form.provider !== 'ollama' && providerUnrestricted">No allowlist configured — pick a listed model or type an id.</p>
                             <p class="mt-1 text-xs text-red-600 dark:text-red-400" x-show="!loadingModels && models.length === 0" x-text="modelsError || 'No models available — check Ollama'"></p>
                             <p class="mt-1 text-xs" x-show="form.provider && form.provider !== 'ollama'"><a href="/admin/ai" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline">Open instance AI settings</a> <span class="text-slate-500 dark:text-slate-400">to manage keys and the model allowlist.</span></p>
                         </div>
@@ -314,6 +304,9 @@ function initPromptsPage() {
         testError: '',
         loadingModels: true,
         models: [],
+        modelOptions: [],
+        promptCustomModel: false,
+        promptAiOpen: {},
         modelsError: '',
         modalOpen: false,
         editingPrompt: null,
@@ -405,8 +398,21 @@ function initPromptsPage() {
                 console.error('Failed to load models:', error);
                 this.modelsError = provider === 'ollama' ? 'Failed to load models — check Ollama' : `Failed to load ${provider} allowlist`;
             } finally {
+                // Shared control (static/js/ai_controls.js): same catalogue,
+                // labels and Custom model… escape hatch as everywhere else.
+                this.modelOptions = AIControls.normalise(this.models);
+                this.promptCustomModel = AIControls.isCustom(this.form.model_name, this.modelOptions);
                 this.loadingModels = false;
             }
+        },
+
+        onPromptModelPick(value) {
+            if (value === AIControls.CUSTOM) {
+                this.promptCustomModel = true;
+                return;
+            }
+            this.promptCustomModel = false;
+            this.form.model_name = value;
         },
         
         applyFilters() {
