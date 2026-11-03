@@ -1475,6 +1475,29 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
     report = [f"wrote {w['path']} ({w['bytes']} B)" for w in written]
     report += [f"skipped {s['path']}: {s['reason']}" for s in skipped]
     report += port_report
+    # Seed the Test tab from what was actually written (the model's checks
+    # plus deterministic UI/endpoint coverage). Nested transaction: a
+    # seeding failure must never roll back a good build.
+    try:
+        from app.services.build_tests import derive_build_tests, seed_idea_tests
+
+        with db.session.begin_nested():
+            seeded = seed_idea_tests(
+                idea,
+                derive_build_tests(
+                    manifest_files,
+                    runtime,
+                    [t.model_dump() for t in manifest.tests],
+                    runbook,
+                ),
+            )
+        report.append(
+            "tests: "
+            f"{seeded['created']} added, {seeded['updated']} updated, "
+            f"{seeded['removed']} removed"
+        )
+    except Exception:
+        logger.exception("build_test_seed_failed", idea_id=str(idea.id))
     current = SecondaryActionResult.query.filter_by(
         idea_id=idea.id, action_type="BUILD_CODE", is_current=True
     ).all()

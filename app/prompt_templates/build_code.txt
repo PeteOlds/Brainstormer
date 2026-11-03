@@ -14,11 +14,15 @@ ${SUPPORTING_MATERIAL}
 3. Every file needs a repo-relative `path` (e.g. `src/app.py`, never absolute, never `..`) and its COMPLETE `content` — no placeholders, TODO stubs, or truncated bodies.
 4. At most 25 files; each file at most ~15000 characters; whole manifest at most ~60000 characters. If the build does not fit, implement the core slice and describe the remainder in the summary.
 5. Output STRICTLY a valid JSON object matching the schema below. Do not include introductory text, markdown wrappers (e.g. ```json), or trailing commentary outside the JSON object.
+6. Also list the checks a reviewer should run to confirm this build works, in `tests` (3-8 entries). Every build MUST include at least one `e2e` UI check that opens the app in a browser and names the screen and what should be visible on it. Add one check per endpoint you implemented (say which request and what the response must contain), one for installing dependencies, and one for the generated test suite if you wrote test files. Only describe behaviour the code actually implements.
 
 ### OUTPUT JSON SCHEMA:
 {
   "summary": "string (what was built, stack choices, anything stubbed or deferred)",
   "files": [
     {"path": "relative/path/to/file.ext", "content": "complete file content as a string"}
+  ],
+  "tests": [
+    {"name": "UI: short check name", "description": "what to open/click and what must happen", "test_type": "e2e"}
   ]
 }

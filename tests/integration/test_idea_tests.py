@@ -45,6 +45,7 @@ def test_create_and_list_idea_test(app, client):
     assert test["name"] == "Login works"
     assert test["status"] == "passed"
     assert test["coverage_pct"] == 80
+    assert test["source"] == "manual"
 
     res = client.get(f"/api/v1/ideas/{idea_id}/tests", headers=headers)
     assert res.status_code == 200

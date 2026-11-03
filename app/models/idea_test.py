@@ -45,6 +45,11 @@ class IdeaTest(db.Model):
     description = db.Column(db.Text, nullable=True)
     test_type = db.Column(db.Enum(TestType), default=TestType.UNIT, nullable=False)
     status = db.Column(db.Enum(TestStatus), default=TestStatus.NOT_RUN, nullable=False)
+    # Where the row came from: "manual" for tests a person added, "build"
+    # for checks seeded from a written BUILD_CODE manifest. Re-seeding a
+    # build replaces only its own rows, so hand-written tests are never
+    # pruned when the app is rebuilt.
+    source = db.Column(db.String(20), default="manual", nullable=False)
     last_run_at = db.Column(db.DateTime(timezone=True), nullable=True)
     last_run_output = db.Column(db.Text, nullable=True)
     coverage_pct = db.Column(db.Float, nullable=True)
@@ -70,6 +75,7 @@ class IdeaTest(db.Model):
             "description": self.description,
             "test_type": self.test_type.value,
             "status": self.status.value,
+            "source": self.source,
             "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
             "last_run_output": self.last_run_output,
             "coverage_pct": self.coverage_pct,

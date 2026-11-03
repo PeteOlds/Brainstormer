@@ -158,6 +158,29 @@ class GtmStrategyOutput(BaseModel):
 BUILD_MAX_FILES = 25
 BUILD_MAX_FILE_CHARS = 15000
 BUILD_MAX_TOTAL_CHARS = 60000
+BUILD_MAX_TESTS = 12
+
+# Mirrors app.models.idea_test.TestType without importing models into the
+# schema layer.
+BUILD_TEST_TYPES = ("unit", "integration", "e2e", "manual", "performance")
+
+
+class BuildTest(BaseModel):
+    """One verification check a reviewer should perform on the build.
+
+    These become Test-tab rows on a successful write. They are checks, not
+    executed tests: the tab records what was verified and the outcome.
+    """
+
+    name: str = Field(..., min_length=3, max_length=200)
+    description: str | None = Field(default=None, max_length=1000)
+    test_type: str = "e2e"
+
+    @field_validator("test_type", mode="before")
+    @classmethod
+    def _known_type(cls, value) -> str:
+        v = str(value or "e2e").strip().lower()
+        return v if v in BUILD_TEST_TYPES else "e2e"
 
 
 class BuildFile(BaseModel):
@@ -198,6 +221,10 @@ class BuildCodeOutput(BaseModel):
 
     summary: str = Field(..., min_length=20)
     files: List[BuildFile] = Field(..., min_length=1, max_length=BUILD_MAX_FILES)
+    # Checks a reviewer should perform once the build is written. The task
+    # keeps these (and adds deterministic ones) as Test-tab rows; older
+    # manifests without the key still validate.
+    tests: List[BuildTest] = Field(default_factory=list, max_length=BUILD_MAX_TESTS)
     written: bool = False
     target_name: str | None = None
     # Absolute server-side target root, set by the task (not the model) so

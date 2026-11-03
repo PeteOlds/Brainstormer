@@ -54,6 +54,7 @@ function ideasApp() {
         ideaTests: [],
         testsLoading: false,
         testSummary: null,
+        testError: '',
         newTestName: '',
         newTestType: 'unit',
         newTestDescription: '',
@@ -539,17 +540,22 @@ function ideasApp() {
         async loadIdeaTests() {
             if (!this.selectedIdea) return;
             this.testsLoading = true;
+            this.testError = '';
             try {
                 const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests`);
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
                 if (res.ok) {
                     this.ideaTests = (data.data || data).tests || [];
+                } else {
+                    this.testError = (data && (data.error || data.message))
+                        || `Could not load tests (HTTP ${res.status}).`;
                 }
                 const s = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/summary`);
-                const sd = await s.json();
+                const sd = await s.json().catch(() => ({}));
                 if (s.ok) this.testSummary = (sd.data || sd);
             } catch (e) {
                 console.error('Failed to load tests:', e);
+                this.testError = 'Could not reach the tests API.';
             } finally {
                 this.testsLoading = false;
             }
@@ -557,6 +563,7 @@ function ideasApp() {
 
         async addIdeaTest() {
             if (!this.selectedIdea || !this.newTestName.trim()) return;
+            this.testError = '';
             try {
                 const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests`, {
                     method: 'POST',
@@ -566,13 +573,18 @@ function ideasApp() {
                         description: this.newTestDescription.trim() || null,
                     }),
                 });
+                const data = await res.json().catch(() => ({}));
                 if (res.ok) {
                     this.newTestName = '';
                     this.newTestDescription = '';
                     await this.loadIdeaTests();
+                } else {
+                    this.testError = (data && (data.error || data.message))
+                        || `Could not add the test (HTTP ${res.status}).`;
                 }
             } catch (e) {
                 console.error('Failed to add test:', e);
+                this.testError = 'Could not reach the tests API.';
             }
         },
 

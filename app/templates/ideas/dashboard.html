@@ -751,6 +751,7 @@
                             <div class="prose prose-sm prose-slate dark:prose-invert max-w-none" x-show="tab.key !== 'BUILD_CODE' && tab.key !== 'TESTS'" x-html="docViewResult(tab.key)?.rendered_output"></div>
                             <template x-if="tab.key === 'TESTS'">
                                 <div class="space-y-4">
+                                    <p x-show="testError" x-text="testError" class="text-sm text-red-600 dark:text-red-400"></p>
                                     <!-- Summary -->
                                     <div class="flex flex-wrap items-center gap-3 text-sm">
                                         <span class="font-semibold" x-text="(testSummary?.total || 0) + ' tests'"></span>
@@ -795,7 +796,7 @@
                                         <tbody>
                                             <template x-for="t in filteredIdeaTests()" :key="t.id">
                                                 <tr class="border-t border-slate-200 dark:border-slate-700">
-                                                    <td class="py-2" x-text="t.name"></td>
+                                                    <td class="py-2"><span x-text="t.name"></span><span x-show="t.source === 'build'" class="ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">build</span></td>
                                                     <td class="py-2 text-xs" x-text="t.test_type"></td>
                                                     <td class="py-2">
                                                         <select :value="t.status" @change="setTestStatus(t, $event.target.value)" class="text-xs border border-slate-300 dark:border-slate-600 rounded px-1 py-0.5 bg-white dark:bg-slate-700">
