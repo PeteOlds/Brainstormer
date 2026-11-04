@@ -517,22 +517,39 @@
                             <button @click="openChildModal('enhancement')" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">Suggest an improvement</button>
                             <button @click="openChildModal('bugfix')" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Report a problem</button>
                         </div>
+                        <div x-show="isAdmin && selectedKids.length" class="mb-4 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-3 flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-medium text-indigo-800 dark:text-indigo-200" x-text="selectedKids.length + ' selected'"></span>
+                            <select x-model="assignTarget" :disabled="releaseBusy" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-3 py-2 min-h-[44px]" aria-label="Release to add the selected ideas to">
+                                <option value="">Add to release…</option>
+                                <template x-for="r2 in realReleases()" :key="r2.id">
+                                    <option :value="r2.id" x-text="r2.name"></option>
+                                </template>
+                                <option value="new">New release…</option>
+                            </select>
+                            <button @click="assignSelected()" :disabled="releaseBusy || !assignTarget" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50">Add selected</button>
+                            <button @click="selectedKids = []" class="px-2 py-2 text-xs text-slate-600 dark:text-slate-300 hover:underline">Clear</button>
+                        </div>
                         <div x-show="!scaleChildren.length" class="text-sm text-slate-500 dark:text-slate-400">No suggestions yet — be the first.</div>
                         <div class="space-y-4">
                             <!-- Children not yet assigned to a release: show first, above all releases -->
                             <template x-if="scaleKids(null).length">
                                 <div class="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3">
                                     <div class="flex flex-wrap items-center gap-2 mb-2">
+                                        <label x-show="isAdmin" class="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer">
+                                            <input type="checkbox" :checked="allKidsSelected(null)" @change="toggleAllKids(null)" class="rounded border-slate-300 dark:border-slate-600" aria-label="Select every unassigned idea">
+                                            Select all
+                                        </label>
                                         <span class="text-sm font-semibold text-slate-900 dark:text-white">No release yet</span>
                                         <span class="text-xs px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700" x-text="scaleKids(null).length + ' unassigned'"></span>
                                         <span class="flex gap-2 ml-auto" x-show="isAdmin">
-                                            <button @click="assignToNewRelease()" :disabled="releaseBusy" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50" title="Create a new release and move these ideas into it">Add to new release</button>
+                                            <button @click="assignToNewRelease()" :disabled="releaseBusy" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50" title="Create a new release and move all unassigned ideas into it">Add all to new release</button>
                                         </span>
                                     </div>
                                     <ul class="space-y-2">
                                         <template x-for="k in scaleKids(null)" :key="k.id">
                                             <li class="rounded-lg bg-slate-50 dark:bg-slate-900/50 px-3 py-2">
                                                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                                                    <input x-show="isAdmin" type="checkbox" :value="k.id" x-model="selectedKids" class="rounded border-slate-300 dark:border-slate-600" :aria-label="'Select ' + k.reference_code">
                                                     <a href="#" @click.prevent="openIdeaById(k.id)" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="k.reference_code"></a>
                                                     <span class="text-xs px-2 py-0.5 rounded-full" :class="k.child_kind === 'bugfix' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'" x-text="k.child_kind === 'bugfix' ? 'Problem' : 'Improvement'"></span>
                                                     <span class="text-slate-700 dark:text-slate-300" x-text="k.prompt_title"></span>
@@ -589,21 +606,55 @@
                             <template x-for="rel in realReleases()" :key="rel.id">
                                 <div class="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3">
                                     <div class="flex flex-wrap items-center gap-2 mb-2">
+                                        <label x-show="isAdmin" class="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer">
+                                            <input type="checkbox" :checked="allKidsSelected(rel.id)" @change="toggleAllKids(rel.id)" class="rounded border-slate-300 dark:border-slate-600" :aria-label="'Select every idea in ' + rel.name">
+                                            Select all
+                                        </label>
                                         <span class="text-sm font-semibold text-slate-900 dark:text-white" x-text="rel.name"></span>
                                         <span x-show="releaseDate(rel)" class="text-xs text-slate-500 dark:text-slate-400" x-text="releaseDate(rel)"></span>
                                         <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" x-text="releaseStageLabel(rel.status)"></span>
+                                        <span x-show="rel.pipeline && rel.pipeline.status !== 'idle'" class="text-xs px-2 py-0.5 rounded-full" :class="rel.pipeline.status === 'failed' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' : (pipelineRunning(rel) ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 animate-pulse' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800')" x-text="pipelineStatusLabel(rel)"></span>
                                         <span class="flex gap-2 ml-auto" x-show="isAdmin && rel.id">
+                                            <button x-show="!pipelineRunning(rel)" @click="runReleasePipeline(rel)" :disabled="releaseBusy || !scaleKids(rel.id).length" class="text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 min-h-[44px] disabled:opacity-50" title="Run PRD, Design, Build and Test for every idea in this release">Run release</button>
+                                            <button x-show="pipelineRunning(rel)" @click="stopReleasePipeline(rel)" :disabled="releaseBusy" class="text-xs font-medium text-red-700 dark:text-red-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50" title="Stop after the current step; finished work is kept">Stop</button>
                                             <button @click="completeRelease(rel.id)" :disabled="releaseBusy || rel.status === 'done'" :title="rel.status === 'done' ? 'Release finished ' + releaseDate(rel) : 'Move every item in this release to shipped'" class="text-xs font-medium text-green-700 dark:text-green-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">Mark release done</button>
                                             <button x-show="rel.github_sha" class="text-xs font-medium text-slate-500 dark:text-slate-400 px-4 py-2 min-h-[44px]" :title="'Pushed ' + (rel.github_pushed_at || '') + ' — further updates need a new release'" x-text="'On GitHub ✓'"></button>
                                             <button x-show="!rel.github_sha && rel.status === 'done'" @click="pushRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50" title="Push this release's build output to the instance GitHub repo">Push to GitHub</button>
                                             <button @click="deleteRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50">Delete</button>
                                         </span>
                                     </div>
+                                    <div x-show="rel.pipeline && rel.pipeline.status !== 'idle'" class="mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2 space-y-1">
+                                        <div class="grid grid-cols-4 gap-1 text-center">
+                                            <template x-for="p in ['prd','design','build','test']" :key="p">
+                                                <div>
+                                                    <div class="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500" x-text="pipelinePhaseLabel(p)"></div>
+                                                    <div class="text-xs font-medium text-slate-700 dark:text-slate-300" x-text="pipelineCount(rel, p)"></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <p x-show="rel.pipeline.error" class="text-xs text-red-600 dark:text-red-400" x-text="rel.pipeline.error"></p>
+                                        <details>
+                                            <summary class="text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer">Per-idea progress</summary>
+                                            <ul class="mt-1 space-y-0.5">
+                                                <template x-for="row in pipelineRows(rel)" :key="row.id">
+                                                    <li class="text-[11px] text-slate-600 dark:text-slate-300 flex flex-wrap gap-x-2">
+                                                        <span class="font-medium" x-text="row.reference_code"></span>
+                                                        <span x-text="'PRD ' + (row.prd || '—')"></span>
+                                                        <span x-text="'Design ' + (row.design || '—')"></span>
+                                                        <span x-text="'Build ' + (row.build || '—')"></span>
+                                                        <span x-text="'Test ' + (row.test || '—')"></span>
+                                                        <span x-show="row.reason" class="text-amber-600 dark:text-amber-400" x-text="row.reason"></span>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </details>
+                                    </div>
                                     <div x-show="!scaleKids(rel.id).length" class="text-xs text-slate-500 dark:text-slate-400">Nothing here yet.</div>
                                     <ul class="space-y-2">
                                         <template x-for="k in scaleKids(rel.id)" :key="k.id">
                                             <li class="rounded-lg bg-slate-50 dark:bg-slate-900/50 px-3 py-2">
                                                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                                                    <input x-show="isAdmin" type="checkbox" :value="k.id" x-model="selectedKids" class="rounded border-slate-300 dark:border-slate-600" :aria-label="'Select ' + k.reference_code">
                                                     <a href="#" @click.prevent="openIdeaById(k.id)" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="k.reference_code"></a>
                                                     <span class="text-xs px-2 py-0.5 rounded-full" :class="k.child_kind === 'bugfix' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'" x-text="k.child_kind === 'bugfix' ? 'Problem' : 'Improvement'"></span>
                                                     <span class="text-slate-700 dark:text-slate-300" x-text="k.prompt_title"></span>

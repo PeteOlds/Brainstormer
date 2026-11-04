@@ -81,6 +81,11 @@ function ideasApp() {
         releaseBusy: false,
         releaseMove: {},
         unassignedMove: null,
+        // Multi-select for "add these problems to a release". Ids are
+        // strings because checkbox values arrive as strings.
+        selectedKids: [],
+        assignTarget: '',
+        pipelinePollTimer: null,
         exportMsg: '',
         docEditing: null,
         docEditList: [],
@@ -439,7 +444,10 @@ function ideasApp() {
             this.scaleReleases = [];
             this.buildStatus = {};
             this.relAiDraft = {};
+            this.selectedKids = [];
+            this.assignTarget = '';
             this.stopBuildPolling();
+            this.stopPipelinePolling();
             this.childModalOpen = false;
             // Actions may have run inside the modal: refresh the list so
             // chips, counts and statuses stop showing stale data.
@@ -865,6 +873,9 @@ function ideasApp() {
                         }
                     }
                     await this.refreshBuildStatus();
+                    if (this.realReleases().some((r) => this.pipelineRunning(r))) {
+                        this.startPipelinePolling();
+                    }
                 }
             } catch (e) {
                 console.error('Failed to load scale family:', e);
@@ -1183,6 +1194,158 @@ function ideasApp() {
 
         releaseKidIds(releaseId) {
             return this.scaleKids(releaseId).map((k) => k.id);
+        },
+
+        // ---- Selecting children and putting them in a release ----------
+        allKidsSelected(releaseId) {
+            const ids = this.releaseKidIds(releaseId).map(String);
+            return ids.length > 0 && ids.every((id) => this.selectedKids.includes(id));
+        },
+
+        toggleAllKids(releaseId) {
+            const ids = this.releaseKidIds(releaseId).map(String);
+            if (this.allKidsSelected(releaseId)) {
+                this.selectedKids = this.selectedKids.filter((id) => !ids.includes(id));
+            } else {
+                this.selectedKids = [...new Set([...this.selectedKids, ...ids])];
+            }
+        },
+
+        async assignSelected() {
+            const ids = [...this.selectedKids];
+            if (!ids.length || !this.assignTarget) return;
+            this.releaseBusy = true;
+            try {
+                let releaseId = this.assignTarget;
+                if (releaseId === 'new') {
+                    const name = await this.showPromptModal('New release name', 'for example: Release 1.1');
+                    if (!name || !name.trim()) return;
+                    const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/releases`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: name.trim() }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.message || 'Could not create the release');
+                    releaseId = ((data.data || data).release || {}).id;
+                    if (!releaseId) throw new Error('No release id returned');
+                }
+                const res = await authFetch(`/api/v1/releases/${releaseId}/assign`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idea_ids: ids }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.message || data.error || 'Could not add them to the release');
+                this.selectedKids = [];
+                this.assignTarget = '';
+                await this.loadScaleFamily();
+            } catch (e) {
+                this.showAlertModal('Failed to add to the release: ' + e.message);
+            } finally {
+                this.releaseBusy = false;
+            }
+        },
+
+        // ---- One-action release run ------------------------------------
+        pipelineRunning(rel) {
+            const status = rel && rel.pipeline && rel.pipeline.status;
+            return status === 'running' || status === 'stopping';
+        },
+
+        pipelineStatusLabel(rel) {
+            const p = rel && rel.pipeline;
+            if (!p || p.status === 'idle') return '';
+            if (p.status === 'running') return 'Running · ' + this.pipelinePhaseLabel(p.phase);
+            if (p.status === 'stopping') return 'Stopping after this step…';
+            if (p.status === 'done') return 'Complete';
+            if (p.status === 'failed') return 'Needs attention';
+            return p.status;
+        },
+
+        pipelinePhaseLabel(phase) {
+            return ({ prd: 'PRD', design: 'Design', build: 'Build', test: 'Test', done: 'Done' })[phase] || phase || '';
+        },
+
+        pipelineRows(rel) {
+            const children = (rel && rel.pipeline && rel.pipeline.children) || {};
+            return Object.entries(children).map(([id, c]) => ({ id, ...c }));
+        },
+
+        pipelineCount(rel, phase) {
+            const p = (rel && rel.pipeline) || {};
+            const counts = p.counts || {};
+            return (counts[phase] || 0) + '/' + (p.total || 0);
+        },
+
+        async runReleasePipeline(rel) {
+            if (!rel || !rel.id) return;
+            const count = rel.child_count || this.scaleKids(rel.id).length;
+            if (!(await this.showConfirmModal(
+                `Run ${count} idea(s) through PRD → Design → Build → Test?\n\nBuilds write into the “${rel.name}” repo one at a time. Finished steps are kept if you stop or something fails.`,
+                '', 'Run release'))) return;
+            this.releaseBusy = true;
+            try {
+                const res = await authFetch(`/api/v1/releases/${rel.id}/pipeline`, { method: 'POST' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.message || data.error || 'Could not start');
+                await this.loadScaleFamily();
+                this.startPipelinePolling();
+            } catch (e) {
+                this.showAlertModal('Could not start the release: ' + e.message);
+            } finally {
+                this.releaseBusy = false;
+            }
+        },
+
+        async stopReleasePipeline(rel) {
+            if (!rel || !rel.id) return;
+            if (!(await this.showConfirmModal('Stop after the current step? Finished work stays.', '', 'Stop'))) return;
+            this.releaseBusy = true;
+            try {
+                const res = await authFetch(`/api/v1/releases/${rel.id}/pipeline/stop`, { method: 'POST' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.message || 'Could not stop');
+                await this.loadScaleFamily();
+            } catch (e) {
+                this.showAlertModal('Could not stop the release: ' + e.message);
+            } finally {
+                this.releaseBusy = false;
+            }
+        },
+
+        startPipelinePolling() {
+            if (this.pipelinePollTimer) return;
+            this.pipelinePollTimer = setInterval(() => this.refreshPipelines(), 6000);
+        },
+
+        stopPipelinePolling() {
+            if (this.pipelinePollTimer) {
+                clearInterval(this.pipelinePollTimer);
+                this.pipelinePollTimer = null;
+            }
+        },
+
+        async refreshPipelines() {
+            if (!this.detailModalOpen || !this.showScaleTab() || this.activeTab !== 'scale') {
+                this.stopPipelinePolling();
+                return;
+            }
+            const running = this.realReleases().filter((r) => this.pipelineRunning(r));
+            if (!running.length) {
+                this.stopPipelinePolling();
+                return;
+            }
+            for (const rel of running) {
+                const res = await authFetch(`/api/v1/releases/${rel.id}/pipeline`);
+                if (!res.ok) continue;
+                const d = await res.json();
+                rel.pipeline = (d.data || d).pipeline;
+            }
+            if (!this.realReleases().some((r) => this.pipelineRunning(r))) {
+                this.stopPipelinePolling();
+                await this.loadScaleFamily();
+            }
         },
 
         // "16-Oct-26" — completion date when the release has one, else the

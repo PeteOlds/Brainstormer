@@ -40,6 +40,17 @@ class Release(db.Model):
     # When the release was marked done — the Release Date shown beside
     # the name and inside the notes.
     completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # One-action pipeline (PRD → Design → Build → Test). The state is
+    # persisted so a worker restart resumes instead of forgetting where it
+    # was; the tick task only advances what the row says is next.
+    pipeline_status = db.Column(
+        db.String(20), default="idle", nullable=False
+    )  # idle|running|stopping|done|failed
+    pipeline_phase = db.Column(db.String(20), nullable=True)  # prd|design|build|test|done
+    pipeline_state = db.Column(db.JSON, nullable=True)
+    pipeline_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    pipeline_finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    pipeline_error = db.Column(db.Text, nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -71,6 +82,45 @@ class Release(db.Model):
                 self.github_pushed_at.isoformat() if self.github_pushed_at else None
             ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "pipeline": self.pipeline_summary(),
+        }
+
+    def pipeline_summary(self):
+        """Compact pipeline view for the release list (no full report)."""
+        state = self.pipeline_state or {}
+        children = state.get("children") or {}
+        phases = ("prd", "design", "build", "test")
+        counts = {
+            phase: sum(1 for c in children.values() if c.get(phase) == "done")
+            for phase in phases
+        }
+        return {
+            "status": self.pipeline_status or "idle",
+            "phase": self.pipeline_phase,
+            "started_at": (
+                self.pipeline_started_at.isoformat()
+                if self.pipeline_started_at
+                else None
+            ),
+            "finished_at": (
+                self.pipeline_finished_at.isoformat()
+                if self.pipeline_finished_at
+                else None
+            ),
+            "error": self.pipeline_error,
+            "total": len(children),
+            "counts": counts,
+            "children": {
+                str(idea_id): {
+                    "reference_code": c.get("reference_code"),
+                    "prd": c.get("prd"),
+                    "design": c.get("design"),
+                    "build": c.get("build"),
+                    "test": c.get("test"),
+                    "reason": c.get("reason"),
+                }
+                for idea_id, c in children.items()
+            },
         }
 
     def __repr__(self):

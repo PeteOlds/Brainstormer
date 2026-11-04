@@ -1784,36 +1784,9 @@ def run_secondary_action(
         # Get prompt template
         prompt_template = get_prompt_template(action_type)
 
-        # Build supporting material for all secondary actions (they all now use it)
-        from app.services.action_context import build_idea_context
-
-        supporting_material = build_idea_context(idea)
-
-        user_prompt = prompt_template.render(
-            ORIGINAL_IDEA_CONTENT=idea.raw_content,
-            SUPPORTING_MATERIAL=supporting_material,
-        )
-        # Rerun answers (PRD_DOC open questions): appended verbatim so the
-        # model regenerates with the human's input. Ignored if empty.
-        answers = (extra_context or {}).get("answers") or []
-        if answers:
-            numbered = "\n".join(f"{i + 1}. {a}" for i, a in enumerate(answers))
-            user_prompt += (
-                "\n\n### USER ANSWERS (use these to resolve open questions):\n"
-                + numbered
-            )
-        # Selected opencode skills + guideline docs (admin run dialog).
-        # Injected after the brief so they steer generation; capped so a
-        # large selection cannot blow the context window.
-        skill_names = (
-            (extra_context or {}).get("skills") or stage_cfg.get("skills") or []
-        )
-        guideline_names = (
-            (extra_context or {}).get("guidelines") or stage_cfg.get("guidelines") or []
-        )
-        # BUILD_CODE target resolution, fail fast before spending on the LLM.
-        # The confirm run skips generation entirely (writes the stored
-        # preview manifest instead) — see _write_confirmed_build below.
+        # BUILD_CODE target resolution happens before the prompt is built:
+        # an existing app repo is context the model must see, and a confirm
+        # run never reaches generation at all.
         build_target = None
         build_root = None
         build_confirm = False
@@ -1857,6 +1830,52 @@ def run_secondary_action(
             if build_confirm:
                 _write_confirmed_build(idea, build_target, build_root, run_id)
                 return
+
+        # Build supporting material for all secondary actions (they all now use it)
+        from app.services.action_context import build_idea_context
+
+        supporting_material = build_idea_context(idea)
+        if action_type == "BUILD_CODE":
+            # Release children build into the app's existing repo. Without
+            # its files the model writes a standalone app and overwrites
+            # every earlier child (and any hand-applied fix). Cap the
+            # snapshot so a large repo cannot crowd out the design.
+            from app.services.build_service import existing_repo_snapshot
+
+            snapshot = existing_repo_snapshot(build_root)
+            if snapshot:
+                supporting_material += "\n\n" + snapshot
+                logger.info(
+                    "build_repo_context_injected",
+                    idea_id=idea_id,
+                    target=build_target.name,
+                    chars=len(snapshot),
+                )
+
+        user_prompt = prompt_template.render(
+            ORIGINAL_IDEA_CONTENT=idea.raw_content,
+            SUPPORTING_MATERIAL=supporting_material,
+        )
+        # Rerun answers (PRD_DOC open questions): appended verbatim so the
+        # model regenerates with the human's input. Ignored if empty.
+        answers = (extra_context or {}).get("answers") or []
+        if answers:
+            numbered = "\n".join(f"{i + 1}. {a}" for i, a in enumerate(answers))
+            user_prompt += (
+                "\n\n### USER ANSWERS (use these to resolve open questions):\n"
+                + numbered
+            )
+        # Selected opencode skills + guideline docs (admin run dialog).
+        # Injected after the brief so they steer generation; capped so a
+        # large selection cannot blow the context window.
+        skill_names = (
+            (extra_context or {}).get("skills") or merged_cfg.get("skills") or []
+        )
+        guideline_names = (
+            (extra_context or {}).get("guidelines")
+            or merged_cfg.get("guidelines")
+            or []
+        )
         if skill_names or guideline_names:
             from app.services.discovery import read_guideline, read_skill_body
 
@@ -1901,12 +1920,19 @@ def run_secondary_action(
         # prompt's temperature at 0.3 (a lower setting is respected).
         # Stage config overrides the prompt values before the cap.
         options = (
-            _generation_options(prompt_config, stage_cfg) if prompt_config else None
+            _generation_options(prompt_config, merged_cfg) if prompt_config else None
         )
         if options is None:
             options = {"temperature": 0.3}
-        else:
-            options["temperature"] = min(options.get("temperature", 0.3), 0.3)
+            # Prompt-less ideas (children, manual ideas) still honour the
+            # release/stage panel for params.
+            for key in ("top_p", "num_predict"):
+                if merged_cfg.get(key) is not None:
+                    options[key] = merged_cfg[key]
+        chosen_temp = merged_cfg.get("temperature")
+        if chosen_temp is None:
+            chosen_temp = options.get("temperature", 0.3)
+        options["temperature"] = min(chosen_temp, 0.3)
         # Secondary outputs (competitor lists, 7-section PRDs) are far longer
         # than ideas: floor output tokens at 4000 so generation isn't cut off
         # mid-object (truncated JSON fails validation unrecoverably). A higher

@@ -86,6 +86,7 @@ def init_celery(app):
             "app.tasks.ollama_tasks.*": {"queue": "ollama"},
             "app.tasks.maintenance_tasks.*": {"queue": "default"},
             "app.tasks.supervision_tasks.*": {"queue": "supervision"},
+            "app.tasks.release_tasks.*": {"queue": "default"},
             "app.tasks.github_tasks.*": {"queue": "github"},
         },
         beat_schedule={
@@ -120,6 +121,7 @@ def init_celery(app):
     from . import ollama_tasks  # noqa: F401
     from . import maintenance_tasks  # noqa: F401
     from . import supervision_tasks  # noqa: F401
+    from . import release_tasks  # noqa: F401
 
     return celery
 

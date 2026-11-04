@@ -36,6 +36,32 @@ def release_notes_path(release, parent) -> Path:
     return release_notes_dir() / release_notes_filename(release, parent)
 
 
+def build_release_notes(release, children, moved: int, rejected: int = 0) -> str:
+    """Deterministic notes text for a finished release.
+
+    Shared by "Mark release done" and the one-action run so both paths
+    produce the same durable file.
+    """
+    lines = [
+        f"Release {release.name}",
+        "",
+        f"{moved} shipped, {rejected} rejected",
+        "",
+    ]
+    for child in children:
+        lines.append(
+            f"{child.prompt_title or child.reference_code} ({child.reference_code})"
+        )
+    finished = (
+        release.completed_at.strftime("%d-%b-%y")
+        if release.completed_at
+        else ""
+    )
+    lines.append("")
+    lines.append(f"Finished {finished}: {moved} shipped")
+    return "\n".join(lines)
+
+
 def write_release_notes_file(release, parent) -> Path | None:
     """Persist release.notes as markdown. Returns the path (None on failure).
 

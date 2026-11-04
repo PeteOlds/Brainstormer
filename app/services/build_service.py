@@ -221,6 +221,180 @@ def join_target_path(root: str, rel_path: str) -> str:
     return _confine(full, [root])
 
 
+# Repo context is a prompt budget, not a backup: enough to let the model
+# extend an existing app without crowding out the design document.
+SNAPSHOT_MAX_FILES = 40
+SNAPSHOT_MAX_CHARS = 30000
+SNAPSHOT_MAX_FILE_CHARS = 12000
+
+_SNAPSHOT_SKIP_DIRS = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".venv",
+    ".venv-local",
+    "venv",
+    "env",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    "build",
+    "target",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    "certs",
+    "logs",
+}
+
+_SNAPSHOT_TEXT_SUFFIXES = {
+    ".py",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".json",
+    ".md",
+    ".txt",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".sql",
+    ".sh",
+    ".bash",
+    ".vue",
+    ".svelte",
+    ".go",
+    ".rs",
+    ".java",
+    ".rb",
+    ".php",
+    ".env",
+}
+
+# Files a model must see before changing an app: how it starts, what it
+# depends on, and what it says it does.
+_SNAPSHOT_PRIORITY = (
+    "readme.md",
+    "readme.txt",
+    "requirements.txt",
+    "pyproject.toml",
+    "package.json",
+    "package-lock.json",
+    "dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+    "procfile",
+    "makefile",
+    "app.py",
+    "main.py",
+    "server.py",
+    "index.html",
+)
+
+
+def existing_repo_snapshot(
+    root: str,
+    max_files: int = SNAPSHOT_MAX_FILES,
+    max_chars: int = SNAPSHOT_MAX_CHARS,
+) -> str:
+    """Text snapshot of an existing build repo, for BUILD_CODE context.
+
+    Returns '' when the root has no readable text files. Skips VCS data,
+    virtualenvs, dependency trees and build output, plus binaries and
+    oversized files. Deterministic ordering keeps prompts cache-friendly.
+    Never raises: a context problem must not block a build.
+    """
+    base = (root or "").strip()
+    if not base or not os.path.isdir(base):
+        return ""
+    candidates = []
+    try:
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = sorted(
+                d
+                for d in dirnames
+                if d not in _SNAPSHOT_SKIP_DIRS and not d.startswith(".")
+            )
+            for name in sorted(filenames):
+                if name.startswith("."):
+                    # Keep .gitignore/.env.example style files, drop swap
+                    # and editor litter.
+                    if name not in (".gitignore", ".dockerignore", ".env.example"):
+                        continue
+                ext = os.path.splitext(name)[1].lower()
+                if ext not in _SNAPSHOT_TEXT_SUFFIXES:
+                    continue
+                full = os.path.join(dirpath, name)
+                try:
+                    size = os.path.getsize(full)
+                except OSError:
+                    continue
+                if size > SNAPSHOT_MAX_FILE_CHARS * 4:
+                    continue
+                rel = os.path.relpath(full, base).replace(os.sep, "/")
+                candidates.append((rel, full))
+    except OSError as exc:
+        logger.warning("repo_snapshot_walk_failed", path=base, error=str(exc)[:200])
+        return ""
+
+    def _rank(item):
+        rel, _full = item
+        name = rel.rsplit("/", 1)[-1].lower()
+        try:
+            priority = _SNAPSHOT_PRIORITY.index(name)
+        except ValueError:
+            priority = len(_SNAPSHOT_PRIORITY)
+        # Shallow files first: they are the app's entry points.
+        depth = rel.count("/")
+        return (priority, depth, rel)
+
+    candidates.sort(key=_rank)
+    chunks = []
+    used = 0
+    shown = 0
+    skipped_large = 0
+    for rel, full in candidates:
+        if shown >= max_files or used >= max_chars:
+            break
+        try:
+            with open(full, "r", encoding="utf-8", errors="replace") as fh:
+                text = fh.read(SNAPSHOT_MAX_FILE_CHARS + 1)
+        except OSError:
+            continue
+        if len(text) > SNAPSHOT_MAX_FILE_CHARS:
+            text = text[:SNAPSHOT_MAX_FILE_CHARS].rstrip() + "\n… (truncated)"
+            skipped_large += 1
+        block = f"--- {rel} ---\n{text.rstrip()}\n"
+        if used + len(block) > max_chars:
+            break
+        chunks.append(block)
+        used += len(block)
+        shown += 1
+    if not chunks:
+        return ""
+    header = (
+        "### EXISTING PROJECT FILES (the app this build extends)\n"
+        "These files are already in the build repo. Preserve their working "
+        "behaviour and routes. Return only the files you add or change, "
+        "with their COMPLETE contents; do not drop existing features."
+    )
+    note = ""
+    if skipped_large:
+        note = f"\n({skipped_large} large file(s) truncated to keep the prompt in budget.)"
+    return header + note + "\n\n" + "\n".join(chunks)
+
+
 def write_manifest(root: str, files: list) -> tuple[list, list]:
     """Write manifest files under root. Returns (written, skipped).
 

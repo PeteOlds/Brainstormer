@@ -284,21 +284,13 @@ def complete_release(user, release_id):
         moved += 1
     release.status = "done"
     release.completed_at = datetime.now(timezone.utc)
-    notes_lines = [
-        f"Release {release.name}",
-        "",
-        f"{moved} shipped, 0 rejected",
-        "",
-    ]
-    for child in children:
-        notes_lines.append(
-            f"{child.prompt_title or child.reference_code} ({child.reference_code})"
-        )
-    notes_lines.append("")
-    notes_lines.append(f"Finished {release.completed_at.strftime('%d-%b-%y')}: {moved} shipped")
-    release.notes = "\n".join(notes_lines)
+    from app.services.release_notes import (
+        build_release_notes,
+        write_release_notes_file,
+    )
+
+    release.notes = build_release_notes(release, children, moved)
     db.session.commit()
-    from app.services.release_notes import write_release_notes_file
 
     parent = Idea.query.get(release.parent_idea_id)
     write_release_notes_file(release, parent)
@@ -591,14 +583,13 @@ def bulk_run_action(user, release_id):
             if target is not None:
                 extra["target_id"] = str(target.id)
                 extra["target_name"] = target.name
-            if row is not None:
-                if row.model_used:
-                    extra["model_override"] = row.model_used
-                if row.provider_used:
-                    extra["provider_override"] = row.provider_used
 
-            # Resolve the provider so the run is routed to the right queue
-            # (OpenCode needs the dedicated serial `opencode` queue).
+            # Release settings win over the stage defaults for every idea
+            # in it (the panel on the card promises exactly that). The
+            # previous run's model is only a display detail, never an
+            # override — copying it made the panel a no-op after the
+            # first run.
+            merged = {}
             try:
                 from app.models import resolve_release, resolve_stage
 
@@ -611,17 +602,13 @@ def bulk_run_action(user, release_id):
                     **stage_cfg,
                     **{k: v for k, v in release_cfg.items() if v is not None},
                 }
-                child_provider = (
-                    extra.get("provider_override") or merged.get("provider") or "ollama"
-                ).lower()
             except Exception:
-                child_provider = (extra.get("provider_override") or "ollama").lower()
+                merged = {}
+            child_provider = (merged.get("provider") or "ollama").lower()
 
             run.job_type = "ai"
             run.provider = child_provider
-            run.model = extra.get("model_override") or (
-                row.model_used if row is not None else None
-            )
+            run.model = merged.get("model_name")
             run.queue = "opencode" if child_provider == "opencode" else "ollama"
             db.session.commit()
 
@@ -629,10 +616,10 @@ def bulk_run_action(user, release_id):
                 run_secondary_action,
                 [str(child.id), action_type],
                 {
-                    "model_override": extra.get("model_override"),
+                    "model_override": merged.get("model_name"),
                     "extra_context": extra,
                     "run_id": str(run.id),
-                    "provider_override": extra.get("provider_override"),
+                    "provider_override": merged.get("provider"),
                 },
                 provider=child_provider,
             )
@@ -659,4 +646,62 @@ def bulk_run_action(user, release_id):
             "release_id": str(release.id),
         },
         status_code=202,
+    )
+
+
+# ---- One-action release run (PRD -> Design -> Build -> Test) -------------
+
+
+@bp.route("/releases/<uuid:release_id>/pipeline", methods=["POST"])
+@require_permission("change_status")
+def start_release_pipeline_route(user, release_id):
+    """Start (or resume) the whole release in one action."""
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    from app.services.release_pipeline import start_release_pipeline
+
+    ok, message = start_release_pipeline(release, user)
+    if not ok:
+        return api_error(message, status_code=400)
+    count = Idea.query.filter_by(release_id=release.id).count()
+    return api_ok(
+        {"message": message, "release": release.to_dict(child_count=count)},
+        status_code=202,
+    )
+
+
+@bp.route("/releases/<uuid:release_id>/pipeline/stop", methods=["POST"])
+@require_permission("change_status")
+def stop_release_pipeline_route(user, release_id):
+    """Stop after the current step; already-finished work is kept."""
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    from app.services.release_pipeline import stop_release_pipeline
+
+    ok, message = stop_release_pipeline(release)
+    if not ok:
+        return api_error(message, status_code=400)
+    count = Idea.query.filter_by(release_id=release.id).count()
+    return api_ok({"message": message, "release": release.to_dict(child_count=count)})
+
+
+@bp.route("/releases/<uuid:release_id>/pipeline", methods=["GET"])
+@token_required
+def get_release_pipeline(user, release_id):
+    """Poll progress: compact summary plus per-child state and report."""
+    release = Release.query.get_or_404(release_id)
+    denied = check_access(release)
+    if denied is not None:
+        return denied
+    count = Idea.query.filter_by(release_id=release.id).count()
+    return api_ok(
+        {
+            "pipeline": release.pipeline_summary(),
+            "child_count": count,
+            "state": release.pipeline_state or {},
+        }
     )
