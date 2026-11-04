@@ -1,7 +1,22 @@
+import os
+
 import pytest
 from app import create_app
 from app.extensions import db
 from app.models import User
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolated_release_notes(tmp_path_factory):
+    """Keep release-note writes out of the repo during tests.
+
+    Completing a release writes docs/release-notes/<ref>-<name>.md. Tests
+    finish releases constantly, so without this the working tree fills
+    with throwaway files that look like user documentation.
+    """
+    os.environ["RELEASE_NOTES_DIR"] = str(tmp_path_factory.mktemp("release-notes"))
+    yield
+    os.environ.pop("RELEASE_NOTES_DIR", None)
 
 
 @pytest.fixture(scope="function")
