@@ -293,17 +293,20 @@ def test_failure_does_not_stop_other_children(celery_app, tmp_path, monkeypatch)
     with celery_app.app_context():
         failing_code = db.session.get(Idea, uuid.UUID(kid_ids[0])).reference_code
 
-    real_launch = rp._launch
+    real_enqueue = rp._enqueue_launch
 
-    def flaky_launch(child, action_type, extra=None):
-        run = real_launch(child, action_type, extra)
-        if child.reference_code == failing_code and action_type == "PRD_DOC":
-            run.status = PromptRunStatus.FAILED
-            run.error = "model returned nonsense"
-            db.session.commit()
-        return run
+    def flaky_enqueue(launch):
+        if launch["args"][1] == "PRD_DOC":
+            idea = db.session.get(Idea, uuid.UUID(launch["args"][0]))
+            if idea is not None and idea.reference_code == failing_code:
+                run = db.session.get(PromptRun, uuid.UUID(launch["run_id"]))
+                run.status = PromptRunStatus.FAILED
+                run.error = "model returned nonsense"
+                db.session.commit()
+                return
+        real_enqueue(launch)
 
-    monkeypatch.setattr(rp, "_launch", flaky_launch)
+    monkeypatch.setattr(rp, "_enqueue_launch", flaky_enqueue)
 
     with celery_app.app_context():
         release = db.session.get(Release, uuid.UUID(rid))

@@ -160,10 +160,15 @@ def _merged_config(child, status_value: str) -> dict:
     return {**stage_cfg, **{k: v for k, v in release_cfg.items() if v is not None}}
 
 
-def _launch(child, action_type: str, extra: dict | None = None):
-    """Queue one action for a child using its release/stage AI settings."""
+def _prepare_launch(child, action_type: str, extra: dict | None = None) -> dict:
+    """Create the run row; the caller enqueues it after committing.
+
+    A worker can pick a task up within milliseconds. Enqueueing before the
+    PromptRun row commits meant the worker loaded a row that did not exist
+    yet, ran anyway, and never updated the run (seen live: the design step
+    stayed PENDING while its document was already saved).
+    """
     from app.models import PromptRun, PromptRunStatus
-    from app.tasks import enqueue_generation
     from app.tasks.ollama_tasks import run_secondary_action
 
     config = _merged_config(child, _status_value(child))
@@ -182,18 +187,29 @@ def _launch(child, action_type: str, extra: dict | None = None):
     )
     db.session.add(run)
     db.session.flush()
-    enqueue_generation(
-        run_secondary_action,
-        [str(child.id), action_type],
-        {
+    return {
+        "run_id": str(run.id),
+        "provider": provider,
+        "task": run_secondary_action,
+        "args": [str(child.id), action_type],
+        "kwargs": {
             "model_override": model,
             "extra_context": dict(extra or {}),
             "run_id": str(run.id),
             "provider_override": provider,
         },
-        provider=provider,
+    }
+
+
+def _enqueue_launch(launch: dict) -> None:
+    from app.tasks import enqueue_generation
+
+    enqueue_generation(
+        launch["task"],
+        launch["args"],
+        launch["kwargs"],
+        launch["provider"],
     )
-    return run
 
 
 def _poll(run_id):
@@ -277,7 +293,7 @@ def _phase_failed(state, phase: str, child_ids) -> bool:
     )
 
 
-def _process_docs(release, children, phase: str, state):
+def _process_docs(release, children, phase: str, state, pending: list):
     """Advance PRD or Design: skip existing docs, queue missing ones."""
     action = PHASE_ACTION[phase]
     stage = PHASE_STAGE[phase]
@@ -311,9 +327,10 @@ def _process_docs(release, children, phase: str, state):
             _skip_child(entry, reason)
             continue
 
-        run = _launch(child, action)
+        launch = _prepare_launch(child, action)
         entry[phase] = "running"
-        entry["run_ids"][phase] = str(run.id)
+        entry["run_ids"][phase] = launch["run_id"]
+        pending.append(launch)
         launched = True
         _report(
             state,
@@ -330,7 +347,7 @@ def _process_docs(release, children, phase: str, state):
                 entry["reason"] = "Could not start this step."
 
 
-def _process_build(release, children, state):
+def _process_build(release, children, state, pending: list):
     """Preview and write one child at a time, in creation order.
 
     Sequential on purpose: each preview reads the repo, and the next
@@ -387,13 +404,14 @@ def _process_build(release, children, state):
         if not ok:
             _skip_child(entry, reason)
             continue
-        run = _launch(
+        launch = _prepare_launch(
             child,
             "BUILD_CODE",
             {"confirm_build": True, "target_id": str(target.id)},
         )
-        entry["run_ids"]["build_confirm"] = str(run.id)
+        entry["run_ids"]["build_confirm"] = launch["run_id"]
         entry["build"] = "writing"
+        pending.append(launch)
         return
 
     # 3. No write waiting: start the next preview, one per tick.
@@ -436,13 +454,14 @@ def _process_build(release, children, state):
             # A preview already exists for this repo: confirm it directly.
             entry["build"] = "preview_ready"
             return
-        run = _launch(
+        launch = _prepare_launch(
             child,
             "BUILD_CODE",
             {"confirm_build": False, "target_id": str(target.id)},
         )
         entry["build"] = "running"
-        entry["run_ids"]["build"] = str(run.id)
+        entry["run_ids"]["build"] = launch["run_id"]
+        pending.append(launch)
         _report(state, f"{child.reference_code}: build preview started")
         return
 
@@ -693,15 +712,32 @@ def advance_release(release_id) -> bool:
     start = PHASES.index(release.pipeline_phase or "prd")
     for phase in PHASES[start:]:
         release.pipeline_phase = phase
+        pending = []
         if phase in ("prd", "design"):
-            _process_docs(release, children, phase, state)
+            _process_docs(release, children, phase, state, pending)
         elif phase == "build":
-            _process_build(release, children, state)
+            _process_build(release, children, state, pending)
         else:
             _process_test(children, state)
 
         _save(release, state)
         db.session.commit()
+
+        # Only now can a worker see the PromptRun row. Enqueueing before
+        # this commit let a fast worker run without a run row to update.
+        for launch in pending:
+            try:
+                _enqueue_launch(launch)
+            except Exception:
+                logger.exception(
+                    "release_launch_failed", run_id=launch["run_id"]
+                )
+                from app.models import PromptRun
+
+                run = _poll(launch["run_id"])
+                if run is not None:
+                    run.mark_failed("Could not queue this step.")
+                    db.session.commit()
 
         if not _phase_settled(state, phase, child_ids):
             _schedule(release.id)
