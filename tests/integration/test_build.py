@@ -656,6 +656,26 @@ class TestBuildRuntimeInfo:
         # row — the notes must not restate it.
         assert "Start command:" not in (info["run_notes"] or "")
 
+    def test_healthcheck_cmd_does_not_mask_the_start_command(self):
+        from app.tasks.ollama_tasks import _extract_runtime_info
+
+        info = _extract_runtime_info(
+            [
+                {
+                    "path": "backend/Dockerfile",
+                    "content": (
+                        "FROM python:3.12\n"
+                        "HEALTHCHECK --interval=10s \\\n"
+                        "    CMD python -c \"print('ok')\"\n"
+                        'CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:app"]\n'
+                    ),
+                },
+                {"path": "backend/src/app.py", "content": "app = 1\n"},
+            ]
+        )
+        assert "gunicorn" in (info["start_command"] or "")
+        assert "print" not in (info["start_command"] or "")
+
     def test_extract_frontend_service_url(self):
         from app.tasks.ollama_tasks import _extract_runtime_info
 
@@ -969,6 +989,20 @@ class TestDeriveRunbook:
         {"path": "backend/requirements.txt", "content": "fastapi\n"},
         {"path": "docker-compose.yml", "content": "x"},
     ]
+
+    def test_gunicorn_flags_before_app_resolve_app_dir(self):
+        from app.tasks.ollama_tasks import _derive_runbook
+
+        rb = _derive_runbook(
+            self._FILES,
+            '["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", '
+            '"--access-logfile", "-", "src.main:app"]',
+            "/mnt/host/IDEA-1",
+        )
+        assert rb is not None
+        assert rb["workdir"] == "/mnt/host/IDEA-1/backend"
+        assert "gunicorn" in rb["run"]
+        assert "src.main:app" in rb["run"]
 
     def test_uvicorn_module_resolves_app_dir(self):
         from app.tasks.ollama_tasks import _derive_runbook

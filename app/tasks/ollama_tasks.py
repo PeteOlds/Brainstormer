@@ -767,9 +767,11 @@ def _extract_runtime_info(files: list) -> dict:
                 port = int(match.group(1))
             except ValueError:
                 pass
-        match = re.search(r"(?m)^\s*CMD\s+(.+)$", dockerfile)
-        if match:
-            start_command = match.group(1).strip()
+        # A HEALTHCHECK also has a nested CMD line; only the last bare CMD
+        # is the container's start command (Docker uses the final one).
+        matches = re.findall(r"(?m)^\s*CMD\s+(.+)$", dockerfile)
+        if matches:
+            start_command = matches[-1].strip()
 
     compose_path, compose_content = _compose()
     docker_image = None
@@ -1053,6 +1055,19 @@ def _derive_runbook(
 
     _RUNNERS = {"uvicorn", "gunicorn", "hypercorn", "daphne"}
 
+    def _runner_dir(text) -> str | None:
+        """Find the ``module:app`` argument after any runner flags.
+
+        ``gunicorn --bind 0.0.0.0:8000 ... app:app`` puts a dotted host:port
+        before the real app target, so take the first candidate that names
+        a file in the manifest rather than the first ``word:word``.
+        """
+        for candidate in _re.finditer(r"([\w.]+):[\w.]+", text or ""):
+            hit = _resolve_module(candidate.group(1))
+            if hit is not None:
+                return hit
+        return None
+
     def _resolve_dir() -> str | None:
         # `python[3] -m dotted.mod ...` or `python[3] script.py ...`
         m = _re.search(
@@ -1063,11 +1078,8 @@ def _derive_runbook(
             mod = m.group(1)
             if mod.split(".")[0] in _RUNNERS:
                 # Runner invocation (`python -m uvicorn pkg.mod:app`):
-                # the app Plugins is the `dotted:app` argument, not the runner.
-                appm = _re.search(r"([\w.]+):\S+", cmd)
-                if not appm:
-                    return None
-                return _resolve_module(appm.group(1))
+                # the app is the `dotted:app` argument, not the runner.
+                return _runner_dir(cmd)
             if mod.split(".")[0] == "flask":
                 # `python -m flask --app pkg.mod run`: --app names the app.
                 appm = _re.search(r"--app[\s=]+([\w.]+)", cmd)
@@ -1085,19 +1097,13 @@ def _derive_runbook(
             # Run from the target root with the manifest-relative script
             # path (never cd into its dir: that would double the path).
             return ""
-        # `uvicorn|gunicorn dotted.mod:app ...`
+        # `uvicorn|gunicorn dotted.mod:app ...`, flags allowed before the app.
         m = _re.search(
-            r"(?:^|&&\s*|;\s*)\s*(?:uvicorn|gunicorn|hypercorn|daphne)\s+([\w.]+):\S+",
+            r"(?:^|&&\s*|;\s*)\s*(?:uvicorn|gunicorn|hypercorn|daphne)\b([^&;]*)",
             cmd,
         )
         if m:
-            mod_path = m.group(1).replace(".", "/") + ".py"
-            hit = next(
-                (p for p in paths if p == mod_path or p.endswith("/" + mod_path)), None
-            )
-            if hit is None:
-                return None
-            return hit[: len(hit) - len(mod_path)].rstrip("/")
+            return _runner_dir(m.group(1))
         # `flask --app pkg.mod run ...` (bare CLI, no python prefix)
         m = _re.search(r"(?:^|&&\s*|;\s*)\s*flask\b[^&;]*--app[\s=]+([\w.]+)", cmd)
         if m:
