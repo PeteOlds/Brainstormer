@@ -1166,32 +1166,6 @@ function ideasApp() {
             }
         },
 
-        // Start a secondary action for one release child (dropdown).
-        async openChildDoc(k, actionType) {
-            if (!actionType) return;
-            // Use the repo picked on the Build tab, else this idea's last
-            // build repo. Never hard-block: the worker falls back to the
-            // instance's only repo and names the options when ambiguous.
-            const targetId = this.buildTargetChoice || this.buildTargetId() || null;
-            this.actionLoading = actionType;
-            try {
-                const extra = {};
-                if (targetId) extra.target_id = targetId;
-                const res = await authFetch(`/api/v1/ideas/${k.id}/actions`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action_type: actionType, extra }),
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error((data && data.message) || 'Failed to start');
-                await this.loadScaleFamily();
-            } catch (e) {
-                this.showAlertModal('Failed to start: ' + e.message);
-            } finally {
-                this.actionLoading = null;
-            }
-        },
-
         releaseKidIds(releaseId) {
             return this.scaleKids(releaseId).map((k) => k.id);
         },
