@@ -52,11 +52,10 @@ class Config:
     # has no endpoint): `opencode run --attach <url>`. Server basic-auth, if
     # any, comes from OPENCODE_SERVER_USERNAME/OPENCODE_SERVER_PASSWORD.
     OPENCODE_SERVER_URL = get_env("OPENCODE_SERVER_URL", "")
-    # Attached sandbox runs: per-run dirs are created under
-    # OPENCODE_SANDBOX_ROOT (worker-visible; defaults to
-    # `<repo>/.opencode-sandbox`) and passed to the server as
-    # `<OPENCODE_SERVER_SANDBOX_ROOT>/<uuid> --dir`. The two roots must be
-    # the same shared directory seen from each side.
+    # Attached runs start from /tmp because the installed CLI (v2.0.x) has
+    # no server-directory flag. These two settings are kept for config
+    # compatibility but are no longer required; local (non-attached)
+    # sandbox runs still use a throwaway temp dir.
     OPENCODE_SANDBOX_ROOT = get_env("OPENCODE_SANDBOX_ROOT", "")
     OPENCODE_SERVER_SANDBOX_ROOT = get_env("OPENCODE_SERVER_SANDBOX_ROOT", "")
     # Build roots (os.pathsep-separated, worker-visible): the only

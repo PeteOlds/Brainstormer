@@ -224,11 +224,8 @@ def _attach_popen(captured, stdout=None):
     return fake_popen
 
 
-def test_opencode_generate_attach_sandbox(monkeypatch, tmp_path):
+def test_opencode_generate_attach_uses_tmp(monkeypatch, tmp_path):
     captured = {}
-    server_root = "/srv/oc-sandbox"
-    monkeypatch.setenv("OPENCODE_SERVER_SANDBOX_ROOT", server_root)
-    monkeypatch.setenv("OPENCODE_SANDBOX_ROOT", str(tmp_path))
     monkeypatch.setattr(ob.shutil, "which", lambda binary: "/usr/bin/opencode")
     monkeypatch.setattr(ob.subprocess, "Popen", _attach_popen(captured))
     monkeypatch.setattr(ob, "_sandbox_agent_name", lambda: "brainstormer-sandbox")
@@ -241,23 +238,25 @@ def test_opencode_generate_attach_sandbox(monkeypatch, tmp_path):
     assert argv[argv.index("--server") + 1] == "http://192.168.1.130:4096"
     # Attached servers reject project-local agents: never pass --agent.
     assert "--agent" not in argv
-    # v2 has no --dir: the server-side project directory is the positional
-    # argument immediately before the message.
-    assert argv[-2].startswith(server_root + "/brainstormer-")
-    assert captured["cwd"].startswith(str(tmp_path))
-    # Local side cleaned up afterwards.
-    assert not os.path.exists(captured["cwd"])
+    # v2 has no server-dir flag; attached runs start from a neutral cwd
+    # that exists on both sides. No server path is sent.
+    assert captured["cwd"] == "/tmp"
+    assert argv[-1] == "hi"
     assert result.text == "ok"
 
 
-def test_opencode_generate_attach_requires_server_root(monkeypatch):
+def test_opencode_generate_attach_without_server_root(monkeypatch):
+    """The installed CLI has no --dir, so no server sandbox root is needed."""
+    captured = {}
     monkeypatch.delenv("OPENCODE_SERVER_SANDBOX_ROOT", raising=False)
     monkeypatch.setattr(ob.shutil, "which", lambda binary: "/usr/bin/opencode")
+    monkeypatch.setattr(ob.subprocess, "Popen", _attach_popen(captured))
+    monkeypatch.setattr(ob, "_sandbox_agent_name", lambda: "brainstormer-sandbox")
 
-    with pytest.raises(ProviderError) as exc:
-        ob.opencode_generate("m", "hi", endpoint="http://x:4096")
-    assert exc.value.retryable is False
-    assert "OPENCODE_SERVER_SANDBOX_ROOT" in str(exc.value)
+    result = ob.opencode_generate("m", "hi", endpoint="http://x:4096")
+
+    assert captured["cwd"] == "/tmp"
+    assert result.text == "ok"
 
 
 def test_opencode_attach_url_env_fallback(monkeypatch, tmp_path):

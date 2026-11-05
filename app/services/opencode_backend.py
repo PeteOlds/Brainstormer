@@ -13,14 +13,14 @@ Repo mode (Site-Admin opt-in per instance) runs in
 
 Attach mode: when the instance config sets ``endpoint`` (or
 ``OPENCODE_SERVER_URL`` is set), the CLI runs against a remote opencode
-server (``opencode run --server <url> <server-dir>``) instead of a
-local server. Credentials then live on that server; the worker only needs
-the CLI binary. Project-local ``--agent`` files are rejected by attached
-servers, so attach mode skips ``--agent`` and isolates by directory only.
-Sandbox dirs must exist on the *server*: the backend creates
-``<OPENCODE_SANDBOX_ROOT>/<uuid>`` through the shared filesystem and
-passes ``<OPENCODE_SERVER_SANDBOX_ROOT>/<uuid>`` as ``--dir`` (the two
-roots must point at the same shared directory).
+server (``opencode run --server <url>``) instead of a local server.
+Credentials then live on that server; the worker only needs the CLI
+binary. The installed CLI (v2.0.x) has no server-side directory flag, so
+attached runs start from ``/tmp`` — a directory that exists on both the
+worker and the server. Text actions work from there; file-context
+actions must pass files with ``--file`` rather than relying on the cwd.
+Project-local ``--agent`` files are rejected by attached servers, so
+attach mode skips ``--agent``.
 
 The subprocess gets a curated environment (PATH/HOME/locale plus
 ``OPENCODE_*``) so application secrets in the worker's env
@@ -126,22 +126,6 @@ def _repo_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def _sandbox_roots() -> tuple[str, str]:
-    """(local_root, server_root) for attached sandbox runs.
-
-    The backend creates per-run dirs under the local root (must be visible
-    from this worker) and passes the same run under the server root as
-    ``--dir``. The operator keeps both pointing at one shared directory
-    (e.g. the bind-mounted repo). Unset server root fails loudly: without
-    it the server would silently run in the wrong directory.
-    """
-    local = (_config("OPENCODE_SANDBOX_ROOT", "") or "").strip()
-    if not local:
-        local = os.path.join(_repo_root(), ".opencode-sandbox")
-    server = (_config("OPENCODE_SERVER_SANDBOX_ROOT", "") or "").strip()
-    return local, server
-
-
 def _clean_env() -> dict:
     env = {key: os.environ[key] for key in _KEEP_ENV if key in os.environ}
     for key, value in os.environ.items():
@@ -163,10 +147,12 @@ def _write_sandbox_agent(directory: str, agent_name: str) -> None:
 def _run_dir(workspace: str, attach_url: str = "") -> Iterator[tuple[str, str | None]]:
     """Yield ``(local_cwd, server_dir)`` for a run, cleaning up sandboxes.
 
-    ``server_dir`` is the ``--dir`` value for attached runs, else None.
-    Attached runs can never rely on the subprocess cwd (it is
-    container-local and meaningless to the server), so they always get an
-    explicit server-side directory. Local runs keep the previous behaviour.
+    ``server_dir`` is passed to the CLI as an extra positional argument for
+    attached runs that support it, else None. The installed OpenCode CLI
+    (v2.0.x) does not have a ``--dir`` flag; for attached runs we run from a
+    neutral directory (/tmp) that exists on both worker and server, and we
+    no longer append a server-side path. Local runs keep the previous
+    behaviour (temp dir + sandbox agent).
     """
     workspace = workspace or "sandbox"
     if workspace == "repo":
@@ -194,20 +180,12 @@ def _run_dir(workspace: str, attach_url: str = "") -> Iterator[tuple[str, str | 
         yield repo, None
         return
     if attach_url:
-        local_root, server_root = _sandbox_roots()
-        if not server_root:
-            raise ProviderError(
-                "OpenCode attach mode needs OPENCODE_SERVER_SANDBOX_ROOT "
-                "(server-side directory shared with this worker).",
-                retryable=False,
-            )
-        name = f"brainstormer-{uuid.uuid4().hex}"
-        local = os.path.join(local_root, name)
-        os.makedirs(local, exist_ok=True)
-        try:
-            yield local, server_root.rstrip("/") + "/" + name
-        finally:
-            shutil.rmtree(local, ignore_errors=True)
+        # OpenCode attached mode: run from a directory that exists on both
+        # sides so the CLI's implicit cwd transmission does not fail with
+        # "Location not found". File-context actions must attach files via
+        # --file instead of relying on cwd; text actions (PRD, design,
+        # analysis) work fine from /tmp.
+        yield "/tmp", None
         return
     tmp = tempfile.mkdtemp(prefix="brainstormer-opencode-")
     try:
@@ -475,8 +453,14 @@ def opencode_generate(
 
     text, prompt_tokens, completion_tokens, cost_cents = _parse_events(stdout or "")
     if proc.returncode != 0 and not text:
-        lines = (stderr or stdout or "").strip().splitlines()
-        detail = lines[-1] if lines else f"exit code {proc.returncode}"
+        raw = (stderr or stdout or "").strip()
+        # The CLI prints a stack trace; the useful line is usually
+        # "Error: ..." near the top, while the last line is just "}".
+        detail = f"exit code {proc.returncode}"
+        for line in raw.splitlines():
+            if line.strip().startswith("Error:"):
+                detail = line.strip()
+                break
         raise ProviderError(f"OpenCode run failed: {detail}", retryable=True)
     if json_mode and not text:
         raise ProviderError("OpenCode returned no content.", retryable=True)
