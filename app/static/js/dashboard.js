@@ -55,6 +55,9 @@ function ideasApp() {
         ideaTests: [],
         testsLoading: false,
         testsRunning: false,
+        testsRunningMessage: '',
+        testRunProgress: 0,
+        selectedTestIds: [],
         testSummary: null,
         testError: '',
         newTestName: '',
@@ -571,13 +574,18 @@ function ideasApp() {
             }
         },
 
-        async runIdeaTests() {
+        async runIdeaTests(selectedIds = []) {
             if (!this.selectedIdea || this.testsRunning) return;
             this.testError = '';
             this.testsRunning = true;
-            const started = Date.now();
+            this.testsRunningMessage = 'Starting…';
+            this.testRunProgress = 0;
+            const ids = Array.isArray(selectedIds) ? selectedIds : [];
             try {
-                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/run`, { method: 'POST' });
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/run`, {
+                    method: 'POST',
+                    body: JSON.stringify({ test_ids: ids }),
+                });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
                     this.testError = (data && (data.error || data.message)) || `Could not start tests (HTTP ${res.status}).`;
@@ -585,25 +593,42 @@ function ideasApp() {
                     return;
                 }
                 const poll = async () => {
-                    await this.loadIdeaTests();
-                    const row = (this.ideaTests || []).find((t) => /test suite/i.test(t.name || ''));
-                    if (row && row.last_run_at && new Date(row.last_run_at).getTime() >= started - 5000) {
-                        this.testsRunning = false;
-                        return;
-                    }
-                    if (Date.now() - started < 300000) {
-                        setTimeout(poll, 3000);
-                    } else {
-                        this.testsRunning = false;
-                        this.testError = 'Timed out waiting for test results.';
-                    }
+                    try {
+                        const s = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/run-status`);
+                        const sd = await s.json().catch(() => ({}));
+                        const run = (sd.data || sd).run;
+                        if (run) {
+                            this.testRunProgress = run.progress || 0;
+                            this.testsRunningMessage = run.message || '';
+                            if (run.status === 'completed' || run.status === 'failed') {
+                                await this.loadIdeaTests();
+                                this.testsRunning = false;
+                                if (run.status === 'failed') this.testError = run.message || 'Tests failed.';
+                                return;
+                            }
+                        }
+                    } catch (e) { /* ignore */ }
+                    if (this.testsRunning) setTimeout(poll, 2000);
                 };
-                setTimeout(poll, 3000);
+                setTimeout(poll, 2000);
             } catch (e) {
                 console.error('Failed to run tests:', e);
                 this.testError = 'Could not reach the tests API.';
                 this.testsRunning = false;
             }
+        },
+        async runSelectedTests() {
+            const ids = (this.selectedTestIds || []).slice();
+            if (!ids.length) return;
+            await this.runIdeaTests(ids);
+            this.selectedTestIds = [];
+        },
+        toggleTestSelection(id) {
+            const arr = this.selectedTestIds || [];
+            const i = arr.indexOf(id);
+            if (i >= 0) arr.splice(i, 1);
+            else arr.push(id);
+            this.selectedTestIds = arr.slice();
         },
 
         async addIdeaTest() {
@@ -649,10 +674,16 @@ function ideasApp() {
 
         async setTestStatus(test, status) {
             if (!this.selectedIdea) return;
+            const payload = { status };
+            if (status === 'passed' && (test.test_type === 'e2e' || test.test_type === 'manual')) {
+                const note = window.prompt('Evidence note (what you verified):', test.last_run_output || '');
+                if (note === null) return;
+                payload.last_run_output = note.trim() || null;
+            }
             try {
                 const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/${test.id}`, {
                     method: 'PATCH',
-                    body: JSON.stringify({ status }),
+                    body: JSON.stringify(payload),
                 });
                 if (res.ok) await this.loadIdeaTests();
             } catch (e) {

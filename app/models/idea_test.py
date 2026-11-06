@@ -28,6 +28,44 @@ class TestStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+class TestRunStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class TestRun(db.Model):
+    __tablename__ = "test_runs"
+
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    idea_id = db.Column(GUID(), db.ForeignKey("ideas.id"), nullable=False, index=True)
+    status = db.Column(
+        db.Enum(TestRunStatus, name="testrunstatus", create_constraint=False),
+        nullable=False,
+        default=TestRunStatus.PENDING,
+    )
+    progress = db.Column(db.Integer, nullable=False, default=0)
+    message = db.Column(db.String(500), nullable=True)
+    selected_ids = db.Column(db.JSON, nullable=True)
+    started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    output = db.Column(db.Text, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "idea_id": str(self.idea_id),
+            "status": self.status.value if hasattr(self.status, "value") else str(self.status),
+            "progress": self.progress or 0,
+            "message": self.message,
+            "selected_ids": self.selected_ids or [],
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+            "output": self.output,
+        }
+
+
 class IdeaTest(db.Model):
     __tablename__ = "idea_tests"
 

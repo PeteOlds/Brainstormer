@@ -827,6 +827,15 @@
                                     <div class="flex items-center gap-2">
                                         <button @click="runIdeaTests()" :disabled="testsRunning" class="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg disabled:opacity-50" x-text="testsRunning ? 'Running tests…' : 'Run all tests'"></button>
                                     </div>
+                                    <!-- Run all / selected -->
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <button @click="runIdeaTests()" :disabled="testsRunning" class="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg disabled:opacity-50" x-text="testsRunning ? 'Running tests…' : 'Run all tests'"></button>
+                                        <button @click="runSelectedTests()" :disabled="testsRunning || !selectedTestIds.length" class="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg disabled:opacity-50">Run selected</button>
+                                        <span class="text-xs text-slate-500" x-show="testsRunning" x-text="testsRunningMessage + ' (' + testRunProgress + '%)'"></span>
+                                    </div>
+                                    <div x-show="testsRunning" class="w-full bg-slate-200 dark:bg-slate-700 rounded h-2 overflow-hidden">
+                                        <div class="bg-indigo-600 h-2 transition-all" :style="'width:' + testRunProgress + '%'"></div>
+                                    </div>
                                     <!-- Filter -->
                                     <div class="flex gap-2">
                                         <template x-for="f in ['all','passed','failed','not_run','skipped']" :key="f">
@@ -850,6 +859,7 @@
                                     <table class="w-full text-sm" x-show="!testsLoading">
                                         <thead>
                                             <tr class="text-left text-xs text-slate-500 uppercase">
+                                                <th class="py-2 w-8"></th>
                                                 <th class="py-2">Name</th>
                                                 <th class="py-2">Type</th>
                                                 <th class="py-2">Status</th>
@@ -861,6 +871,7 @@
                                         <tbody>
                                             <template x-for="t in filteredIdeaTests()" :key="t.id">
                                                 <tr class="border-t border-slate-200 dark:border-slate-700">
+                                                    <td class="py-2"><input type="checkbox" :value="t.id" x-model="selectedTestIds" class="rounded" /></td>
                                                     <td class="py-2"><span x-text="t.name"></span><span x-show="t.source === 'build'" class="ml-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">build</span></td>
                                                     <td class="py-2 text-xs" x-text="t.test_type"></td>
                                                     <td class="py-2">

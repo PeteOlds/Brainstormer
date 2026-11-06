@@ -315,7 +315,12 @@ def complete_release(user, release_id):
     denied = check_access(release)
     if denied is not None:
         return denied
+    children = Idea.query.filter_by(release_id=release.id).all()
+    if not children:
+        return api_error("Nothing in this release yet — move ideas into it first.", status_code=400)
+
     data = request.get_json() or {}
+    force = bool(data.get("force"))
     target = (data.get("status") or "shipped").strip().lower()
     if target in ("ship", "shipped"):
         target = "shipped"
@@ -325,9 +330,32 @@ def complete_release(user, release_id):
         return api_error(
             "status must be 'shipped' or 'drop'.", status_code=400
         )
-    children = Idea.query.filter_by(release_id=release.id).all()
-    if not children:
-        return api_error("Nothing in this release yet — move ideas into it first.", status_code=400)
+
+    # Pre-release readiness: required tests must be passed (or explicitly
+    # waived). With force=false we only report; with force=true we proceed.
+    missing = []
+    for child in children:
+        from app.models.idea_test import IdeaTest, TestStatus
+
+        required_names = (
+            "ui:",
+            "generated test suite passes",
+            "dependencies install cleanly",
+        )
+        for t in IdeaTest.query.filter_by(idea_id=child.id).all():
+            low = (t.name or "").lower()
+            if not any(low.startswith(n) or n in low for n in required_names):
+                continue
+            if t.status != TestStatus.PASSED:
+                missing.append(f"{child.reference_code}: {t.name} ({t.status.value})")
+    if missing and not force:
+        return api_ok(
+            {
+                "warnings": missing,
+                "requires_confirmation": True,
+                "message": "Required tests are not all passed. Re-run with force=true to override.",
+            }
+        )
 
     moved = 0
     for child in children:
