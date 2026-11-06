@@ -1027,9 +1027,28 @@ def _extract_runtime_info(files: list, preferred_paths=None) -> dict:
                 credentials = found
                 break
 
+    # Native (non-pip) dependencies cannot be installed into the venv by
+    # the supervised runner, so name them up front instead of failing at
+    # first use (e.g. pytesseract needs the tesseract binary).
+    system_deps = set()
+    for content in by_path.values():
+        low = content.lower()
+        if "pytesseract" in low:
+            system_deps.add("tesseract-ocr (for pytesseract)")
+        if "psycopg2" in low or "psycopg[binary]" in low or "psycopg " in low:
+            system_deps.add("libpq-dev (for psycopg/psycopg2)")
+        if "mysqlclient" in low:
+            system_deps.add("default-libmysqlclient-dev (for mysqlclient)")
+        if "python-ldap" in low or "ldap3" in low:
+            system_deps.add("libldap2-dev (for LDAP support)")
+
     notes = []
     if inferred_note:
         notes.append(inferred_note)
+    if system_deps:
+        notes.append(
+            "System packages required on the host: " + ", ".join(sorted(system_deps))
+        )
     # No "Start command:" note: the How-to-run panel already shows it as a
     # copyable Run row, and models restate it here verbatim (noise).
     # Browser step goes last: open the app only after starting it.

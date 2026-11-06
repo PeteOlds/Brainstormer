@@ -836,6 +836,14 @@ class TestBuildRuntimeInfo:
         assert info["start_command"] == "python3 src/app.py"
         assert info["port"] is None
 
+    def test_system_dependency_note(self):
+        from app.tasks.ollama_tasks import _extract_runtime_info
+
+        info = _extract_runtime_info(
+            [{"path": "requirements.txt", "content": "pytesseract==0.3.10\n"}]
+        )
+        assert "tesseract-ocr" in (info["run_notes"] or "")
+
     def test_primary_dockerfile_prefers_changed_service(self):
         from app.tasks.ollama_tasks import _extract_runtime_info
 
