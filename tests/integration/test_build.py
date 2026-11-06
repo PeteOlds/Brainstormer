@@ -308,9 +308,7 @@ class TestBuildTargetResolution:
             assert reason is None
             assert target.id == parent_target.id
 
-    def test_standalone_idea_gets_a_repo_named_after_it(
-        self, app, tmp_path
-    ):
+    def test_standalone_idea_gets_a_repo_named_after_it(self, app, tmp_path):
         from app.services.build_targets import resolve_build_target
 
         with app.app_context():
@@ -323,9 +321,7 @@ class TestBuildTargetResolution:
             target, reason = resolve_build_target(idea, allow_create=True)
             assert reason is None
             assert target.name == idea.reference_code
-            assert target.path == os.path.realpath(
-                tmp_path / idea.reference_code
-            )
+            assert target.path == os.path.realpath(tmp_path / idea.reference_code)
             assert os.path.isdir(target.path)
 
             again, _ = resolve_build_target(idea, allow_create=True)
@@ -720,6 +716,7 @@ class TestBuildRuntimeInfo:
         assert info["port"] == 3000
         assert "uvicorn" in (info["start_command"] or "")
         from app.tasks.ollama_tasks import _host_network_ip
+
         assert info["app_url"] == f"http://{_host_network_ip()}:3000"
         assert info["frontend_url"] is None
         assert info["credentials"] == {
@@ -772,12 +769,15 @@ class TestBuildRuntimeInfo:
         # Backend keeps the API port; the human UI gets its own URL.
         assert info["port"] == 8001
         from app.tasks.ollama_tasks import _host_network_ip
+
         assert info["app_url"] == f"http://{_host_network_ip()}:8001"
         assert info["frontend_port"] == 3000
         from app.tasks.ollama_tasks import _host_network_ip
+
         assert info["frontend_url"] == f"http://{_host_network_ip()}:3000"
         # The browser line names the UI, never the raw API.
         from app.tasks.ollama_tasks import _host_network_ip
+
         assert f"http://{_host_network_ip()}:3000" in (info["run_notes"] or "")
         assert "Open http://localhost:8001" not in (info["run_notes"] or "")
 
@@ -836,12 +836,48 @@ class TestBuildRuntimeInfo:
         assert info["start_command"] == "python3 src/app.py"
         assert info["port"] is None
 
+    def test_primary_dockerfile_prefers_changed_service(self):
+        from app.tasks.ollama_tasks import _extract_runtime_info
+
+        info = _extract_runtime_info(
+            [
+                {
+                    "path": "backend/Dockerfile",
+                    "content": 'FROM python:3.12\nEXPOSE 8000\nCMD ["python", "app.py"]\n',
+                },
+                {"path": "backend/src/app.py", "content": "print('hi')\n"},
+                {
+                    "path": "frontend/Dockerfile",
+                    "content": 'FROM node:20\nCMD ["npm", "start"]\n',
+                },
+                {
+                    "path": "frontend/package.json",
+                    "content": '{"scripts":{"start":"react-scripts start"}}\n',
+                },
+                {
+                    "path": "docker-compose.yml",
+                    "content": (
+                        "services:\n  backend:\n    build: ./backend\n"
+                        "    ports: ['8000:8000']\n  frontend:\n    build: ./frontend\n"
+                        "    ports: ['3000:3000']\n"
+                    ),
+                },
+            ],
+            preferred_paths=["backend/src/app.py"],
+        )
+        assert info["start_dir"] == "backend"
+        assert info["port"] == 8000
+        assert "python" in (info["start_command"] or "")
+
     def test_dockerfile_cmd_wins_over_inference(self):
         from app.tasks.ollama_tasks import _extract_runtime_info
 
         info = _extract_runtime_info(
             [
-                {"path": "Dockerfile", "content": 'FROM x\nCMD ["node", "server.js"]\n'},
+                {
+                    "path": "Dockerfile",
+                    "content": 'FROM x\nCMD ["node", "server.js"]\n',
+                },
                 {
                     "path": "app.py",
                     "content": "from flask import Flask\napp = Flask(__name__)\n",
@@ -910,6 +946,19 @@ class TestBuildPortAllocation:
             assert port_in_use(port) is False
         finally:
             sock.close()
+
+    def test_rewrite_source_port(self):
+        from app.tasks.ollama_tasks import _rewrite_source_port
+
+        files = [
+            {
+                "path": "backend/src/app.py",
+                "content": "app.run(host='0.0.0.0', port=8000)\n",
+            }
+        ]
+        out, count = _rewrite_source_port(files, 8000, 8001)
+        assert count == 1
+        assert "port=8001" in out[0]["content"]
 
     def test_allocate_build_port_free_keeps_values(self):
         import socket
@@ -1159,6 +1208,22 @@ class TestDeriveRunbook:
         assert rb["run_argv"][0] == "/app/projects/IDEA-1/backend/.venv/bin/python"
         assert rb["setup_argv"][-1] == "/app/projects/IDEA-1/backend/.venv"
 
+    def test_nested_entry_rewrites_with_start_dir(self):
+        from app.tasks.ollama_tasks import _derive_runbook
+
+        files = [
+            {"path": "backend/src/app.py", "content": "print('hi')\n"},
+            {"path": "backend/requirements.txt", "content": "flask\n"},
+        ]
+        rb = _derive_runbook(files, '["python", "app.py"]', "/h", start_dir="backend")
+        assert rb is not None
+        assert rb["workdir"] == "/h/backend"
+        assert (
+            rb["run"]
+            == 'cd "/h/backend" && . .venv-local/bin/activate && python3 src/app.py'
+        )
+        assert rb["run_argv"] == ["/h/backend/.venv/bin/python", "src/app.py"]
+
     def test_unresolvable_or_requirementless_returns_none(self):
         from app.tasks.ollama_tasks import _derive_runbook
 
@@ -1356,7 +1421,45 @@ class TestManagedApps:
         assert spec["open_url"] == f"http://{_host_network_ip()}:3000"
         assert spec["frontend_run_argv"]
 
-    def test_spec_open_url_falls_back_to_api(self, tmp_path):
+    def test_spec_repairs_old_nested_runbook(self, tmp_path):
+        """An old row that cd's to the repo root and runs app.py is fixed."""
+        import os
+
+        from types import SimpleNamespace
+
+        from app.routes.instances import _spec_from_build_version
+
+        os.makedirs(tmp_path / "backend" / "src", exist_ok=True)
+        (tmp_path / "backend" / "src" / "app.py").write_text("print('hi')\n")
+        (tmp_path / "backend" / "requirements.txt").write_text("flask\n")
+
+        version_row = SimpleNamespace(
+            result_data={
+                "written": True,
+                "target_path": str(tmp_path),
+                "target_host_path": str(tmp_path),
+                "start_command": "python app.py",
+                "app_url": "http://localhost:8000",
+                "port": 8000,
+                "runbook": {
+                    "workdir": str(tmp_path),
+                    "workdir_container": str(tmp_path),
+                    "run_argv": ["/bin/python", "app.py"],
+                    "setup_argv": [],
+                    "pip_argv": [],
+                    "run": f'cd "{tmp_path}" && python3 app.py',
+                },
+                "files": [
+                    {"path": "backend/src/app.py", "content": "print('hi')\n"},
+                ],
+            }
+        )
+        target = SimpleNamespace(path=str(tmp_path))
+        spec, display, err = _spec_from_build_version(version_row, target, "IDEA-1")
+        assert err is None
+        assert spec["workdir"].endswith("/backend/src")
+        assert spec["run_argv"][-1] == "app.py"
+        assert "app.py" in display
         from types import SimpleNamespace
 
         from app.routes.instances import _spec_from_build_version
@@ -1376,6 +1479,7 @@ class TestManagedApps:
         spec, display, err = _spec_from_build_version(version_row, target, "IDEA-1")
         assert err is None
         from app.tasks.ollama_tasks import _host_network_ip
+
         assert spec["open_url"] == f"http://{_host_network_ip()}:8001"
 
     def test_spec_rederives_command_for_legacy_row(self, tmp_path):

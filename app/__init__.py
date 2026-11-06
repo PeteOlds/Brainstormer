@@ -37,9 +37,7 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     if app.config.get("TRUST_PROXY_HEADERS"):
         from werkzeug.middleware.proxy_fix import ProxyFix
 
-        app.wsgi_app = ProxyFix(
-            app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1
-        )
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
     init_extensions(app)
 

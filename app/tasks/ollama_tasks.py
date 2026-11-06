@@ -15,6 +15,7 @@ from app.services.prompt_templates import get_base_prompt, get_prompt_template
 from app.tasks import BaseTask, celery, enqueue_generation
 from app.utils.crypto import decrypt
 
+
 def _host_network_ip() -> str:
     """Best-effort LAN IP of this machine (never 127.x) for shareable URLs."""
     import socket
@@ -31,6 +32,7 @@ def _host_network_ip() -> str:
     except Exception:
         pass
     return "localhost"
+
 
 logger = structlog.get_logger()
 
@@ -600,8 +602,18 @@ def _accumulate_answers(idea_id, action_type, new_answers):
     return list(keyed.values()) + unkeyed
 
 
-def _infer_entry_command(by_path: dict, known_port=None):
+def _infer_entry_command(
+    by_path: dict,
+    known_port=None,
+    preferred_paths=None,
+    start_dir=None,
+):
     """Guess a start command when the manifest has no Dockerfile/compose/package.json.
+
+    Searches the whole tree rather than a fixed prefix list, so a monorepo
+    entry such as ``backend/src/app.py`` is found too. When several entries
+    exist, one under a changed file's directory wins, then one directly in
+    ``start_dir``, then the shallowest path.
 
     Returns ``(start_command, port, note)`` or ``(None, None, None)``. Only
     fires on a recognisable Python entry file, so an unrelated manifest
@@ -610,62 +622,131 @@ def _infer_entry_command(by_path: dict, known_port=None):
     """
     import re as _re
 
+    names = ("app.py", "main.py", "server.py", "run.py", "wsgi.py", "asgi.py")
+
+    def _norm(value) -> str:
+        text = str(value or "").replace("\\", "/")
+        while text.startswith("./"):
+            text = text[2:]
+        return text
+
     def _module(rel: str) -> str:
         return rel[:-3].replace("/", ".") if rel.endswith(".py") else rel
 
+    def _dir_of(rel: str) -> str:
+        return rel.rsplit("/", 1)[0] if "/" in rel else ""
+
+    normalised = {
+        _norm(path): str(content)
+        for path, content in (by_path or {}).items()
+        if _norm(path)
+    }
+    preferred = [_norm(path) for path in (preferred_paths or []) if _norm(path)]
+    base = _norm(start_dir or "").strip("/")
+
+    def _under(path: str, folder: str) -> bool:
+        return bool(folder) and (path == folder or path.startswith(folder + "/"))
+
+    def _near_preferred(rel: str) -> bool:
+        folder = _dir_of(rel)
+        for path in preferred:
+            other = _dir_of(path)
+            if rel == path or folder == other:
+                return True
+            if (
+                folder
+                and other
+                and (folder.startswith(other + "/") or other.startswith(folder + "/"))
+            ):
+                return True
+        return False
+
+    candidates = []
+    for rel in normalised:
+        name = rel.rsplit("/", 1)[-1]
+        if name not in names:
+            continue
+        candidates.append(
+            (
+                0 if _under(rel, base) else 1,
+                0 if _near_preferred(rel) else 1,
+                rel.count("/"),
+                names.index(name),
+                rel,
+            )
+        )
+    candidates.sort()
     has_requirements = any(
-        _re.search(r"(^|/)requirements[^/]*\.txt$", path or "") for path in by_path
+        _re.search(r"(^|/)requirements[^/]*\.txt$", path or "") for path in normalised
     )
-    for prefix in ("", "src/", "backend/", "app/", "api/"):
-        for name in ("app.py", "main.py", "server.py", "run.py", "wsgi.py", "asgi.py"):
-            rel = prefix + name
-            text = by_path.get(rel)
-            if text is None:
-                continue
-            text = str(text)
-            mod = _module(rel)
-            if "FastAPI(" in text or "fastapi import" in text:
-                port = known_port or 8000
-                note = f"Start command inferred from {rel} (FastAPI)."
-                if not has_requirements:
-                    note += (
-                        "\nNo requirements.txt in this build — install uvicorn "
-                        "and fastapi before running."
-                    )
+    for _base_rank, _pref_rank, _depth, _name_rank, rel in candidates:
+        text = normalised[rel]
+        mod = _module(rel)
+        if "FastAPI(" in text or "fastapi import" in text:
+            port = known_port or 8000
+            note = f"Start command inferred from {rel} (FastAPI)."
+            if not has_requirements:
+                note += (
+                    "\nNo requirements.txt in this build — install uvicorn "
+                    "and fastapi before running."
+                )
+            return (
+                f"python3 -m uvicorn {mod}:app --host 0.0.0.0 --port {port}",
+                port,
+                note,
+            )
+        if _re.search(r"\bFlask\s*\(", text) or "flask import" in text:
+            port = known_port or 5000
+            note = f"Start command inferred from {rel} (Flask)."
+            if not has_requirements:
+                note += (
+                    "\nNo requirements.txt in this build — install flask "
+                    "before running."
+                )
+            if _re.search(r"(?m)^\s*app\s*=\s*Flask\s*\(", text):
                 return (
-                    f"python3 -m uvicorn {mod}:app --host 0.0.0.0 --port {port}",
+                    f"python3 -m flask --app {mod} run --host 0.0.0.0 --port {port}",
                     port,
                     note,
                 )
-            if _re.search(r"\bFlask\s*\(", text) or "flask import" in text:
-                port = known_port or 5000
-                note = f"Start command inferred from {rel} (Flask)."
-                if not has_requirements:
-                    note += (
-                        "\nNo requirements.txt in this build — install flask "
-                        "before running."
-                    )
-                if _re.search(r"(?m)^\s*app\s*=\s*Flask\s*\(", text):
-                    return (
-                        f"python3 -m flask --app {mod} run --host 0.0.0.0 --port {port}",
-                        port,
-                        note,
-                    )
-                return f"python3 {rel}", port, note
-            # Canonical script names run as scripts even without a
-            # __main__ guard; wsgi/asgi modules only when they have one.
-            if name in ("app.py", "main.py", "server.py", "run.py") or "__main__" in text:
-                return f"python3 {rel}", known_port, f"Start command inferred from {rel}."
+            return f"python3 {rel}", port, note
+        # Canonical script names run as scripts even without a
+        # __main__ guard; wsgi/asgi modules only when they have one.
+        if (
+            rel.rsplit("/", 1)[-1] in ("app.py", "main.py", "server.py", "run.py")
+            or "__main__" in text
+        ):
+            return f"python3 {rel}", known_port, f"Start command inferred from {rel}."
     return None, None, None
 
 
-def _extract_runtime_info(files: list) -> dict:
+def _merge_files(base: list, overlay: list) -> list:
+    """Repo-context files merged with a build manifest (manifest wins).
+
+    A build preview is usually incremental, so the runtime/runbook sees
+    the files already on disk plus the ones this build changes. Insertion
+    order follows the base so preference tie-breaks stay stable.
+    """
+    by_path = {}
+    for entry in base or []:
+        if isinstance(entry, dict) and entry.get("path"):
+            by_path[str(entry["path"])] = entry
+    for entry in overlay or []:
+        if isinstance(entry, dict) and entry.get("path"):
+            by_path[str(entry["path"])] = entry
+    return list(by_path.values())
+
+
+def _extract_runtime_info(files: list, preferred_paths=None) -> dict:
     """Infer how to run a built app from its manifest files.
 
     Inspects Dockerfile (EXPOSE/CMD), docker-compose (ports/image),
     package.json (start script) and .env.example (credentials) without
-    executing anything. Returns only plain JSON-safe values so the
-    result row can carry them straight to the UI instructions modal.
+    executing anything. ``preferred_paths`` are the files this build
+    changed; they decide which service in a monorepo is the primary one
+    (a backend change must not run the frontend's Dockerfile). Returns
+    only plain JSON-safe values so the result row can carry them straight
+    to the UI instructions modal.
     """
     import json
     import re
@@ -684,6 +765,27 @@ def _extract_runtime_info(files: list) -> dict:
         "portal",
         "app",
     )
+
+    def _norm(value) -> str:
+        text = str(value or "").replace("\\", "/")
+        while text.startswith("./"):
+            text = text[2:]
+        return text
+
+    def _dir_of(path: str) -> str:
+        rel = _norm(path)
+        return rel.rsplit("/", 1)[0] if "/" in rel else ""
+
+    def _under(path: str, folder: str) -> bool:
+        return bool(folder) and (path == folder or path.startswith(folder + "/"))
+
+    def _frontend_dir(folder: str) -> bool:
+        parts = [p for p in _norm(folder).lower().split("/") if p]
+        return any(
+            p
+            in ("frontend", "ui", "client", "web", "www", "site", "dashboard", "portal")
+            for p in parts
+        )
 
     def _pub_ports(mapping):
         """Published (host, container) ports from one compose ports entry."""
@@ -728,6 +830,7 @@ def _extract_runtime_info(files: list) -> dict:
 
     info: dict = {
         "start_command": None,
+        "start_dir": None,
         "app_url": None,
         "port": None,
         "frontend_url": None,
@@ -740,13 +843,44 @@ def _extract_runtime_info(files: list) -> dict:
     by_path = {}
     for entry in files or []:
         if isinstance(entry, dict) and entry.get("path"):
-            by_path[str(entry["path"])] = str(entry.get("content") or "")
+            by_path[_norm(entry["path"])] = str(entry.get("content") or "")
+    preferred = [_norm(path) for path in (preferred_paths or []) if _norm(path)]
+
+    def _changed_under(folder: str) -> bool:
+        if not preferred:
+            return False
+        if not folder:
+            return False
+        return any(_under(path, folder) for path in preferred)
 
     def _dockerfile():
-        for path, content in by_path.items():
-            if path == "Dockerfile" or path.endswith("/Dockerfile"):
-                return content
-        return None
+        """Pick the primary Dockerfile when a monorepo has several."""
+        candidates = [
+            (path, content)
+            for path, content in by_path.items()
+            if path == "Dockerfile" or path.endswith("/Dockerfile")
+        ]
+        if not candidates:
+            return None, None
+
+        def _score(item):
+            path, _content = item
+            folder = _dir_of(path)
+            changed = _changed_under(folder)
+            if changed:
+                base = 0 if not _frontend_dir(folder) else 1
+            elif folder in backend_dirs and folder not in frontend_dirs:
+                base = 2
+            elif folder == "":
+                base = 3
+            elif folder in frontend_dirs:
+                base = 4
+            else:
+                base = 5
+            return (base, 0 if changed else 1, folder.count("/"), path)
+
+        path, content = min(candidates, key=_score)
+        return content, _dir_of(path)
 
     def _compose():
         for path, content in by_path.items():
@@ -757,9 +891,38 @@ def _extract_runtime_info(files: list) -> dict:
                 return path, content
         return None, None
 
+    compose_path, compose_content = _compose()
+    compose = {}
+    if compose_content:
+        try:
+            import yaml
+
+            compose = yaml.safe_load(compose_content) or {}
+        except Exception:
+            compose = {}
+    services = compose.get("services") if isinstance(compose, dict) else {}
+    if not isinstance(services, dict):
+        services = {}
+
+    frontend_dirs = set()
+    backend_dirs = set()
+    for name, svc in services.items():
+        if not isinstance(svc, dict):
+            continue
+        build = svc.get("build")
+        ctx = build.get("context") if isinstance(build, dict) else build
+        folder = _norm(ctx).strip("/") if isinstance(ctx, str) else ""
+        if not folder or folder == ".":
+            continue
+        if _looks_frontend(name, svc):
+            frontend_dirs.add(folder)
+        else:
+            backend_dirs.add(folder)
+
     port = None
     start_command = None
-    dockerfile = _dockerfile()
+    start_dir = None
+    dockerfile, start_dir = _dockerfile()
     if dockerfile:
         match = re.search(r"(?m)^\s*EXPOSE\s+(\d+)", dockerfile)
         if match:
@@ -772,66 +935,72 @@ def _extract_runtime_info(files: list) -> dict:
         matches = re.findall(r"(?m)^\s*CMD\s+(.+)$", dockerfile)
         if matches:
             start_command = matches[-1].strip()
+    info["start_dir"] = start_dir
 
-    compose_path, compose_content = _compose()
     docker_image = None
     frontend_port = None
     if compose_content:
         info["docker_compose_file"] = compose_path
-        try:
-            import yaml
-
-            compose = yaml.safe_load(compose_content) or {}
-        except Exception:
-            compose = {}
-        services = compose.get("services") or {}
         compose_host_seen = False
-        if isinstance(services, dict):
-            for _name, svc in services.items():
-                if not isinstance(svc, dict):
+        for _name, svc in services.items():
+            if not isinstance(svc, dict):
+                continue
+            for mapping in svc.get("ports") or []:
+                # Host side is what the user opens and what can
+                # collide: "HOST:CONTAINER" binds HOST, a bare port
+                # (or int) only names the container side.
+                host, target = _pub_ports(mapping)
+                if _looks_frontend(_name, svc):
+                    if host and frontend_port is None:
+                        frontend_port = host
                     continue
-                for mapping in svc.get("ports") or []:
-                    # Host side is what the user opens and what can
-                    # collide: "HOST:CONTAINER" binds HOST, a bare port
-                    # (or int) only names the container side.
-                    host, target = _pub_ports(mapping)
-                    if _looks_frontend(_name, svc):
-                        if host and frontend_port is None:
-                            frontend_port = host
-                        continue
-                    if host:
-                        # A compose host binding is deployment truth: it
-                        # overwrites a Dockerfile EXPOSE, first one wins
-                        # across services — but keep scanning, a frontend
-                        # service may still follow.
-                        if not compose_host_seen:
-                            port = host
-                            compose_host_seen = True
-                        break
-                    if target and port is None:
-                        # Expose-only form: no host binding to collide
-                        # with, but still the port the app serves.
-                        port = target
-                if isinstance(svc.get("image"), str) and svc["image"].strip():
-                    docker_image = svc["image"].strip()
+                if host:
+                    # A compose host binding is deployment truth: it
+                    # overwrites a Dockerfile EXPOSE, first one wins
+                    # across services — but keep scanning, a frontend
+                    # service may still follow.
+                    if not compose_host_seen:
+                        port = host
+                        compose_host_seen = True
+                    break
+                if target and port is None:
+                    # Expose-only form: no host binding to collide
+                    # with, but still the port the app serves.
+                    port = target
+            if isinstance(svc.get("image"), str) and svc["image"].strip():
+                docker_image = svc["image"].strip()
 
-    for path, content in by_path.items():
-        if path.endswith("package.json"):
-            try:
-                pkg = json.loads(content)
-                scripts = pkg.get("scripts") or {}
-                if isinstance(scripts, dict) and scripts.get("start"):
-                    start_command = start_command or str(scripts["start"])
-            except (ValueError, AttributeError):
-                pass
-            break
+    package_entries = [
+        (path, content)
+        for path, content in by_path.items()
+        if path == "package.json" or path.endswith("/package.json")
+    ]
+    if package_entries:
+
+        def _pkg_score(item):
+            path, _content = item
+            folder = _dir_of(path)
+            changed = _changed_under(folder)
+            return (0 if changed else 1, folder.count("/"), path)
+
+        _pkg_path, pkg_content = min(package_entries, key=_pkg_score)
+        try:
+            pkg = json.loads(pkg_content)
+            scripts = pkg.get("scripts") or {}
+            if isinstance(scripts, dict) and scripts.get("start"):
+                start_command = start_command or str(scripts["start"])
+        except (ValueError, AttributeError):
+            pass
 
     # No Dockerfile CMD / package.json start script: infer from the app's
     # own entry file so a plain Flask/FastAPI app still gets a runbook.
     inferred_note = None
     if not start_command:
         start_command, inferred_port, inferred_note = _infer_entry_command(
-            by_path, port
+            by_path,
+            port,
+            preferred_paths=preferred,
+            start_dir=start_dir,
         )
         if inferred_port:
             port = inferred_port
@@ -870,7 +1039,9 @@ def _extract_runtime_info(files: list) -> dict:
     if docker_image:
         notes.append(f"Docker image: {docker_image}")
     if compose_path:
-        notes.append(f"Or run everything with Docker Compose using {compose_path} (install docker-compose-v2 first if `docker compose` is missing; create /var/log/opencode and copy .env.example to .env if needed).")
+        notes.append(
+            f"Or run everything with Docker Compose using {compose_path} (install docker-compose-v2 first if `docker compose` is missing; create /var/log/opencode and copy .env.example to .env if needed)."
+        )
     if port:
         app_url = f"http://{_host_network_ip()}:{port}"
     frontend_url = None
@@ -987,6 +1158,62 @@ def _rewrite_compose_host_port(files: list, old: int, new: int) -> tuple[list, i
     return out, changed
 
 
+def _rewrite_source_port(files: list, old: int, new: int) -> tuple[list, int]:
+    """Point a build's hard-coded listener port at a free one.
+
+    Only files in the write manifest are touched, and only narrow
+    patterns that clearly set a listening port (``app.run(... port=8000)``,
+    ``uvicorn.run(...)``, ``PORT = 8000``, Node ``.listen(8000)`` / JS
+    ``port: 8000``). Returns (files, changed_count). A start command that
+    does not name its port is only honest once this rewrite has run.
+    """
+    import re
+
+    patterns = {
+        ".py": (
+            re.compile(
+                r"(\b(?:app|application|server)\.run\([^)]{0,300}?\bport\s*=\s*)"
+                + str(old)
+                + r"\b",
+                re.S,
+            ),
+            re.compile(
+                r"(\buvicorn\.run\([^)]{0,300}?\bport\s*=\s*)" + str(old) + r"\b",
+                re.S,
+            ),
+            re.compile(r"(\bPORT\s*=\s*)" + str(old) + r"\b"),
+        ),
+        ".js": (
+            re.compile(r"(\.listen\(\s*)" + str(old) + r"\b"),
+            re.compile(r"(\bport\s*:\s*)" + str(old) + r"\b"),
+        ),
+        ".ts": (
+            re.compile(r"(\.listen\(\s*)" + str(old) + r"\b"),
+            re.compile(r"(\bport\s*:\s*)" + str(old) + r"\b"),
+        ),
+    }
+    changed = 0
+    out = []
+    for entry in files or []:
+        if not isinstance(entry, dict):
+            out.append(entry)
+            continue
+        suffix = os.path.splitext(str(entry.get("path") or "").lower())[1]
+        pats = patterns.get(suffix)
+        if not pats:
+            out.append(entry)
+            continue
+        text = str(entry.get("content") or "")
+        updated = text
+        for pattern in pats:
+            updated, count = pattern.subn(r"\g<1>" + str(new), updated)
+            changed += count
+        if updated != text:
+            entry = dict(entry, content=updated)
+        out.append(entry)
+    return out, changed
+
+
 def _pretty_cmd(value) -> str:
     """Model commands into runnable host commands.
 
@@ -1013,7 +1240,11 @@ def _pretty_cmd(value) -> str:
 
 
 def _derive_runbook(
-    files: list, start_command, host_root: str, container_root: str | None = None
+    files: list,
+    start_command,
+    host_root: str,
+    container_root: str | None = None,
+    start_dir: str | None = None,
 ) -> dict | None:
     """Derive verified paste-and-run commands from a build manifest.
 
@@ -1021,9 +1252,13 @@ def _derive_runbook(
     ``uvicorn pkg.mod:app``) against the manifest's file list to find the
     directory the command must run in, and pairs it with a venv setup step
     when a pip requirements file ships (bare hosts refuse system pip via
-    PEP 668). Returns ``{"setup", "setup_fallback", "run", "workdir"}``
-    with absolute host paths (the fallback installs the same packages
-    unpinned, for newer Pythons the old pins no longer build on), plus
+    PEP 668). ``start_dir`` is the primary service folder (for example
+    ``backend`` when the chosen Dockerfile is ``backend/Dockerfile``); it
+    lets a bare ``python app.py`` resolve to ``backend/src/app.py`` and
+    rewrite the command to ``python src/app.py``. Returns
+    ``{"setup", "setup_fallback", "run", "workdir", "command"}`` with
+    absolute host paths (the fallback installs the same packages unpinned,
+    for newer Pythons the old pins no longer build on), plus
     container-native ``run_argv``/``setup_argv``/``pip_argv`` for the
     supervised runner when ``container_root`` is given (host paths do not
     exist inside worker containers). Returns None when the command cannot
@@ -1044,12 +1279,57 @@ def _derive_runbook(
     ]
     if not paths:
         return None
+    base_dir = str(start_dir or "").replace("\\", "/")
+    while base_dir.startswith("./"):
+        base_dir = base_dir[2:]
+    base_dir = base_dir.strip("/")
+
+    def _resolve_script(rel: str) -> tuple[str, str] | None:
+        """(appdir, command-relative script) for a Python script token.
+
+        ``python app.py`` with a ``backend/Dockerfile`` and only
+        ``backend/src/app.py`` in the tree resolves to appdir ``backend``
+        and rewritten script ``src/app.py``. Running the original from the
+        repo root (or from ``backend``) would fail.
+        """
+        script = rel.replace("\\", "/")
+        while script.startswith("./"):
+            script = script[2:]
+        pool = paths
+        if base_dir:
+            pool = [
+                path
+                for path in paths
+                if path == base_dir or path.startswith(base_dir + "/")
+            ]
+        hits = [path for path in pool if path == script or path.endswith("/" + script)]
+        if not hits and base_dir:
+            hits = [
+                path for path in paths if path == script or path.endswith("/" + script)
+            ]
+        if not hits:
+            return None
+        hit = sorted(set(hits), key=lambda path: (path.count("/"), path))[0]
+        if base_dir and hit.startswith(base_dir + "/"):
+            return base_dir, hit[len(base_dir) + 1 :]
+        if hit.endswith("/" + script):
+            return hit[: -len(script)].rstrip("/"), script
+        return "", script
 
     def _resolve_module(mod: str) -> str | None:
         mod_path = mod.replace(".", "/")
         for cand in (mod_path + ".py", mod_path + "/__init__.py"):
-            hit = next((p for p in paths if p == cand or p.endswith("/" + cand)), None)
-            if hit is not None:
+            hits = [path for path in paths if path == cand or path.endswith("/" + cand)]
+            if base_dir:
+                under = [
+                    path
+                    for path in hits
+                    if path == base_dir or path.startswith(base_dir + "/")
+                ]
+                if under:
+                    hits = under
+            if hits:
+                hit = sorted(set(hits), key=lambda path: (path.count("/"), path))[0]
                 return hit[: len(hit) - len(cand)].rstrip("/")
         return None
 
@@ -1069,6 +1349,7 @@ def _derive_runbook(
         return None
 
     def _resolve_dir() -> str | None:
+        nonlocal cmd
         # `python[3] -m dotted.mod ...` or `python[3] script.py ...`
         m = _re.search(
             r"(?:^|&&\s*|;\s*)\s*python3?\s+(?:-m\s+([\w.]+)|([\w./-]+\.pyw?))(?:\s|$)",
@@ -1088,15 +1369,18 @@ def _derive_runbook(
                 return _resolve_module(appm.group(1).split(":")[0])
             return _resolve_module(mod)
         if m and m.group(2):
-            script = m.group(2).lstrip("./")
-            hit = next(
-                (p for p in paths if p == script or p.endswith("/" + script)), None
-            )
+            hit = _resolve_script(m.group(2))
             if hit is None:
                 return None
-            # Run from the target root with the manifest-relative script
-            # path (never cd into its dir: that would double the path).
-            return ""
+            appdir, rel_from = hit
+            script = m.group(2)
+            if rel_from != script.lstrip("./"):
+                start, end = m.span(2)
+                cmd = cmd[:start] + rel_from + cmd[end:]
+            # Run from the manifest-relative script path's parent; the
+            # command keeps only the path relative to that parent (never
+            # cd into the script's own dir: that would double the path).
+            return appdir
         # `uvicorn|gunicorn dotted.mod:app ...`, flags allowed before the app.
         m = _re.search(
             r"(?:^|&&\s*|;\s*)\s*(?:uvicorn|gunicorn|hypercorn|daphne)\b([^&;]*)",
@@ -1111,9 +1395,21 @@ def _derive_runbook(
         # `npm start`, `npm run dev`, `node server.js`, `npx ...`
         m = _re.search(r"(?:^|&&\s*|;\s*)\s*(?:npm|npx|yarn|pnpm|node)\b", cmd)
         if m:
-            pkg = next(
-                (p for p in paths if p == "package.json" or p.endswith("/package.json")),
-                None,
+            pkg_pool = [
+                p for p in paths if p == "package.json" or p.endswith("/package.json")
+            ]
+            if base_dir:
+                under = [
+                    p
+                    for p in pkg_pool
+                    if p == base_dir + "/package.json" or p.startswith(base_dir + "/")
+                ]
+                if under:
+                    pkg_pool = under
+            pkg = (
+                sorted(set(pkg_pool), key=lambda p: (p.count("/"), p))[0]
+                if pkg_pool
+                else None
             )
             if pkg is None:
                 return None
@@ -1127,7 +1423,7 @@ def _derive_runbook(
         host_root.rstrip("/") if not appdir else host_root.rstrip("/") + "/" + appdir
     )
     quoted = f'cd "{workdir}"'
-    pretty = _pretty_cmd(start_command).strip()
+    pretty = cmd
     import shlex as _shlex
 
     try:
@@ -1138,7 +1434,7 @@ def _derive_runbook(
         # `cd /dir && cmd` (models sometimes paste their own cd): workdir
         # already covers the cd, so drop it and keep the real head.
         while len(args) > 2 and args[0] == "cd" and "&&" in args:
-            args = args[args.index("&&") + 1:]
+            args = args[args.index("&&") + 1 :]
     head = _os.path.basename(args[0]) if args else ""
     node_cmd = head in ("npm", "npx", "yarn", "pnpm", "node")
     # Display commands are pasted on the reader's own machine, while the
@@ -1154,7 +1450,15 @@ def _derive_runbook(
     )
     if req is not None:
         rel = _os.path.relpath(req, appdir) if appdir else req
-        if not rel.startswith(".."):
+        resolved = (
+            _os.path.normpath(_os.path.join(appdir, rel))
+            if appdir
+            else _os.path.normpath(rel)
+        )
+        # A nested workdir such as backend/src may sit beside the
+        # requirements file (rel ../requirements.txt); allow that as long
+        # as the normalized path stays inside the build root.
+        if not resolved.startswith("..") and not _os.path.isabs(resolved):
             setup = (
                 f"{quoted} && rm -rf {dvenv} && python3 -m venv {dvenv} "
                 f"&& . {dvenv}/bin/activate && {dvenv}/bin/pip install -r {rel}"
@@ -1254,6 +1558,7 @@ def _derive_runbook(
         "setup": setup,
         "setup_fallback": setup_fallback,
         "run": run,
+        "command": cmd,
         "workdir": workdir,
         "workdir_container": cworkdir,
         "venv_dir": venv_dir,
@@ -1310,13 +1615,19 @@ def _allocate_build_port(runtime: dict, files: list) -> tuple[dict, list, list]:
             )
         else:
             files, _ = _rewrite_compose_host_port(files, fport, fnew)
+            files, _ = _rewrite_source_port(files, fport, fnew)
             runtime = dict(
-                runtime, frontend_port=fnew, frontend_url=f"http://{_host_network_ip()}:{fnew}"
+                runtime,
+                frontend_port=fnew,
+                frontend_url=f"http://{_host_network_ip()}:{fnew}",
             )
             existing = runtime.get("run_notes")
             if isinstance(existing, str) and existing:
                 runtime["run_notes"] = re.sub(
-                    r"((?:localhost|127\.0\.0\.1|\d{1,3}(?:\.\d{1,3}){3}))" + r":" + str(fport) + r"\b",
+                    r"((?:localhost|127\.0\.0\.1|\d{1,3}(?:\.\d{1,3}){3}))"
+                    + r":"
+                    + str(fport)
+                    + r"\b",
                     lambda m: f"{_host_network_ip()}:{fnew}",
                     existing,
                 )
@@ -1375,6 +1686,7 @@ def _allocate_build_port(runtime: dict, files: list) -> tuple[dict, list, list]:
             runtime["start_command"] = rewritten
             cmd_rewritten = True
     files, compose_rewritten = _rewrite_compose_host_port(files, old, new)
+    files, source_rewritten = _rewrite_source_port(files, old, new)
     # Notes prose written before allocation names the old port (model and
     # extractor output); point localhost URLs at the new one BEFORE
     # appending the allocation notice (which must keep naming the old).
@@ -1383,7 +1695,10 @@ def _allocate_build_port(runtime: dict, files: list) -> tuple[dict, list, list]:
         import re
 
         runtime["run_notes"] = re.sub(
-            r"((?:localhost|127\.0\.0\.1|\d{1,3}(?:\.\d{1,3}){3}))" + r":" + str(old) + r"\b",
+            r"((?:localhost|127\.0\.0\.1|\d{1,3}(?:\.\d{1,3}){3}))"
+            + r":"
+            + str(old)
+            + r"\b",
             lambda m: f"{_host_network_ip()}:{new}",
             existing_notes,
         )
@@ -1391,13 +1706,17 @@ def _allocate_build_port(runtime: dict, files: list) -> tuple[dict, list, list]:
         f"Port {old} is already in use on this machine, so this build was "
         f"set to port {new} — the commands below already use {new}."
     )
-    if not cmd_rewritten and not compose_rewritten and cmd:
+    if not cmd_rewritten and not compose_rewritten and not source_rewritten and cmd:
         line += (
             " The start command does not name its port, so if the app itself "
             f"fixes its port, change that setting to {new} as well."
         )
     runtime["run_notes"] = "\n".join([n for n in [runtime.get("run_notes"), line] if n])
     report.append(line)
+    if source_rewritten:
+        report.append(
+            f"Updated the app's hard-coded listener port from {old} to {new}."
+        )
     if compose_rewritten:
         report.append(
             f"docker-compose.yml now publishes {new} on this machine "
@@ -1417,7 +1736,12 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
     """
     from app.models import SecondaryActionResult
     from app.schemas.ollama_schemas import BuildCodeOutput
-    from app.services.build_service import BuildError, server_path, write_manifest
+    from app.services.build_service import (
+        BuildError,
+        existing_repo_files,
+        server_path,
+        write_manifest,
+    )
     from pydantic import ValidationError
 
     preview = SecondaryActionResult.query.filter_by(
@@ -1440,9 +1764,18 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
         return
     try:
         manifest_files = [f.model_dump() for f in manifest.files]
-        runtime = _extract_runtime_info(manifest_files)
-        # Port check + compose rewrite happen BEFORE writing so the
-        # on-disk compose file already publishes a free host port.
+        manifest_paths = [f["path"] for f in manifest_files]
+        # The preview is usually incremental: it only contains files the
+        # model changed. Merge it over the repo on disk so runtime and
+        # runbook derivation see the Dockerfile/compose/entry points that
+        # already exist. The manifest still wins on conflicts.
+        context = _merge_files(
+            existing_repo_files(str(build_root)),
+            manifest_files,
+        )
+        runtime = _extract_runtime_info(context, preferred_paths=manifest_paths)
+        # Port check + compose/source rewrite happen BEFORE writing so the
+        # on-disk files already publish a free host port.
         runtime, manifest_files, port_report = _allocate_build_port(
             runtime, manifest_files
         )
@@ -1454,10 +1787,11 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
     # success, and only refuse later at one-click run time.
     try:
         runbook = _derive_runbook(
-            manifest_files,
+            context,
             runtime.get("start_command"),
             server_path(str(build_root)),
             str(build_root),
+            start_dir=runtime.get("start_dir"),
         )
     except Exception:
         runbook = None
@@ -1470,6 +1804,8 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
             "and ask for a runnable app with an entry point.",
         )
         return
+    if runbook.get("command"):
+        runtime["start_command"] = runbook["command"]
     try:
         written, skipped = write_manifest(
             build_root,

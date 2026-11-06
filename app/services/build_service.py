@@ -22,6 +22,7 @@ class BuildError(Exception):
 
 def build_roots() -> list:
     """Configured build roots, resolved. Empty when unconfigured."""
+
     def _config(key: str, default=None):
         from flask import current_app
 
@@ -280,6 +281,11 @@ _SNAPSHOT_TEXT_SUFFIXES = {
     ".env",
 }
 
+# Extensionless files that define how a repo runs. In particular the
+# Dockerfile is the strongest runtime signal and must never be filtered
+# out just because it has no suffix.
+_SNAPSHOT_EXTENSIONLESS = {"dockerfile", "containerfile", "procfile", "makefile"}
+
 # Files a model must see before changing an app: how it starts, what it
 # depends on, and what it says it does.
 _SNAPSHOT_PRIORITY = (
@@ -333,7 +339,10 @@ def existing_repo_snapshot(
                     if name not in (".gitignore", ".dockerignore", ".env.example"):
                         continue
                 ext = os.path.splitext(name)[1].lower()
-                if ext not in _SNAPSHOT_TEXT_SUFFIXES:
+                if (
+                    ext not in _SNAPSHOT_TEXT_SUFFIXES
+                    and name.lower() not in _SNAPSHOT_EXTENSIONLESS
+                ):
                     continue
                 full = os.path.join(dirpath, name)
                 try:
@@ -391,8 +400,86 @@ def existing_repo_snapshot(
     )
     note = ""
     if skipped_large:
-        note = f"\n({skipped_large} large file(s) truncated to keep the prompt in budget.)"
+        note = (
+            f"\n({skipped_large} large file(s) truncated to keep the prompt in budget.)"
+        )
     return header + note + "\n\n" + "\n".join(chunks)
+
+
+def existing_repo_files(
+    root: str,
+    max_files: int = SNAPSHOT_MAX_FILES,
+    max_chars: int = SNAPSHOT_MAX_CHARS,
+) -> list:
+    """Structured twin of ``existing_repo_snapshot``: paths plus contents.
+
+    The build preview is often incremental (only the files the model
+    changed), so runtime and runbook derivation must also see the repo it
+    is extending. Returns ``[{"path": rel, "content": text}]`` in the same
+    deterministic order as the prompt snapshot. Never raises.
+    """
+    base = (root or "").strip()
+    if not base or not os.path.isdir(base):
+        return []
+    candidates = []
+    try:
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = sorted(
+                d
+                for d in dirnames
+                if d not in _SNAPSHOT_SKIP_DIRS and not d.startswith(".")
+            )
+            for name in sorted(filenames):
+                if name.startswith("."):
+                    if name not in (".gitignore", ".dockerignore", ".env.example"):
+                        continue
+                ext = os.path.splitext(name)[1].lower()
+                if (
+                    ext not in _SNAPSHOT_TEXT_SUFFIXES
+                    and name.lower() not in _SNAPSHOT_EXTENSIONLESS
+                ):
+                    continue
+                full = os.path.join(dirpath, name)
+                try:
+                    size = os.path.getsize(full)
+                except OSError:
+                    continue
+                if size > SNAPSHOT_MAX_FILE_CHARS * 4:
+                    continue
+                rel = os.path.relpath(full, base).replace(os.sep, "/")
+                candidates.append((rel, full))
+    except OSError as exc:
+        logger.warning("repo_files_walk_failed", path=base, error=str(exc)[:200])
+        return []
+
+    def _rank(item):
+        rel, _full = item
+        name = rel.rsplit("/", 1)[-1].lower()
+        try:
+            priority = _SNAPSHOT_PRIORITY.index(name)
+        except ValueError:
+            priority = len(_SNAPSHOT_PRIORITY)
+        depth = rel.count("/")
+        return (priority, depth, rel)
+
+    candidates.sort(key=_rank)
+    out = []
+    used = 0
+    for rel, full in candidates:
+        if len(out) >= max_files or used >= max_chars:
+            break
+        try:
+            with open(full, "r", encoding="utf-8", errors="replace") as fh:
+                text = fh.read(SNAPSHOT_MAX_FILE_CHARS + 1)
+        except OSError:
+            continue
+        if len(text) > SNAPSHOT_MAX_FILE_CHARS:
+            text = text[:SNAPSHOT_MAX_FILE_CHARS].rstrip() + "\n… (truncated)"
+        if used + len(text) > max_chars:
+            break
+        out.append({"path": rel, "content": text})
+        used += len(text)
+    return out
 
 
 def write_manifest(root: str, files: list) -> tuple[list, list]:

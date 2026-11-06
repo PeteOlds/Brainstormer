@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, request
@@ -415,6 +416,32 @@ def _managed_live(row):
     return data
 
 
+def _runbook_entry_exists(runbook, host_root):
+    """Whether a stored runbook still points at a real entry point."""
+    if not isinstance(runbook, dict):
+        return False
+    argv = runbook.get("run_argv")
+    if not isinstance(argv, list) or not argv:
+        return False
+    workdir = (
+        runbook.get("workdir_container") or runbook.get("workdir") or host_root or ""
+    )
+    script = None
+    for token in argv:
+        if isinstance(token, str) and token.endswith(".py"):
+            script = token
+            break
+    if script is None:
+        for token in argv:
+            if isinstance(token, str) and ":" in token and not token.startswith("http"):
+                module = token.split(":", 1)[0]
+                candidate = os.path.join(workdir, module.replace(".", os.sep) + ".py")
+                if os.path.isfile(candidate):
+                    return True
+        return True
+    return os.path.isfile(os.path.join(workdir, script))
+
+
 def _spec_from_build_version(version_row, target, idea_ref):
     """Runnable spec from a written BUILD_CODE version. Returns (spec dict,
     display command, error message). Never executes anything.
@@ -426,8 +453,16 @@ def _spec_from_build_version(version_row, target, idea_ref):
     import os
     import sys
 
-    from app.services.build_service import container_path, server_path
-    from app.tasks.ollama_tasks import _derive_runbook
+    from app.services.build_service import (
+        container_path,
+        existing_repo_files,
+        server_path,
+    )
+    from app.tasks.ollama_tasks import (
+        _derive_runbook,
+        _extract_runtime_info,
+        _merge_files,
+    )
 
     out = version_row.result_data or {}
     if not out.get("written"):
@@ -441,32 +476,53 @@ def _spec_from_build_version(version_row, target, idea_ref):
         for f in files
         if isinstance(f, dict) and f.get("path")
     ]
+    # Stored builds are often incremental, and old rows may carry a
+    # runbook derived from the preview alone. Merge the repo on disk so
+    # both runtime detection and runbook repair see the real entry points.
+    try:
+        repo_files = existing_repo_files(out.get("target_path") or host_root)
+    except Exception:
+        repo_files = []
+    context = _merge_files(repo_files, manifest)
+    preferred_paths = [f["path"] for f in manifest]
+    try:
+        runtime = _extract_runtime_info(context, preferred_paths=preferred_paths)
+    except Exception:
+        runtime = {}
+    start_command = out.get("start_command") or runtime.get("start_command")
+    inferred_port = runtime.get("port")
     runbook = out.get("runbook") if isinstance(out.get("runbook"), dict) else None
-    start_command = out.get("start_command")
-    inferred_port = None
-    if not start_command:
-        # Builds recorded before entry-point inference existed: derive a
-        # command from the stored manifest so they can still be run.
-        from app.tasks.ollama_tasks import _infer_entry_command
-
+    needs_repair = (
+        runbook is None
+        or not (runbook or {}).get("workdir_container")
+        or not _runbook_entry_exists(runbook, host_root)
+    )
+    fresh = None
+    if needs_repair:
         try:
-            start_command, inferred_port, _note = _infer_entry_command(
-                {str(f.get("path")): f.get("content", "") for f in manifest}
-            )
-        except Exception:
-            start_command = None
-    if runbook is None or not (runbook or {}).get("workdir_container"):
-        # Missing or pre-container-shape runbook: re-derive so argv is
-        # container-native. Stored display strings stay untouched.
-        try:
-            runbook = _derive_runbook(
-                manifest,
+            fresh = _derive_runbook(
+                context,
                 start_command,
                 host_root,
                 out.get("target_path") or (target.path if target else ""),
+                start_dir=runtime.get("start_dir"),
             )
         except Exception:
-            runbook = None
+            fresh = None
+        if fresh and fresh.get("run_argv"):
+            runbook = fresh
+            start_command = fresh.get("command") or start_command
+        elif runbook is None or not (runbook or {}).get("workdir_container"):
+            try:
+                runbook = _derive_runbook(
+                    context,
+                    start_command,
+                    host_root,
+                    out.get("target_path") or (target.path if target else ""),
+                    start_dir=runtime.get("start_dir"),
+                )
+            except Exception:
+                runbook = None
     argv = (runbook or {}).get("run_argv") if runbook else None
     if not argv:
         return (
@@ -506,27 +562,42 @@ def _spec_from_build_version(version_row, target, idea_ref):
         import re
 
         ip = _host_network_ip()
-        return re.sub(r"^(https?://)(?:localhost|127\.0\.0\.1)(?=[:/])", r"\g<1>" + ip, url.strip(), count=1)
+        return re.sub(
+            r"^(https?://)(?:localhost|127\.0\.0\.1)(?=[:/])",
+            r"\g<1>" + ip,
+            url.strip(),
+            count=1,
+        )
 
-    app_url = _network_url(out.get("app_url")) or (out.get("app_url") or "").strip() or None
+    app_url = (
+        _network_url(out.get("app_url")) or (out.get("app_url") or "").strip() or None
+    )
     if app_url is None and port:
         app_url = f"http://{_host_network_ip()}:{port}"
-    frontend_url = _network_url(out.get("frontend_url")) or (out.get("frontend_url") or "").strip() or None
+    frontend_url = (
+        _network_url(out.get("frontend_url"))
+        or (out.get("frontend_url") or "").strip()
+        or None
+    )
     try:
-        frontend_port = int(out.get("frontend_port")) if out.get("frontend_port") else None
+        frontend_port = (
+            int(out.get("frontend_port")) if out.get("frontend_port") else None
+        )
     except (TypeError, ValueError):
         frontend_port = None
-    project_root = (out.get("target_path") or (target.path if target else "") or "").strip()
+    project_root = (
+        out.get("target_path") or (target.path if target else "") or ""
+    ).strip()
     frontend_root = None
     has_frontend = False
-    for entry in files:
+    for entry in context:
         path = str((entry or {}).get("path") or "").replace("\\", "/")
         if path == "frontend/src/index.html" or path.startswith("frontend/src/"):
             frontend_root = os.path.join(project_root, "frontend", "src")
             has_frontend = True
             break
     if not has_frontend:
-        for entry in files:
+        for entry in context:
             path = str((entry or {}).get("path") or "").replace("\\", "/")
             if path == "frontend/index.html" or path.startswith("frontend/"):
                 frontend_root = os.path.join(project_root, "frontend")
