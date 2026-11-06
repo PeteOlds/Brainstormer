@@ -606,6 +606,7 @@ function ideasApp() {
             }
         },
 
+        async addIdeaTest() {
             if (!this.selectedIdea || !this.newTestName.trim()) return;
             this.testError = '';
             try {
