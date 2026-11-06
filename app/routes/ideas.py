@@ -1685,7 +1685,18 @@ def list_idea_tests(user, idea_id):
     return api_ok({"tests": [r.to_dict() for r in rows]})
 
 
-@bp.route("/ideas/<uuid:idea_id>/tests", methods=["POST"])
+@bp.route("/ideas/<uuid:idea_id>/tests/run", methods=["POST"])
+@token_required
+def run_idea_tests_endpoint(user, idea_id):
+    """Kick off the build's generated test suite in the background."""
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    from app.tasks.test_tasks import run_idea_tests
+
+    run_idea_tests.delay(str(idea.id))
+    return api_ok({"message": "Tests started; refresh to see results."}, 202)
 @token_required
 def create_idea_test(user, idea_id):
     from app.models import IdeaTest, TestStatus, TestType

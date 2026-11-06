@@ -122,6 +122,7 @@ def init_celery(app):
     from . import maintenance_tasks  # noqa: F401
     from . import supervision_tasks  # noqa: F401
     from . import release_tasks  # noqa: F401
+    from . import test_tasks  # noqa: F401
 
     return celery
 
