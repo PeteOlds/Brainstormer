@@ -823,6 +823,10 @@
                                             <span class="text-slate-600 dark:text-slate-300" x-text="'coverage ' + (testSummary.coverage_pct || 0).toFixed(0) + '%'"></span>
                                         </template>
                                     </div>
+                                    <!-- Run all tests -->
+                                    <div class="flex items-center gap-2">
+                                        <button @click="runIdeaTests()" :disabled="testsRunning" class="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg disabled:opacity-50" x-text="testsRunning ? 'Running tests…' : 'Run all tests'"></button>
+                                    </div>
                                     <!-- Filter -->
                                     <div class="flex gap-2">
                                         <template x-for="f in ['all','passed','failed','not_run','skipped']" :key="f">

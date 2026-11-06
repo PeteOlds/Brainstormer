@@ -54,6 +54,7 @@ function ideasApp() {
         // Test tab state (manual + imported test cases).
         ideaTests: [],
         testsLoading: false,
+        testsRunning: false,
         testSummary: null,
         testError: '',
         newTestName: '',
@@ -570,7 +571,41 @@ function ideasApp() {
             }
         },
 
-        async addIdeaTest() {
+        async runIdeaTests() {
+            if (!this.selectedIdea || this.testsRunning) return;
+            this.testError = '';
+            this.testsRunning = true;
+            const started = Date.now();
+            try {
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/run`, { method: 'POST' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    this.testError = (data && (data.error || data.message)) || `Could not start tests (HTTP ${res.status}).`;
+                    this.testsRunning = false;
+                    return;
+                }
+                const poll = async () => {
+                    await this.loadIdeaTests();
+                    const row = (this.ideaTests || []).find((t) => /test suite/i.test(t.name || ''));
+                    if (row && row.last_run_at && new Date(row.last_run_at).getTime() >= started - 5000) {
+                        this.testsRunning = false;
+                        return;
+                    }
+                    if (Date.now() - started < 300000) {
+                        setTimeout(poll, 3000);
+                    } else {
+                        this.testsRunning = false;
+                        this.testError = 'Timed out waiting for test results.';
+                    }
+                };
+                setTimeout(poll, 3000);
+            } catch (e) {
+                console.error('Failed to run tests:', e);
+                this.testError = 'Could not reach the tests API.';
+                this.testsRunning = false;
+            }
+        },
+
             if (!this.selectedIdea || !this.newTestName.trim()) return;
             this.testError = '';
             try {
