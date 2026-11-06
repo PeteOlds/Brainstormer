@@ -49,6 +49,7 @@ function ideasApp() {
         scaleParent: null,
         scaleChildren: [],
         scaleReleases: [],
+        scaleTargets: [],
         buildStatus: {},
         // Test tab state (manual + imported test cases).
         ideaTests: [],
@@ -819,6 +820,7 @@ function ideasApp() {
             this.scaleParent = null;
             this.scaleChildren = [];
             this.scaleReleases = [];
+            this.scaleTargets = [];
             const idea = this.selectedIdea;
             if (!idea) return;
             try {
@@ -842,7 +844,9 @@ function ideasApp() {
                     }
                     if (rel.ok) {
                         const d = await rel.json();
-                        this.scaleReleases = ((d.data || d).releases || []);
+                        const payload = d.data || d;
+                        this.scaleReleases = payload.releases || [];
+                        this.scaleTargets = payload.build_targets || [];
                         // Seed the AI-settings draft from each release's saved
                         // config (blank fields = "stage default"). The pseudo
                         // "No release yet" entry has no id — seed it too so the
@@ -1106,6 +1110,25 @@ function ideasApp() {
             }
         },
 
+        async setReleaseTarget(rel, targetId) {
+            if (!rel || !rel.id) return;
+            this.releaseBusy = true;
+            try {
+                const res = await authFetch(`/api/v1/releases/${rel.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ build_target_id: targetId || null }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.message || 'Could not save the build repo');
+                await this.loadScaleFamily();
+            } catch (e) {
+                this.showAlertModal('Could not save the build repo: ' + e.message);
+            } finally {
+                this.releaseBusy = false;
+            }
+        },
+
         async completeRelease(releaseId) {
             const target = (await this.showConfirmModal('Mark every item in this release as shipped? OK = shipped, Cancel = stop here.', '', 'Ship all')) ? 'SHIP' : null;
             if (!target) return;
@@ -1255,8 +1278,9 @@ function ideasApp() {
         async runReleasePipeline(rel) {
             if (!rel || !rel.id) return;
             const count = rel.child_count || this.scaleKids(rel.id).length;
+            const repo = (rel.build_target && rel.build_target.name) || 'the automatic repo';
             if (!(await this.showConfirmModal(
-                `Run ${count} idea(s) through PRD → Design → Build → Test?\n\nBuilds write into the “${rel.name}” repo one at a time. Finished steps are kept if you stop or something fails.`,
+                `Run ${count} idea(s) through PRD → Design → Build → Test?\n\nBuilds write into “${repo}” one at a time. Finished steps are kept if you stop or something fails.`,
                 '', 'Run release'))) return;
             this.releaseBusy = true;
             try {

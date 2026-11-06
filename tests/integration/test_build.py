@@ -281,6 +281,81 @@ class TestBuildTargetResolution:
             db.session.commit()
             assert _resolve_build_target(idea, None).id == only.id
 
+    def test_child_uses_the_parent_repo(self, app, tmp_path):
+        from app.services.build_targets import resolve_build_target
+
+        with app.app_context():
+            inst = make_instance(76, "BR3")
+            parent = seed_idea(db, inst.id, email="br3p@t.test", status="SCALE")
+            child = Idea(
+                reference_code="IDEA-BR3C",
+                prompt_title="Child",
+                raw_content="fix it",
+                status="SPARK",
+                instance_id=inst.id,
+                parent_id=parent.id,
+            )
+            db.session.add(child)
+            db.session.commit()
+            parent_target = seed_target(
+                inst.id, name=parent.reference_code, path=str(tmp_path)
+            )
+            other_dir = tmp_path / "other"
+            other_dir.mkdir()
+            seed_target(inst.id, name="another-app", path=str(other_dir))
+
+            target, reason = resolve_build_target(child)
+            assert reason is None
+            assert target.id == parent_target.id
+
+    def test_standalone_idea_gets_a_repo_named_after_it(
+        self, app, tmp_path
+    ):
+        from app.services.build_targets import resolve_build_target
+
+        with app.app_context():
+            from flask import current_app
+
+            current_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
+            inst = make_instance(77, "BR4")
+            idea = seed_idea(db, inst.id, email="br4@t.test")
+
+            target, reason = resolve_build_target(idea, allow_create=True)
+            assert reason is None
+            assert target.name == idea.reference_code
+            assert target.path == os.path.realpath(
+                tmp_path / idea.reference_code
+            )
+            assert os.path.isdir(target.path)
+
+            again, _ = resolve_build_target(idea, allow_create=True)
+            assert again.id == target.id
+
+    def test_child_auto_create_uses_the_parent_repo(self, app, tmp_path):
+        from app.services.build_targets import resolve_build_target
+
+        with app.app_context():
+            from flask import current_app
+
+            current_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
+            inst = make_instance(78, "BR5")
+            parent = seed_idea(db, inst.id, email="br5p@t.test", status="SCALE")
+            child = Idea(
+                reference_code="IDEA-BR5C",
+                prompt_title="Child",
+                raw_content="fix it",
+                status="SPARK",
+                instance_id=inst.id,
+                parent_id=parent.id,
+            )
+            db.session.add(child)
+            db.session.commit()
+
+            target, reason = resolve_build_target(child, allow_create=True)
+            assert reason is None
+            assert target.name == parent.reference_code
+            assert os.path.isdir(target.path)
+
 
 class TestBuildTask:
     def test_preview_saves_manifest_unwritten(self, celery_app, tmp_path):

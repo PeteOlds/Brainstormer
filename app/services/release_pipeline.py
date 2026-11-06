@@ -245,39 +245,22 @@ def _skip_later(entry, after_phase: str) -> None:
 
 
 def _resolve_target(release, child):
-    """The repo a release build writes into.
+    """The repo a release build writes into, plus a reason when there is none.
 
-    Order: the repo named after the release (the convention the release
-    UI already documents), the repo the child last built into, then the
-    instance's only registered repo. Ambiguous means fail with a reason,
-    never guess.
+    The pipeline and the Build tab share one resolver so a child cannot
+    build in one place from the tab and fail in another from a release.
     """
-    from app.models import InstanceBuildTarget, SecondaryActionResult
+    from app.services.build_targets import resolve_build_target
 
-    target = InstanceBuildTarget.query.filter_by(
-        instance_id=child.instance_id, name=release.name
-    ).first()
-    if target is not None:
-        return target
-    last = (
-        db.session.query(InstanceBuildTarget)
-        .join(
-            SecondaryActionResult,
-            SecondaryActionResult.target_id == InstanceBuildTarget.id,
-        )
-        .filter(
-            SecondaryActionResult.idea_id == child.id,
-            SecondaryActionResult.action_type == "BUILD_CODE",
-        )
-        .order_by(SecondaryActionResult.executed_at.desc())
-        .first()
+    return resolve_build_target(child, release=release, allow_create=False)
+
+
+def _missing_target_reason(child, reason: str | None) -> str:
+    return (
+        f"{getattr(child, 'reference_code', 'This idea')}: "
+        f"{reason or 'no build repo could be resolved.'} "
+        "Set one on the release card or in Admin → AI Settings."
     )
-    if last is not None:
-        return last
-    targets = InstanceBuildTarget.query.filter_by(
-        instance_id=child.instance_id
-    ).all()
-    return targets[0] if len(targets) == 1 else None
 
 
 def _phase_settled(state, phase: str, child_ids) -> bool:
@@ -391,14 +374,10 @@ def _process_build(release, children, state, pending: list):
         entry = state["children"][str(child.id)]
         if entry["build"] != "preview_ready":
             continue
-        target = _resolve_target(release, child)
+        target, target_error = _resolve_target(release, child)
         if target is None:
             entry["build"] = "failed"
-            entry["reason"] = (
-                f"No build repo named “{release.name}” (and more than one repo "
-                "is registered). Add one in Admin → AI Settings or pick a repo "
-                "on the Build tab."
-            )
+            entry["reason"] = _missing_target_reason(child, target_error)
             continue
         ok, reason = _advance_status(child, "SHIP", actor)
         if not ok:
@@ -419,14 +398,10 @@ def _process_build(release, children, state, pending: list):
         entry = state["children"][str(child.id)]
         if entry["build"] != "pending":
             continue
-        target = _resolve_target(release, child)
+        target, target_error = _resolve_target(release, child)
         if target is None:
             entry["build"] = "failed"
-            entry["reason"] = (
-                f"No build repo named “{release.name}” (and more than one repo "
-                "is registered). Add one in Admin → AI Settings or pick a repo "
-                "on the Build tab."
-            )
+            entry["reason"] = _missing_target_reason(child, target_error)
             continue
         current = _existing_current(child.id, "BUILD_CODE")
         current_written = bool(
@@ -526,11 +501,19 @@ def _finish(release, state, children):
     release.pipeline_phase = "done"
     release.pipeline_finished_at = _now()
     if failed:
+        codes = ", ".join(
+            str(c.get("reference_code") or "?") for c in failed
+        )
+        first_reason = next(
+            (c.get("reason") for c in failed if c.get("reason")), None
+        )
         release.pipeline_status = "failed"
         release.status = "in_progress"
         release.pipeline_error = (
-            f"{len(failed)} of {len(children)} idea(s) did not finish. "
-            "Open the failed rows for the reason, then run the release again."
+            f"{len(failed)} of {len(children)} idea(s) did not finish"
+            f"{f' ({codes})' if codes else ''}."
+            f"{f' {first_reason}' if first_reason else ''} "
+            "See Per-idea progress for every reason, then run again."
         )
         _report(state, "Release stopped with failures — review and re-run.")
     else:
@@ -595,6 +578,36 @@ def start_release_pipeline(release, user=None):
     )
     if not children:
         return False, "Nothing in this release yet — add ideas to it first."
+
+    # Fail fast. The build phase used to discover a missing repo only after
+    # PRD and Design had already spent model calls, leaving a broken release
+    # that had done half the work. Resolve (and, when allowed, lazily create)
+    # every child's repo before anything moves.
+    from app.services.build_targets import resolve_build_target
+    from app.services.build_service import BuildError, resolve_target_path
+
+    creator_id = user.id if user is not None else release.created_by_id
+    for child in children:
+        if _status_value(child) in ("DROP", "ARCHIVE"):
+            continue
+        target, reason = resolve_build_target(
+            child,
+            release=release,
+            allow_create=True,
+            created_by_id=creator_id,
+        )
+        if target is None:
+            return False, (
+                f"Cannot start: {child.reference_code} has no build repo. "
+                f"{reason}"
+            )
+        try:
+            resolve_target_path(target.path)
+        except BuildError as exc:
+            return False, (
+                f"Cannot start: the repo for {child.reference_code} "
+                f"({target.name}) is unusable. {exc}"
+            )
 
     state = _load_state(release, children)
     # Re-runs keep finished work and retry the rest. Skipped steps are

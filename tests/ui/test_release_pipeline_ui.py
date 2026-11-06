@@ -143,6 +143,7 @@ def test_release_card_shows_pipeline_progress(
     detail = _open_scale(admin_page, live_server, seeded)
     assert detail.get_by_text("Running · Design").first.is_visible()
     assert detail.get_by_text("2/2").first.is_visible()  # both PRDs done
+    assert detail.get_by_text("Builds into").first.is_visible()
     assert detail.get_by_role("button", name="Stop").first.is_visible()
     detail.get_by_text("Per-idea progress").click()
     assert detail.get_by_text(f"PRD done").first.is_visible()

@@ -16,6 +16,7 @@ from app.models import (
     IdeaTest,
     Instance,
     InstanceBuildTarget,
+    PromptRun,
     PromptRunStatus,
     Release,
     SecondaryActionResult,
@@ -330,6 +331,115 @@ def test_failure_does_not_stop_other_children(celery_app, tmp_path, monkeypatch)
         assert other["build"] == "done"
 
 
+def test_child_builds_into_the_parents_repo(celery_app, tmp_path, monkeypatch):
+    """A release shares the parent app's repo, not a repo per release."""
+    monkeypatch.setattr("app.tasks.ollama_tasks.OllamaClient", FakeOllama)
+    celery_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
+    _, parent_id, rid, kid_ids = _seed(celery_app, tmp_path)
+
+    with celery_app.app_context():
+        parent = db.session.get(Idea, uuid.UUID(parent_id))
+        for target in InstanceBuildTarget.query.filter_by(
+            instance_id=parent.instance_id
+        ).all():
+            db.session.delete(target)
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        db.session.add_all(
+            [
+                InstanceBuildTarget(
+                    instance_id=parent.instance_id,
+                    name=parent.reference_code,
+                    path=str(tmp_path),
+                ),
+                InstanceBuildTarget(
+                    instance_id=parent.instance_id,
+                    name="another-app",
+                    path=str(elsewhere),
+                ),
+            ]
+        )
+        db.session.commit()
+        parent_target = InstanceBuildTarget.query.filter_by(
+            instance_id=parent.instance_id, name=parent.reference_code
+        ).one()
+        expected = str(parent_target.id)
+
+        release = db.session.get(Release, uuid.UUID(rid))
+        ok, message = start_release_pipeline(release, None)
+        assert ok, message
+        assert _run_until_done(rid)
+
+        for kid_id in kid_ids:
+            build = SecondaryActionResult.query.filter_by(
+                idea_id=uuid.UUID(kid_id),
+                action_type="BUILD_CODE",
+                is_current=True,
+            ).one()
+            assert str(build.target_id) == expected
+
+
+def test_missing_repo_is_caught_before_any_model_call(celery_app, tmp_path):
+    """No repo means no PRD/Design spend: the run refuses at the start."""
+    _, _, rid, kid_ids = _seed(celery_app, tmp_path)
+
+    with celery_app.app_context():
+        release = db.session.get(Release, uuid.UUID(rid))
+        for target in InstanceBuildTarget.query.filter_by(
+            instance_id=release.instance_id
+        ).all():
+            db.session.delete(target)
+        db.session.commit()
+        celery_app.config["OPENCODE_BUILD_ROOTS"] = ""
+
+        ok, message = start_release_pipeline(release, None)
+        assert not ok
+        assert "no build repo" in message.lower()
+        assert "no build roots" in message.lower()
+        assert PromptRun.query.filter_by(
+            idea_id=uuid.UUID(kid_ids[0])
+        ).count() == 0
+
+        release = db.session.get(Release, uuid.UUID(rid))
+        assert release.pipeline_status == "idle"
+
+
+def test_release_can_store_and_clear_its_repo(admin_client, app, tmp_path):
+    inst_id, parent_id, rid, _ = _seed(app, tmp_path)
+    app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
+
+    with app.app_context():
+        target = InstanceBuildTarget.query.filter_by(
+            instance_id=uuid.UUID(inst_id)
+        ).one()
+        target_id = str(target.id)
+
+    res = admin_client.patch(
+        f"/api/v1/releases/{rid}", json={"build_target_id": target_id}
+    )
+    assert res.status_code == 200, res.get_json()
+    body = res.get_json()["data"]["release"]
+    assert body["build_target_id"] == target_id
+    assert body["build_target"]["name"] == "Release 1.1"
+
+    res = admin_client.get(f"/api/v1/ideas/{parent_id}/releases")
+    assert res.status_code == 200
+    payload = res.get_json()["data"]
+    assert [t["id"] for t in payload["build_targets"]] == [target_id]
+
+    res = admin_client.patch(
+        f"/api/v1/releases/{rid}", json={"build_target_id": None}
+    )
+    assert res.status_code == 200
+    assert res.get_json()["data"]["release"]["build_target_id"] is None
+
+    res = admin_client.patch(
+        f"/api/v1/releases/{rid}",
+        json={"build_target_id": str(uuid.uuid4())},
+    )
+    assert res.status_code == 400
+
+
 def test_repo_snapshot_includes_app_and_skips_noise(tmp_path):
     (tmp_path / "app.py").write_text("print('hello')\n", encoding="utf-8")
     (tmp_path / "requirements.txt").write_text("flask\n", encoding="utf-8")
@@ -353,6 +463,7 @@ def test_repo_snapshot_includes_app_and_skips_noise(tmp_path):
 
 def test_pipeline_routes_start_and_stop(admin_client, app, tmp_path):
     inst_id, parent_id, rid, kid_ids = _seed(app, tmp_path)
+    app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
 
     res = admin_client.post(f"/api/v1/releases/{rid}/pipeline")
     assert res.status_code == 202, res.get_json()

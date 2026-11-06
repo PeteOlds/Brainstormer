@@ -25,6 +25,15 @@ class Release(db.Model):
         index=True,
     )
     name = db.Column(db.String(120), nullable=False)
+    # The repo this release's builds write into. Empty means "resolve it":
+    # the root parent's repo for a normal release, or a lazily created repo
+    # named after the idea when it stands alone.
+    build_target_id = db.Column(
+        GUID(),
+        db.ForeignKey("instance_build_targets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     status = db.Column(db.String(20), default="planned", nullable=False)
     target_date = db.Column(db.DateTime(timezone=True), nullable=True)
     created_by_id = db.Column(
@@ -59,17 +68,30 @@ class Release(db.Model):
 
     def to_dict(self, child_count: int = 0):
         from app.models import Idea
+        from app.services.build_targets import resolve_build_target
 
         parent = Idea.query.get(self.parent_idea_id) if self.parent_idea_id else None
         from app.services.release_notes import release_notes_path
 
         path = release_notes_path(self, parent)
+        target = None
+        if parent is not None:
+            target, _ = resolve_build_target(
+                parent, release=self, allow_create=False
+            )
         return {
             "id": str(self.id),
             "parent_idea_id": str(self.parent_idea_id),
             "name": self.name,
             "status": self.status,
             "target_date": self.target_date.isoformat() if self.target_date else None,
+            "build_target_id": (
+                str(self.build_target_id) if self.build_target_id else None
+            ),
+            # Name only: the server-side path stays in the admin target API.
+            "build_target": (
+                {"id": str(target.id), "name": target.name} if target else None
+            ),
             "child_count": child_count,
             "notes": self.notes,
             "notes_path": str(path),

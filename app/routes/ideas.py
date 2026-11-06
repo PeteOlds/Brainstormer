@@ -701,80 +701,20 @@ def discovery(user):
     return api_ok(data)
 
 
-def _child_default_target(idea):
-    """Default build target for a child idea (its parent's release target if any)."""
-    if not idea.parent_id:
-        return None
-    parent = Idea.query.get(idea.parent_id)
-    if parent and parent.release_id:
-        from app.models import InstanceBuildTarget
-
-        return InstanceBuildTarget.query.filter_by(
-            instance_id=parent.instance_id,
-            name=parent.release.name,
-        ).first()
-    return None
-
-
 def _resolve_build_target(idea, target_id):
-    """Repo a BUILD_CODE run writes into.
+    """Repo a BUILD_CODE run writes into, shared with the release pipeline.
 
-    Order: explicit id (must belong to the idea's instance), a repo named
-    after the idea's reference code, the repo its last build used, the
-    release's repo, then the instance's only repo. An explicit id that does
-    not resolve never falls back — writing into a different repo than the
-    caller asked for would be worse than failing.
+    The Build tab may lazily create the idea's repo (named after its
+    reference code) when the instance has no matching one. An explicit id
+    that does not resolve never falls back — writing into a different repo
+    than the caller asked for is worse than failing.
     """
-    from app.models import InstanceBuildTarget, SecondaryActionResult
+    from app.services.build_targets import resolve_build_target
 
-    if target_id:
-        try:
-            return InstanceBuildTarget.query.filter_by(
-                id=uuid.UUID(str(target_id)), instance_id=idea.instance_id
-            ).first()
-        except (ValueError, TypeError, AttributeError):
-            return None
-
-    # Per-idea repos are named after the idea (IDEA-1234). Without this the
-    # fallback below happily reuses whatever single repo the instance has,
-    # so a new idea's build lands in another idea's folder and mixes files.
-    ref = str(getattr(idea, "reference_code", "") or "").strip().lower()
-    if ref:
-        for cand in InstanceBuildTarget.query.filter_by(
-            instance_id=idea.instance_id
-        ).all():
-            if str(cand.name or "").strip().lower() == ref:
-                return cand
-
-    prior = (
-        SecondaryActionResult.query.filter_by(
-            idea_id=idea.id, action_type="BUILD_CODE"
-        )
-        .filter(SecondaryActionResult.target_id.isnot(None))
-        .order_by(SecondaryActionResult.executed_at.desc())
-        .first()
+    target, _reason = resolve_build_target(
+        idea, explicit_id=target_id, allow_create=True
     )
-    if prior is not None:
-        found = InstanceBuildTarget.query.filter_by(
-            id=prior.target_id, instance_id=idea.instance_id
-        ).first()
-        if found is not None:
-            return found
-
-    # Fall back to the idea's release target
-    if idea.release_id:
-        from app.models import Release
-
-        release = Release.query.get(idea.release_id)
-        if release:
-            found = InstanceBuildTarget.query.filter_by(
-                instance_id=release.instance_id, name=release.name
-            ).first()
-            if found is not None:
-                return found
-
-    targets = InstanceBuildTarget.query.filter_by(instance_id=idea.instance_id).all()
-    return targets[0] if len(targets) == 1 else None
+    return target
 
 
 def _check_action_allowed(idea, action_type):
@@ -846,24 +786,19 @@ def _enqueue_action(idea, action_type, extra=None):
                     f"{provider_override} allowlist.",
                 )
     if action_type == "BUILD_CODE":
-        target = _resolve_build_target(idea, extra.get("target_id"))
-        if target is None:
-            from app.models import InstanceBuildTarget
+        from app.services.build_targets import resolve_build_target
 
-            names = ", ".join(
-                sorted(
-                    t.name
-                    for t in InstanceBuildTarget.query.filter_by(
-                        instance_id=idea.instance_id
-                    ).all()
-                )
-            ) or "none"
+        target, reason = resolve_build_target(
+            idea,
+            explicit_id=extra.get("target_id"),
+            allow_create=True,
+        )
+        if target is None:
             return (
                 None,
                 None,
-                "No build repo selected. Registered repos for this instance: "
-                f"{names}. Pick one on the Build tab or add one in "
-                "Admin → AI Settings.",
+                "No build repo selected. "
+                f"{reason or 'Add one in Admin → AI Settings.'}",
             )
         extra["target_id"] = str(target.id)
 

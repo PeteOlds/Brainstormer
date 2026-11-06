@@ -57,12 +57,26 @@ def list_releases(user, parent_id):
             "name": "No release yet",
             "status": "planned",
             "target_date": None,
+            "build_target_id": None,
+            "build_target": None,
             "child_count": counts.get(None, 0),
             "notes": None,
             "created_at": None,
         }
     )
-    return api_ok({"releases": data})
+    payload = {"releases": data}
+    # The release card shows the repo and, for admins, a picker. Names and
+    # ids are harmless to members; the server-side path stays in the admin
+    # build-target API.
+    payload["build_targets"] = [
+        {"id": str(t.id), "name": t.name}
+        for t in InstanceBuildTarget.query.filter_by(
+            instance_id=parent.instance_id
+        )
+        .order_by(InstanceBuildTarget.name)
+        .all()
+    ]
+    return api_ok(payload)
 
 
 def _release_counts(parent_id):
@@ -124,6 +138,26 @@ def create_release(user, parent_id):
     # parent made before tenancy may carry NULL — fall back to the request.
     if release.instance_id is None:
         release.instance_id = parent.instance_id
+
+    from app.services.build_targets import resolve_build_target
+
+    requested_target = data.get("build_target_id")
+    if requested_target:
+        target, _ = resolve_build_target(
+            parent, explicit_id=requested_target
+        )
+        if target is None:
+            return api_error(
+                "That build repo does not exist for this instance.",
+                status_code=400,
+            )
+        release.build_target_id = target.id
+    else:
+        # Prefer the parent's repo as the default, but do not create one
+        # here: the run preflight creates it only when a build is requested.
+        target, _ = resolve_build_target(parent, allow_create=False)
+        release.build_target_id = target.id if target else None
+
     db.session.add(release)
     db.session.commit()
     return api_created({"release": release.to_dict()})
@@ -171,10 +205,27 @@ def update_release(user, release_id):
         if notes is not None and not isinstance(notes, str):
             return api_error("notes must be text.", status_code=400)
         release.notes = (notes or "").strip() or None
+    if "build_target_id" in data:
+        from app.services.build_targets import resolve_build_target
+
+        parent = Idea.query.get(release.parent_idea_id)
+        raw = data.get("build_target_id")
+        if raw in (None, ""):
+            release.build_target_id = None
+        else:
+            target = None
+            if parent is not None:
+                target, _ = resolve_build_target(
+                    parent, release=release, explicit_id=raw
+                )
+            if target is None:
+                return api_error(
+                    "That build repo does not exist for this instance.",
+                    status_code=400,
+                )
+            release.build_target_id = target.id
     db.session.commit()
     if "notes" in data:
-        from app.models import Idea
-
         parent = Idea.query.get(release.parent_idea_id)
         write_release_notes_file(release, parent)
     counts = _release_counts(release.parent_idea_id)
@@ -477,26 +528,7 @@ def bulk_run_action(user, release_id):
 
     requested_target = data.get("target_id")
 
-    def _resolve_target(child, row):
-        """Repo this child's build writes into.
-
-        Order: explicit request, the repo its previous run used, then the
-        instance's only registered repo. Anything ambiguous stays None so
-        the caller can skip with a reason instead of guessing.
-        """
-        for candidate in (requested_target, getattr(row, "target_id", None)):
-            if not candidate:
-                continue
-            try:
-                found = InstanceBuildTarget.query.filter_by(
-                    id=uuid.UUID(str(candidate)), instance_id=child.instance_id
-                ).first()
-            except (ValueError, TypeError, AttributeError):
-                found = None
-            if found is not None:
-                return found
-        targets = InstanceBuildTarget.query.filter_by(instance_id=child.instance_id).all()
-        return targets[0] if len(targets) == 1 else None
+    from app.services.build_targets import resolve_build_target
 
     launched = 0
     started = []
@@ -543,12 +575,24 @@ def bulk_run_action(user, release_id):
             )
             continue
 
-        target = _resolve_target(child, row) if action_type == "BUILD_CODE" else None
+        target = None
+        target_error = None
+        if action_type == "BUILD_CODE":
+            target, target_error = resolve_build_target(
+                child,
+                release=release,
+                explicit_id=requested_target,
+                allow_create=True,
+                created_by_id=user.id,
+            )
         if action_type == "BUILD_CODE" and target is None:
             skipped.append(
                 {
                     "reference_code": child.reference_code,
-                    "reason": "No build repo selected — pick one on the Build tab or register one in Admin → AI Settings.",
+                    "reason": (
+                        "No build repo selected. "
+                        f"{target_error or 'Add one in Admin → AI Settings.'}"
+                    ),
                 }
             )
             continue

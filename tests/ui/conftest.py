@@ -54,8 +54,14 @@ def live_app():
     """Fresh app + file-backed DB per test (mutation isolation)."""
     tmpdir = tempfile.mkdtemp(prefix="brainstormer-ui-")
     db_path = os.path.join(tmpdir, "ui.db")
+    builds_dir = os.path.join(tmpdir, "builds")
+    os.makedirs(builds_dir, exist_ok=True)
 
     class LiveConfig(TestingConfig):
+        # A release may lazily create its repo. Point that inside the test
+        # temp dir so a UI test never writes into the real projects/ folder.
+        OPENCODE_BUILD_ROOTS = builds_dir
+        OPENCODE_SERVER_BUILD_ROOTS = builds_dir
         SQLALCHEMY_DATABASE_URI = f"sqlite:///{db_path}"
         # The dev server is threaded: one connection shared across threads
         # (StaticPool) corrupts state and hangs requests. A real pool with

@@ -623,6 +623,16 @@
                                             <button @click="deleteRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50">Delete</button>
                                         </span>
                                     </div>
+                                    <div x-show="rel.id" class="flex flex-wrap items-center gap-2 mb-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                        <span>Builds into</span>
+                                        <span class="font-medium text-slate-700 dark:text-slate-300" x-text="rel.build_target ? rel.build_target.name : 'no repo yet'"></span>
+                                        <select x-show="isAdmin" :value="rel.build_target_id || ''" @change="setReleaseTarget(rel, $event.target.value)" :disabled="releaseBusy" :aria-label="'Build repo for ' + rel.name" class="text-[11px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-1 py-1">
+                                            <option value="">Auto (idea's repo)</option>
+                                            <template x-for="t in scaleTargets" :key="t.id">
+                                                <option :value="t.id" x-text="t.name"></option>
+                                            </template>
+                                        </select>
+                                    </div>
                                     <div x-show="rel.pipeline && rel.pipeline.status !== 'idle'" class="mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2 space-y-1">
                                         <div class="grid grid-cols-4 gap-1 text-center">
                                             <template x-for="p in ['prd','design','build','test']" :key="p">
@@ -634,7 +644,7 @@
                                         </div>
                                         <p x-show="rel.pipeline.error" class="text-xs text-red-600 dark:text-red-400" x-text="rel.pipeline.error"></p>
                                         <details>
-                                            <summary class="text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer">Per-idea progress</summary>
+                                            <summary class="text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer">Per-idea progress and reasons</summary>
                                             <ul class="mt-1 space-y-0.5">
                                                 <template x-for="row in pipelineRows(rel)" :key="row.id">
                                                     <li class="text-[11px] text-slate-600 dark:text-slate-300 flex flex-wrap gap-x-2">
