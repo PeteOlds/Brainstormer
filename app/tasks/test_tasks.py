@@ -484,6 +484,7 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
 
     run.progress = 100
     run.message = "Completed"
+    run.status = TestRunStatus.COMPLETED
     run.finished_at = _now()
     db.session.commit()
     logger.info("idea_tests_run", idea_id=str(idea.id))
