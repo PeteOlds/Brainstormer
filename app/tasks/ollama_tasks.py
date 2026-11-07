@@ -1041,6 +1041,14 @@ def _extract_runtime_info(files: list, preferred_paths=None) -> dict:
             system_deps.add("default-libmysqlclient-dev (for mysqlclient)")
         if "python-ldap" in low or "ldap3" in low:
             system_deps.add("libldap2-dev (for LDAP support)")
+        if "lxml" in low or "weasyprint" in low:
+            system_deps.add("libxml2-dev libxslt1-dev (for lxml/weasyprint)")
+        if "cryptography" in low or "pyopenssl" in low:
+            system_deps.add("libssl-dev libffi-dev (for cryptography)")
+        if "pillow" in low or "pil" in low:
+            system_deps.add("zlib1g-dev libjpeg-dev libpng-dev (for Pillow)")
+        if "opencv" in low or "cv2" in low:
+            system_deps.add("libgl1 libsm6 (for OpenCV)")
 
     notes = []
     if inferred_note:
