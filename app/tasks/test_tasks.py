@@ -47,6 +47,8 @@ def _find_row(idea, predicate):
 
 def _friendly_error(text):
     low = (text or "").lower()
+    if "no tests ran" in low:
+        return "No automated tests were found in this build. Add tests to the build, or verify manually."
     if "unrecognized arguments" in low or "unrecognized arg" in low:
         return "Test configuration conflict — Brainstormer will retry with safe settings."
     if "no module named pytest" in low or "no module named 'pytest'" in low:
@@ -327,7 +329,7 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                     )
             except Exception:  # noqa: BLE001
                 pass
-            cmd = [interpreter, "-m", "pytest", "-q", "-o", "addopts="]
+            cmd = [interpreter, "-m", "pytest", "-q", "-c", "/dev/null"]
         output = ""
         ok = False
         attempts = []
@@ -365,7 +367,7 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                             env=env,
                         )
                     elif "Test configuration conflict" in hint:
-                        cmd = [interpreter, "-m", "pytest", "-q", "-o", "addopts="]
+                        cmd = [interpreter, "-m", "pytest", "-q", "-c", "/dev/null"]
                     else:
                         import re as _re
 
