@@ -326,21 +326,60 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
             except Exception:  # noqa: BLE001
                 pass
             cmd = [interpreter, "-m", "pytest", "-q"]
-        try:
-            proc = subprocess.run(
-                cmd, cwd=workdir, capture_output=True, text=True, timeout=300, env=env
-            )
-            output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
-            ok = proc.returncode == 0
-        except FileNotFoundError as exc:
-            output = f"Test runner not found: {exc}"
-            ok = False
-        except subprocess.TimeoutExpired:
-            output = "Test run timed out after 5 minutes."
-            ok = False
-        except Exception as exc:  # noqa: BLE001
-            output = f"Could not run tests: {exc}"
-            ok = False
+        output = ""
+        ok = False
+        attempts = []
+        for attempt in range(2):
+            try:
+                proc = subprocess.run(
+                    cmd, cwd=workdir, capture_output=True, text=True, timeout=300, env=env
+                )
+                out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+                ok = proc.returncode == 0
+            except FileNotFoundError as exc:
+                out = f"Test runner not found: {exc}"
+                ok = False
+            except subprocess.TimeoutExpired:
+                out = "Test run timed out after 5 minutes."
+                ok = False
+            except Exception as exc:  # noqa: BLE001
+                out = f"Could not run tests: {exc}"
+                ok = False
+            attempts.append((ok, out))
+            if ok:
+                break
+            # Auto-retry once for fixable environment issues.
+            if attempt == 0 and not has_node:
+                hint = _friendly_error(out) or ""
+                if "test tool isn't installed" in hint or "Missing dependency" in hint:
+                    # Try to install pytest or the missing dependency.
+                    if "test tool isn't installed" in hint:
+                        subprocess.run(
+                            [interpreter, "-m", "pip", "install", "pytest"],
+                            cwd=workdir,
+                            capture_output=True,
+                            text=True,
+                            timeout=120,
+                            env=env,
+                        )
+                    else:
+                        import re as _re
+
+                        m = _re.search(r"Missing dependency '([^']+)'", hint)
+                        if m:
+                            subprocess.run(
+                                [interpreter, "-m", "pip", "install", m.group(1)],
+                                cwd=workdir,
+                                capture_output=True,
+                                text=True,
+                                timeout=120,
+                                env=env,
+                            )
+                    continue
+            break
+        # Combine outputs.
+        output = "\n\n=== retry ===\n".join(a[1] for a in attempts) if len(attempts) > 1 else attempts[0][1]
+        ok = attempts[-1][0]
         _update_row(suite_row, TestStatus.PASSED if ok else TestStatus.FAILED, output)
 
     # --- 4. Container image builds ---
