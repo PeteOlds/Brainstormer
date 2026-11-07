@@ -47,6 +47,8 @@ def _find_row(idea, predicate):
 
 def _friendly_error(text):
     low = (text or "").lower()
+    if "unrecognized arguments" in low or "unrecognized arg" in low:
+        return "Test configuration conflict — Brainstormer will retry with safe settings."
     if "no module named pytest" in low or "no module named 'pytest'" in low:
         return "The test tool isn't installed. Brainstormer tried to install it; if this persists, check the app's internet/dependency setup."
     if "modulenotfounderror" in low:
@@ -325,7 +327,7 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                     )
             except Exception:  # noqa: BLE001
                 pass
-            cmd = [interpreter, "-m", "pytest", "-q"]
+            cmd = [interpreter, "-m", "pytest", "-q", "-o", "addopts="]
         output = ""
         ok = False
         attempts = []
@@ -351,7 +353,7 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
             # Auto-retry once for fixable environment issues.
             if attempt == 0 and not has_node:
                 hint = _friendly_error(out) or ""
-                if "test tool isn't installed" in hint or "Missing dependency" in hint:
+                if "test tool isn't installed" in hint or "Missing dependency" in hint or "Test configuration conflict" in hint:
                     # Try to install pytest or the missing dependency.
                     if "test tool isn't installed" in hint:
                         subprocess.run(
@@ -362,6 +364,8 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                             timeout=120,
                             env=env,
                         )
+                    elif "Test configuration conflict" in hint:
+                        cmd = [interpreter, "-m", "pytest", "-q", "-o", "addopts="]
                     else:
                         import re as _re
 
