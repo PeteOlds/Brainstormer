@@ -130,13 +130,13 @@ def _ui_test(runtime: dict, runbook: dict | None, has_ui: bool) -> dict:
     run_cmd = (runbook or {}).get("run")
     start = f"Run the app ({run_cmd})" if run_cmd else "Start the app"
     if has_ui and url:
-        name = "UI: main screen loads in a browser"
+        name = "Check the main screen loads in a browser"
         description = (
             f"{start} and open {url}. The main screen renders with its "
             "controls and data visible — no stack trace, blank page or 500."
         )
     elif url:
-        name = "UI: app responds at its URL"
+        name = "Check the app opens in a browser"
         description = (
             f"{start} and open {url}. Expect an HTTP 200 with the app's "
             "own output (JSON or HTML), not a connection error."
@@ -243,7 +243,7 @@ def derive_build_tests(
     if has_python_deps:
         add(
             {
-                "name": "Dependencies install cleanly",
+                "name": "App installs without errors",
                 "description": (
                     "Run the Setup step in the same folder as the app and "
                     "expect it to finish without resolver or build errors."
@@ -257,7 +257,7 @@ def derive_build_tests(
     ):
         add(
             {
-                "name": "npm install completes",
+                "name": "App installs without errors",
                 "description": (
                     "Run `npm install` in the app folder. Expect no "
                     "unresolved peer dependencies or build-script failures."
@@ -273,7 +273,7 @@ def derive_build_tests(
     ):
         add(
             {
-                "name": "Container image builds",
+                "name": "App builds as a container",
                 "description": (
                     "Run the Compose/Docker build command in the How-to-run "
                     "panel. Expect a successful image build and a container "
@@ -286,7 +286,7 @@ def derive_build_tests(
     if _has_test_suite(files):
         add(
             {
-                "name": "Generated test suite passes",
+                "name": "App's automated tests pass",
                 "description": (
                     "Run the project's test command (e.g. `pytest` or "
                     "`npm test`) in the build folder. Expect all generated "

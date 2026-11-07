@@ -708,6 +708,34 @@ function ideasApp() {
             if (this.testStatusFilter === 'all') return this.ideaTests;
             return this.ideaTests.filter((t) => t.status === this.testStatusFilter);
         },
+        isManualTest(t) {
+            return t.test_type === 'manual' || t.test_type === 'e2e';
+        },
+        automatedTests() {
+            const base = this.testStatusFilter === 'all'
+                ? this.ideaTests
+                : this.ideaTests.filter((t) => t.status === this.testStatusFilter);
+            return base.filter((t) => !this.isManualTest(t));
+        },
+        manualTests() {
+            const base = this.testStatusFilter === 'all'
+                ? this.ideaTests
+                : this.ideaTests.filter((t) => t.status === this.testStatusFilter);
+            return base.filter((t) => this.isManualTest(t));
+        },
+        releaseReady() {
+            const autoFailed = this.ideaTests.some((t) => !this.isManualTest(t) && t.status === 'failed');
+            const manualPending = this.ideaTests.some((t) => this.isManualTest(t) && t.status === 'not_run');
+            return !autoFailed && !manualPending && this.ideaTests.length > 0;
+        },
+        releaseBlockers() {
+            const out = [];
+            this.ideaTests.forEach((t) => {
+                if (!this.isManualTest(t) && t.status === 'failed') out.push(t.name + ' failed');
+                if (this.isManualTest(t) && t.status === 'not_run') out.push(t.name + ' not verified');
+            });
+            return out;
+        },
 
         flatComments() {
             const out = [];
