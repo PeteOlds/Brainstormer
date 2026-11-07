@@ -45,6 +45,27 @@ def _find_row(idea, predicate):
     return None
 
 
+def _friendly_error(text):
+    low = (text or "").lower()
+    if "no module named pytest" in low or "no module named 'pytest'" in low:
+        return "The test tool isn't installed. Brainstormer tried to install it; if this persists, check the app's internet/dependency setup."
+    if "modulenotfounderror" in low:
+        import re
+
+        m = re.search(r"no module named ['\"]?([a-zA-Z0-9_.-]+)", text or "", re.I)
+        dep = m.group(1) if m else "a dependency"
+        return f"Missing dependency '{dep}'. Add it to requirements.txt and rebuild the app."
+    if "address already in use" in low:
+        return "The app's port is already in use. Stop the other app and rerun."
+    if "syntaxerror" in low:
+        return "There's a syntax error in the generated code. Open the build files and fix it, then rerun."
+    if "timed out" in low:
+        return "The tests took too long. Try running a smaller subset."
+    if "command not found" in low or "not found" in low and "docker" in low:
+        return "Docker isn't available in this environment, so the container check was skipped."
+    return None
+
+
 def _update_row(row, status, output):
     if row is None:
         return
@@ -52,6 +73,9 @@ def _update_row(row, status, output):
     row.last_run_at = _now()
     if output is not None:
         text = str(output).strip()
+        hint = _friendly_error(text)
+        if hint and status == TestStatus.FAILED:
+            text = hint + "\n\n--- details ---\n" + text
         if len(text) > 4000:
             text = text[-4000:]
         row.last_run_output = text or None
@@ -278,6 +302,29 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
             cmd = ["npm", "test"]
         else:
             interpreter = venv_python or "python3"
+            # Make sure the test runner is available in the app's
+            # environment; otherwise a non-technical user sees a cryptic
+            # "No module named pytest" failure.
+            try:
+                check = subprocess.run(
+                    [interpreter, "-m", "pytest", "--version"],
+                    cwd=workdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    env=env,
+                )
+                if check.returncode != 0:
+                    subprocess.run(
+                        [interpreter, "-m", "pip", "install", "pytest"],
+                        cwd=workdir,
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        env=env,
+                    )
+            except Exception:  # noqa: BLE001
+                pass
             cmd = [interpreter, "-m", "pytest", "-q"]
         try:
             proc = subprocess.run(
