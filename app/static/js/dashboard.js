@@ -56,6 +56,8 @@ function ideasApp() {
         testsLoading: false,
         testsRunning: false,
         testsRunningMessage: '',
+        testDetailsOpen: false,
+        testDetailsRow: null,
         testRunProgress: 0,
         selectedTestIds: [],
         testSummary: null,
@@ -629,6 +631,24 @@ function ideasApp() {
             if (i >= 0) arr.splice(i, 1);
             else arr.push(id);
             this.selectedTestIds = arr.slice();
+        },
+
+        viewTestDetails(t) {
+            this.testDetailsRow = t;
+            this.testDetailsOpen = true;
+        },
+        closeTestDetails() {
+            this.testDetailsOpen = false;
+            this.testDetailsRow = null;
+        },
+        rerunTest(t) {
+            if (!t || !this.selectedIdea) return;
+            this.runIdeaTests([t.id]);
+        },
+        failureSummary(t) {
+            const out = (t && t.last_run_output) ? String(t.last_run_output) : '';
+            const line = out.split('\n').map((l) => l.trim()).find((l) => l.length > 0) || '';
+            return line.length > 120 ? line.slice(0, 117) + '…' : line;
         },
 
         async addIdeaTest() {
