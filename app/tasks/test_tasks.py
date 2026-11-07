@@ -166,13 +166,16 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         run.finished_at = _now()
         db.session.commit()
 
-    build = (
-        SecondaryActionResult.query.filter_by(
-            idea_id=idea.id, action_type="BUILD_CODE", is_current=True
-        )
+    build = None
+    candidates = (
+        SecondaryActionResult.query.filter_by(idea_id=idea.id, action_type="BUILD_CODE")
         .order_by(SecondaryActionResult.version.desc())
-        .first()
+        .all()
     )
+    for c in candidates:
+        if (c.result_data or {}).get("written"):
+            build = c
+            break
     if build is None or not (build.result_data or {}).get("written"):
         _finish(TestRunStatus.FAILED, 100, "No confirmed build to test yet.")
         _record_test_failure(idea, "No confirmed build to test yet.")
