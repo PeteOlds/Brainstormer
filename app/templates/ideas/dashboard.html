@@ -1023,20 +1023,42 @@
                                         </div>
                                     </template>
                                     <template x-if="tab.key === 'BUILD_CODE' && buildRunInfo(tab.key)">
-                                        <div class="mt-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4">
-                                            <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-1">How to run <span class="font-normal text-slate-500 dark:text-slate-400" x-text="'· ' + (buildRunInfo(tab.key)?.target || '')"></span></h4>
-                                            <p class="text-xs text-slate-600 dark:text-slate-400 mb-2">Steps to start the app yourself — each command has a Copy button. Easiest is Run on this machine below. Setup uses its own <code class="font-mono">.venv-local</code> folder, so it never disturbs the one-click run.</p>
-                                            <dl class="space-y-2 text-sm">
-                                                <template x-for="(line, i) in (buildRunInfo(tab.key)?.lines || [])" :key="i">
-                                                    <div class="flex flex-wrap items-center gap-2">
-                                                        <dt class="font-medium text-slate-700 dark:text-slate-300 min-w-[92px]" x-text="line.label + ':'"></dt>
-                                                        <dd x-show="line.link"><a :href="line.value" target="_blank" rel="noopener" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline" x-text="line.value"></a></dd>
-                                                        <dd x-show="!line.link && !line.pre" class="font-mono text-slate-700 dark:text-slate-300" x-text="line.value"></dd>
-                                                        <dd x-show="line.pre" class="w-full font-mono text-xs whitespace-pre-wrap text-slate-700 dark:text-slate-300" x-text="line.value"></dd>
-                                                        <dd x-show="line.copy"><button @click="copyText(line.value, 'Copied')" title="Copy command" class="px-2 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Copy</button></dd>
-                                                    </div>
-                                                </template>
-                                            </dl>
+                                        <div class="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+                                            <div class="flex items-center justify-between gap-3 mb-3">
+                                                <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Run your app</h4>
+                                                <span class="text-xs text-slate-500 dark:text-slate-400" x-text="buildRunInfo(tab.key)?.target || ''"></span>
+                                            </div>
+                                            <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-4 mb-3">
+                                                <div class="flex flex-wrap items-center gap-3">
+                                                    <span class="inline-flex items-center gap-1.5 text-sm font-medium" :class="managedAppLive() ? 'text-green-700 dark:text-green-400' : 'text-slate-600 dark:text-slate-400'">
+                                                        <span class="inline-block w-2.5 h-2.5 rounded-full" :class="managedAppLive() ? 'bg-green-500' : 'bg-slate-400'"></span>
+                                                        <span x-text="managedAppLive() ? 'Running' : 'Stopped'"></span>
+                                                    </span>
+                                                    <template x-if="managedApp && managedApp.health_url">
+                                                        <a :href="managedApp.health_url" target="_blank" rel="noopener" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Open app</a>
+                                                    </template>
+                                                    <button @click="configureManagedApp()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50" x-text="managedApp ? 'Update setup' : 'Enable one-click run'"></button>
+                                                    <button @click="startManagedApp()" x-show="managedApp && !managedAppLive()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-green-700 hover:bg-green-800 rounded-lg disabled:opacity-50">Start</button>
+                                                    <button @click="stopManagedApp()" x-show="managedAppLive()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg disabled:opacity-50">Stop</button>
+                                                </div>
+                                                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Start runs this app here on the server — no terminal needed. Stop shuts it down again.</p>
+                                                <p x-show="managedApp && managedApp.last_error" class="mt-2 text-xs text-red-600 dark:text-red-400" x-text="managedApp.last_error"></p>
+                                            </div>
+                                            <details class="text-sm">
+                                                <summary class="cursor-pointer text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">Advanced: run it yourself in a terminal</summary>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-2">Use these only if you want to run the app manually. Each command has a Copy button.</p>
+                                                <dl class="space-y-2">
+                                                    <template x-for="(line, i) in (buildRunInfo(tab.key)?.lines || [])" :key="i">
+                                                        <div class="flex flex-wrap items-center gap-2">
+                                                            <dt class="font-medium text-slate-700 dark:text-slate-300 min-w-[92px] text-xs" x-text="line.label + ':'"></dt>
+                                                            <dd x-show="line.link"><a :href="line.value" target="_blank" rel="noopener" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline text-xs" x-text="line.value"></a></dd>
+                                                            <dd x-show="!line.link && !line.pre" class="font-mono text-xs text-slate-700 dark:text-slate-300" x-text="line.value"></dd>
+                                                            <dd x-show="line.pre" class="w-full font-mono text-xs whitespace-pre-wrap text-slate-700 dark:text-slate-300" x-text="line.value"></dd>
+                                                            <dd x-show="line.copy"><button @click="copyText(line.value, 'Copied')" title="Copy command" class="px-2 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Copy</button></dd>
+                                                        </div>
+                                                    </template>
+                                                </dl>
+                                            </details>
                                         </div>
                                     </template>
                                     <template x-if="isAdmin">
