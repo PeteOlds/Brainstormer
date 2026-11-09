@@ -1808,7 +1808,7 @@ def _inject_root_route(files: list) -> None:
                 "\n\n@app.route('/')\n"
                 "def _brainstormer_home():\n"
                 "    return '<h1>App is running</h1><p>This app is live. "
-                "Use the documented endpoints to interact with it.</p>'\n"
+                "Use the <a href=\"/upload\">/upload</a> endpoint to process images.</p>'\n"
             )
             snippet = snippet.replace("@app.route", f"@{app_var}.route")
         else:
@@ -1816,7 +1816,7 @@ def _inject_root_route(files: list) -> None:
                 "\n\n@{av}.get('/')\n"
                 "def _brainstormer_home():\n"
                 "    return '<h1>App is running</h1><p>This app is live. "
-                "Use the documented endpoints to interact with it.</p>'\n"
+                "Use the <a href=\"/upload\">/upload</a> endpoint to process images.</p>'\n"
             ).format(av=app_var)
         entry["content"] = content.rstrip() + "\n" + snippet
 
