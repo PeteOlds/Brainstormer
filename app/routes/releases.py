@@ -753,7 +753,9 @@ def start_release_pipeline_route(user, release_id):
         return denied
     from app.services.release_pipeline import start_release_pipeline
 
-    ok, message = start_release_pipeline(release, user)
+    data = request.get_json() or {}
+    force = bool(data.get("force"))
+    ok, message = start_release_pipeline(release, user, force=force)
     if not ok:
         return api_error(message, status_code=400)
     count = Idea.query.filter_by(release_id=release.id).count()

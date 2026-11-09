@@ -86,6 +86,7 @@ function ideasApp() {
         childLoading: false,
         childError: '',
         releaseBusy: false,
+        releaseForceRerun: false,
         releaseMove: {},
         unassignedMove: null,
         // Multi-select for "add these problems to a release". Ids are
@@ -1399,7 +1400,10 @@ function ideasApp() {
                 '', 'Run release'))) return;
             this.releaseBusy = true;
             try {
-                const res = await authFetch(`/api/v1/releases/${rel.id}/pipeline`, { method: 'POST' });
+                const res = await authFetch(`/api/v1/releases/${rel.id}/pipeline`, {
+                    method: 'POST',
+                    body: JSON.stringify({ force: this.releaseForceRerun }),
+                });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.message || data.error || 'Could not start');
                 await this.loadScaleFamily();

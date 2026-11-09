@@ -565,7 +565,7 @@ def _schedule(release_id: str, countdown: int = TICK_SECONDS) -> None:
     )
 
 
-def start_release_pipeline(release, user=None):
+def start_release_pipeline(release, user=None, force=False):
     """Start (or resume) the one-action run. Returns (ok, message)."""
     from app.models import Idea
 
@@ -618,7 +618,7 @@ def start_release_pipeline(release, user=None):
         if _status_value(child) in ("DROP", "ARCHIVE"):
             continue
         for phase in PHASES:
-            if entry[phase] in ("failed", "skipped"):
+            if force or entry[phase] in ("failed", "skipped"):
                 entry[phase] = "pending"
                 entry["reason"] = None
                 entry["run_ids"].pop(phase, None)

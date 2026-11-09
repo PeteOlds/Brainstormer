@@ -615,6 +615,10 @@
                                         <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" x-text="releaseStageLabel(rel.status)"></span>
                                         <span x-show="rel.pipeline && rel.pipeline.status !== 'idle'" class="text-xs px-2 py-0.5 rounded-full" :class="rel.pipeline.status === 'failed' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' : (pipelineRunning(rel) ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 animate-pulse' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800')" x-text="pipelineStatusLabel(rel)"></span>
                                         <span class="flex gap-2 ml-auto" x-show="isAdmin && rel.id">
+                                            <label x-show="!pipelineRunning(rel)" class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
+                                                <input type="checkbox" x-model="releaseForceRerun" class="rounded">
+                                                Re-run everything
+                                            </label>
                                             <button x-show="!pipelineRunning(rel)" @click="runReleasePipeline(rel)" :disabled="releaseBusy || !scaleKids(rel.id).length" class="text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 min-h-[44px] disabled:opacity-50" title="Run PRD, Design, Build and Test for every idea in this release">Run release</button>
                                             <button x-show="pipelineRunning(rel)" @click="stopReleasePipeline(rel)" :disabled="releaseBusy" class="text-xs font-medium text-red-700 dark:text-red-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50" title="Stop after the current step; finished work is kept">Stop</button>
                                             <button @click="completeRelease(rel.id)" :disabled="releaseBusy || rel.status === 'done'" :title="rel.status === 'done' ? 'Release finished ' + releaseDate(rel) : 'Move every item in this release to shipped'" class="text-xs font-medium text-green-700 dark:text-green-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">Mark release done</button>
@@ -643,6 +647,7 @@
                                             </template>
                                         </div>
                                         <p x-show="rel.pipeline.error" class="text-xs text-red-600 dark:text-red-400" x-text="rel.pipeline.error"></p>
+                                        <p x-show="pipelineRows(rel).some(r => r.reason)" class="text-xs text-amber-600 dark:text-amber-400">Some steps were skipped — see details below.</p>
                                         <details>
                                             <summary class="text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer">Per-idea progress and reasons</summary>
                                             <ul class="mt-1 space-y-0.5">
