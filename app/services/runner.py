@@ -69,7 +69,10 @@ def poll_health(url: str | None, timeout: float = 3) -> bool | None:
         return None
     try:
         with urllib.request.urlopen(url.strip(), timeout=timeout) as res:
-            return 200 <= res.status < 300
+            return True
+    except urllib.error.HTTPError as e:
+        # Any HTTP response means the app is up (even 404).
+        return 100 <= e.code < 600
     except Exception:
         return False
 
