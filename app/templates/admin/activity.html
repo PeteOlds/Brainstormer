@@ -312,6 +312,7 @@
                         </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400">
                             <span x-text="run.triggered_by === 'schedule' ? 'Scheduled' : 'Manual'"></span>
+                            <span x-show="run.provider || run.model"> · <span x-text="[run.provider, run.model].filter(Boolean).join(' ')"></span></span>
                             · <span x-text="run.status.charAt(0) + run.status.slice(1).toLowerCase()"></span>
                             <span x-show="run.duration_seconds != null" x-text="' · ' + fmtDuration(run.duration_seconds)"></span>
                         </p>
