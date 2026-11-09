@@ -1777,6 +1777,50 @@ def _allocate_build_port(runtime: dict, files: list) -> tuple[dict, list, list]:
     return runtime, files, report
 
 
+def _inject_root_route(files: list) -> None:
+    """Add a simple root route to Flask/FastAPI apps that lack one.
+
+    Non-technical users expect "Open app" to show something. If the app
+    has no '/' route, append a minimal one so they don't see a 404.
+    """
+    import re
+
+    for entry in files or []:
+        if not isinstance(entry, dict):
+            continue
+        path = str(entry.get("path") or "")
+        content = str(entry.get("content") or "")
+        if not (path.endswith(".py")):
+            continue
+        if "Flask(" not in content and "FastAPI(" not in content:
+            continue
+        if re.search(r"@\w+\.route\(\s*['\"]/?['\"]", content) or re.search(
+            r"@\w+\.(get|post)\(\s*['\"]/?['\"]", content, re.I
+        ):
+            continue
+        # Determine the app variable name.
+        app_var = "app"
+        m = re.search(r"^(\w+)\s*=\s*(?:Flask|FastAPI)\(", content, re.M)
+        if m:
+            app_var = m.group(1)
+        if "Flask(" in content:
+            snippet = (
+                "\n\n@app.route('/')\n"
+                "def _brainstormer_home():\n"
+                "    return '<h1>App is running</h1><p>This app is live. "
+                "Use the documented endpoints to interact with it.</p>'\n"
+            )
+            snippet = snippet.replace("@app.route", f"@{app_var}.route")
+        else:
+            snippet = (
+                "\n\n@{av}.get('/')\n"
+                "def _brainstormer_home():\n"
+                "    return '<h1>App is running</h1><p>This app is live. "
+                "Use the documented endpoints to interact with it.</p>'\n"
+            ).format(av=app_var)
+        entry["content"] = content.rstrip() + "\n" + snippet
+
+
 def _write_confirmed_build(idea, build_target, build_root, run_id):
     """Write a previewed manifest to its target (confirm run, no LLM).
 
@@ -1858,6 +1902,9 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
         return
     if runbook.get("command"):
         runtime["start_command"] = runbook["command"]
+    # Ensure the app has a root route so "Open app" doesn't 404 for
+    # non-technical users. Only inject if no existing root route.
+    _inject_root_route(manifest_files)
     try:
         written, skipped = write_manifest(
             build_root,
