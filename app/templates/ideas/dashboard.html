@@ -1022,13 +1022,15 @@
                                             </ul>
                                         </div>
                                     </template>
-                                    <template x-if="tab.key === 'BUILD_CODE' && buildRunInfo(tab.key)">
-                                        <div class="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
-                                            <div class="flex items-center justify-between gap-3 mb-3">
-                                                <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Run your app</h4>
-                                                <span class="text-xs text-slate-500 dark:text-slate-400" x-text="buildRunInfo(tab.key)?.target || ''"></span>
-                                            </div>
-                                            <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-4 mb-3">
+                                    <div class="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" x-show="tab.key === 'BUILD_CODE'">
+                                        <div class="flex items-center justify-between gap-3 mb-3">
+                                            <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Run your app</h4>
+                                            <span class="text-xs text-slate-500 dark:text-slate-400" x-text="(buildRunInfo(tab.key)?.target || managedApp?.target_name || '')"></span>
+                                        </div>
+                                        <div x-show="!buildRunInfo(tab.key) && !managedApp" class="text-sm text-slate-500 dark:text-slate-400 mb-3">
+                                            Confirm a build first to enable one-click run.
+                                        </div>
+                                        <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 p-4 mb-3" x-show="buildRunInfo(tab.key) || managedApp">
                                                 <div class="flex flex-wrap items-center gap-3">
                                                     <span class="inline-flex items-center gap-1.5 text-sm font-medium" :class="managedAppLive() ? 'text-green-700 dark:text-green-400' : 'text-slate-600 dark:text-slate-400'">
                                                         <span class="inline-block w-2.5 h-2.5 rounded-full" :class="managedAppLive() ? 'bg-green-500' : 'bg-slate-400'"></span>
@@ -1060,7 +1062,7 @@
                                                 </dl>
                                             </details>
                                         </div>
-                                    </template>
+                                    </div>
                                     <template x-if="isAdmin">
                                         <div class="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4">
                                             <div class="flex flex-wrap items-center gap-2">
@@ -1073,6 +1075,7 @@
                                                     <button @click="stopManagedApp()" x-show="managedAppLive()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-xs font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">Stop</button>
                                                     <a :href="managedAppOpenUrl()" x-show="managedAppHealthy()" target="_blank" rel="noopener" class="px-4 py-2 min-h-[44px] inline-flex items-center text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30">Open app</a>
                                                     <button @click="loadAppLogs()" x-show="managedApp" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Refresh logs</button>
+                                                    <button @click="copyText(appLogText, 'Logs copied')" x-show="appLogText" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Copy logs</button>
                                                 </span>
                                             </div>
                                             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Start runs this app here on the server — no terminal needed. Stop shuts it down again.</p>
