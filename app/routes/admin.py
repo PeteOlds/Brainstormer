@@ -441,7 +441,7 @@ def activity_stats(user):
             model_by_prompt[str(pc.id)] = pc.model_name
 
     for item in recent_runs:
-        model = None
+        model = item.get("model")  # keep stored value as fallback
         if (
             item["prompt_config_id"]
             and str(item["prompt_config_id"]) in model_by_prompt
