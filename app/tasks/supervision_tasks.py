@@ -6,6 +6,8 @@ process group — it must run on a worker because pids are
 container-local (a kill from the web container could hit an unrelated
 process). Status/tail stay in the routes (health-first, file-based).
 """
+import os
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -114,6 +116,64 @@ def start_managed_app(self, app_id: str, run_id: str | None = None):
             run.mark_success()
         db.session.commit()
         return
+    # Proactively rewrite a hard-coded port if it conflicts with an
+    # already-running program (e.g. Brainstormer itself on 8000).
+    try:
+        from app.services.build_service import allocate_port, port_in_use
+
+        workdir = spec.get("workdir") or app_row.workdir or ""
+        app_port = app_row.port
+        entry = None
+        for a in (spec.get("run_argv") or []):
+            if isinstance(a, str) and a.endswith(".py"):
+                entry = a
+                break
+        if not app_port and entry:
+            full = entry if os.path.isabs(entry) else os.path.join(workdir, entry)
+            try:
+                with open(full) as fh:
+                    text = fh.read()
+                m = re.search(r"\.run\([^)]*?\bport\s*=\s*(\d+)", text, re.S)
+                if m:
+                    app_port = int(m.group(1))
+                else:
+                    m = re.search(r"\.listen\(\s*(\d+)", text)
+                    if m:
+                        app_port = int(m.group(1))
+            except OSError:
+                pass
+        if app_port and port_in_use(int(app_port)):
+            new_port, _ = allocate_port(int(app_port))
+            if new_port and new_port != int(app_port):
+                if entry:
+                    full = entry if os.path.isabs(entry) else os.path.join(workdir, entry)
+                    try:
+                        with open(full) as fh:
+                            text = fh.read()
+                        text = re.sub(
+                            r"(\bport\s*=\s*)" + str(app_port) + r"\b",
+                            lambda m: m.group(1) + str(new_port),
+                            text,
+                        )
+                        with open(full, "w") as fh:
+                            fh.write(text)
+                    except OSError:
+                        pass
+                app_row.port = new_port
+                if app_row.health_url:
+                    app_row.health_url = re.sub(
+                        r":\d+(/|$)", f":{new_port}\\1", app_row.health_url, count=1
+                    )
+                spec["health_url"] = app_row.health_url
+                spec["port_note"] = (
+                    "Port %d was already in use, so Brainstormer "
+                    "moved your app to port %d. Use the new port "
+                    "to open it." % (app_port, new_port)
+                )
+                app_row.spec = spec
+                db.session.commit()
+    except Exception:  # noqa: BLE001
+        pass
     try:
         launched = runner.start(spec)
     except RunnerError as exc:

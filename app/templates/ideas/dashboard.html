@@ -1045,6 +1045,7 @@
                                                 </div>
                                                 <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Start runs this app here on the server — no terminal needed. Stop shuts it down again.</p>
                                                 <p x-show="managedApp && managedApp.last_error" class="mt-2 text-xs text-red-600 dark:text-red-400" x-text="managedApp.last_error"></p>
+                                                <p x-show="managedApp && managedApp.spec && managedApp.spec.port_note" class="mt-2 text-xs text-amber-700 dark:text-amber-400" x-text="managedApp.spec.port_note"></p>
                                                 <div x-show="managedApp" class="mt-2 flex flex-wrap items-center gap-2">
                                                     <button @click="loadAppLogs()" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Refresh logs</button>
                                                     <button @click="copyText(appLogText, 'Logs copied')" x-show="appLogText" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Copy logs</button>
