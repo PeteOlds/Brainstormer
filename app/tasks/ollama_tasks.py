@@ -1805,7 +1805,8 @@ def _inject_root_route(files: list) -> None:
             app_var = m.group(1)
         if "Flask(" in content:
             snippet = (
-                "\n\n@app.route('/')\n"
+                "\n\nos.makedirs('uploads', exist_ok=True)\n"
+                "\n@app.route('/')\n"
                 "def _brainstormer_home():\n"
                 "    return ('<h1>App is running</h1>'\n"
                 "            '<p>Your app is live. Upload an image below:</p>'\n"
