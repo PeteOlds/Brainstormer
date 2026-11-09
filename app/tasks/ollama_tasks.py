@@ -1050,6 +1050,31 @@ def _extract_runtime_info(files: list, preferred_paths=None) -> dict:
         if "opencv" in low or "cv2" in low:
             system_deps.add("libgl1 libsm6 (for OpenCV)")
 
+    # Detect a hard-coded listener port from source even when there is
+    # no Dockerfile EXPOSE or compose mapping (common in generated apps).
+    if port is None:
+        for content in by_path.values():
+            m = re.search(r"\.run\([^)]*?\bport\s*=\s*(\d+)", content, re.S)
+            if m:
+                try:
+                    port = int(m.group(1))
+                    break
+                except ValueError:
+                    pass
+            m = re.search(r"\.listen\(\s*(\d+)", content)
+            if m:
+                try:
+                    port = int(m.group(1))
+                    break
+                except ValueError:
+                    pass
+            m = re.search(r"\bPORT\s*=\s*(\d+)", content)
+            if m:
+                try:
+                    port = int(m.group(1))
+                    break
+                except ValueError:
+                    pass
     notes = []
     if inferred_note:
         notes.append(inferred_note)
