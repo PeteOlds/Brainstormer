@@ -331,16 +331,35 @@ def complete_release(user, release_id):
             "status must be 'shipped' or 'drop'.", status_code=400
         )
 
-    # Pre-release readiness: required tests must be passed (or explicitly
-    # waived). With force=false we only report; with force=true we proceed.
+    # Pre-release readiness (enforced). With force=false we only report;
+    # with force=true an admin can override, recorded in release notes.
     missing = []
     for child in children:
+        from app.models import SecondaryActionResult, ManagedApp
         from app.models.idea_test import IdeaTest, TestStatus
+
+        # Confirmed build?
+        has_build = (
+            SecondaryActionResult.query.filter_by(
+                idea_id=child.id, action_type="BUILD_CODE"
+            )
+            .filter(SecondaryActionResult.result_data["written"].astext == "true")
+            .first()
+            is not None
+        )
+        if not has_build:
+            missing.append(f"{child.reference_code}: no confirmed build")
+
+        # Managed app has been started at least once?
+        app_row = ManagedApp.query.filter_by(idea_id=child.id).first()
+        if app_row is None or app_row.started_at is None:
+            missing.append(f"{child.reference_code}: app never started")
 
         required_names = (
             "ui:",
             "generated test suite passes",
-            "dependencies install cleanly",
+            "app installs without errors",
+            "app builds as a container",
         )
         for t in IdeaTest.query.filter_by(idea_id=child.id).all():
             low = (t.name or "").lower()
@@ -353,7 +372,7 @@ def complete_release(user, release_id):
             {
                 "warnings": missing,
                 "requires_confirmation": True,
-                "message": "Required tests are not all passed. Re-run with force=true to override.",
+                "message": "Release readiness checks failed. Re-run with force=true to override.",
             }
         )
 
