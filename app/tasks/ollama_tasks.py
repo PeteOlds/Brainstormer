@@ -1807,16 +1807,24 @@ def _inject_root_route(files: list) -> None:
             snippet = (
                 "\n\n@app.route('/')\n"
                 "def _brainstormer_home():\n"
-                "    return '<h1>App is running</h1><p>This app is live. "
-                "Use the <a href=\"/upload\">/upload</a> endpoint to process images.</p>'\n"
+                "    return ('<h1>App is running</h1>'\n"
+                "            '<p>Your app is live. Upload an image below:</p>'\n"
+                "            '<form action=\"/upload\" method=\"POST\" enctype=\"multipart/form-data\">'\n"
+                "            '<input type=\"file\" name=\"image\" accept=\"image/*\">'\n"
+                "            '<button type=\"submit\">Upload</button>'\n"
+                "            '</form>')\n"
             )
             snippet = snippet.replace("@app.route", f"@{app_var}.route")
         else:
             snippet = (
                 "\n\n@{av}.get('/')\n"
                 "def _brainstormer_home():\n"
-                "    return '<h1>App is running</h1><p>This app is live. "
-                "Use the <a href=\"/upload\">/upload</a> endpoint to process images.</p>'\n"
+                "    return ('<h1>App is running</h1>'\n"
+                "            '<p>Your app is live. Upload an image below:</p>'\n"
+                "            '<form action=\"/upload\" method=\"POST\" enctype=\"multipart/form-data\">'\n"
+                "            '<input type=\"file\" name=\"image\" accept=\"image/*\">'\n"
+                "            '<button type=\"submit\">Upload</button>'\n"
+                "            '</form>')\n"
             ).format(av=app_var)
         entry["content"] = content.rstrip() + "\n" + snippet
 
