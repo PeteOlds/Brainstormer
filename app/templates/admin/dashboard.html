@@ -172,9 +172,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
     // Load stats
     try {
-        const res = await authFetch('/api/v1/admin/stats', {
-            headers: { 'Authorization': 'Bearer ' + token }
-        });
+        const res = await authFetch('/api/v1/admin/stats');
         if (res.ok) {
             const data = await res.json();
             document.getElementById('total-users').textContent = data.data.users.total;
@@ -205,9 +203,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         label.className = 'text-sm text-red-600 dark:text-red-400';
     };
     try {
-        const res = await authFetch('/api/ready', {
-            headers: { 'Authorization': 'Bearer ' + token }
-        });
+        const res = await authFetch('/api/ready');
         // NOTE: /api/ready returns 503 when anything is down, but the body
         // still carries per-service results — paint each row on its own merit.
         const data = await res.json();
@@ -258,11 +254,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadBreakdowns() {
         let stats = null, activity = null;
         try {
-            const r1 = await authFetch('/api/v1/admin/stats', { headers: { 'Authorization': 'Bearer ' + token } });
+            const r1 = await authFetch('/api/v1/admin/stats');
             if (r1.ok) stats = (await r1.json()).data;
         } catch (e) { console.error('Failed to load stats for breakdowns:', e); }
         try {
-            const r2 = await authFetch('/api/v1/admin/activity/stats', { headers: { 'Authorization': 'Bearer ' + token } });
+            const r2 = await authFetch('/api/v1/admin/activity/stats');
             if (r2.ok) activity = (await r2.json()).data;
         } catch (e) { console.error('Failed to load activity for breakdowns:', e); }
         const empty = '<p class="text-sm text-slate-500">No data yet.</p>';
