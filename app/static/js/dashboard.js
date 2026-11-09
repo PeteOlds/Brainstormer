@@ -1539,7 +1539,17 @@ function ideasApp() {
         async assignToNewRelease() {
             const ids = this.releaseKidIds(null);
             if (!ids.length) return;
-            const name = await this.showPromptModal('New release name', 'for example: Release 1.1');
+            const existing = (this.scaleReleases || []).map((r) => (r && r.name) || '');
+            let maxMajor = 1, maxMinor = 0;
+            for (const n of existing) {
+                const m = String(n).match(/Release\s+(\d+)\.(\d+)/i);
+                if (m) {
+                    const maj = parseInt(m[1], 10), min = parseInt(m[2], 10);
+                    if (maj > maxMajor || (maj === maxMajor && min > maxMinor)) { maxMajor = maj; maxMinor = min; }
+                }
+            }
+            const suggested = 'Release ' + maxMajor + '.' + (maxMinor + 1);
+            const name = await this.showPromptModal('New release name', 'for example: ' + suggested, suggested);
             if (!name || !name.trim()) return;
             if (!this.selectedIdea) {
                 this.showAlertModal('No idea selected — open an idea first.');
@@ -1948,10 +1958,10 @@ function ideasApp() {
         },
 
         // Prompt modal (replaces prompt())
-        async showPromptModal(message, placeholder) {
+        async showPromptModal(message, placeholder, defaultValue) {
             this.promptModalMessage = message;
             this.promptModalPlaceholder = placeholder || '';
-            this.promptModalValue = '';
+            this.promptModalValue = defaultValue || '';
             this.promptModalOpen = true;
             return new Promise((resolve, reject) => {
                 this.promptModalResolve = resolve;
