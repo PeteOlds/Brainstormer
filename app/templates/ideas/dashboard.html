@@ -610,8 +610,8 @@
                                             <input type="checkbox" :checked="allKidsSelected(rel.id)" @change="toggleAllKids(rel.id)" class="rounded border-slate-300 dark:border-slate-600" :aria-label="'Select every idea in ' + rel.name">
                                             Select all
                                         </label>
-                                        <button @click="toggleReleaseCollapse(rel)" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" :aria-label="isReleaseCollapsed(rel) ? 'Expand' : 'Collapse'">
-                                            <svg class="w-4 h-4 transition-transform" :class="isReleaseCollapsed(rel) ? '' : 'rotate-90'" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                        <button @click="toggleReleaseCollapse(rel)" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" :aria-label="isReleaseCollapsed(rel) ? 'Show ideas' : 'Hide ideas'">
+                                            <span x-text="isReleaseCollapsed(rel) ? 'Show ideas (' + scaleKids(rel.id).length + ')' : 'Hide ideas'"></span>
                                         </button>
                                         <span class="text-sm font-semibold text-slate-900 dark:text-white" x-text="rel.name"></span>
                                         <span x-show="releaseDate(rel)" class="text-xs text-slate-500 dark:text-slate-400" x-text="releaseDate(rel)"></span>
