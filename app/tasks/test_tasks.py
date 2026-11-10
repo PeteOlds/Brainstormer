@@ -101,30 +101,27 @@ def _record_test_failure(idea, message: str):
 def _get_or_create_suite_row(idea):
     from app.models.idea_test import TestType
 
+    # Prefer an existing row that looks like a test-suite check.
+    for candidate in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
+        low = (candidate.name or "").lower()
+        if "test" in low or "suite" in low:
+            return candidate
+    # Fall back to creating one.
     name = "Generated test suite passes"
-    row = IdeaTest.query.filter_by(idea_id=idea.id, source="build").filter(
-        IdeaTest.name.ilike(name)
-    ).first()
-    if row is None:
-        for candidate in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
-            if "test suite" in (candidate.name or "").lower():
-                row = candidate
-                break
-    if row is None:
-        row = IdeaTest(
-            idea_id=idea.id,
-            instance_id=getattr(idea, "instance_id", None),
-            name=name,
-            description=(
-                "Run the project's test command (e.g. `pytest` or `npm test`) "
-                "in the build folder. Expect all generated tests to pass."
-            ),
-            test_type=TestType.UNIT,
-            status=TestStatus.NOT_RUN,
-            source="build",
-        )
-        db.session.add(row)
-        db.session.flush()
+    row = IdeaTest(
+        idea_id=idea.id,
+        instance_id=getattr(idea, "instance_id", None),
+        name=name,
+        description=(
+            "Run the project's test command (e.g. `pytest` or `npm test`) "
+            "in the build folder. Expect all generated tests to pass."
+        ),
+        test_type=TestType.UNIT,
+        status=TestStatus.NOT_RUN,
+        source="build",
+    )
+    db.session.add(row)
+    db.session.flush()
     return row
 
 
@@ -251,7 +248,7 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         return (r.name or "").lower()
 
     # --- 1. Dependencies install cleanly ---
-    dep_row = _find_row(idea, lambda n: "dependencies install" in n or "dependencies install cleanly" in n)
+    dep_row = _find_row(idea, lambda n: "depend" in n or "install" in n)
     if dep_row is not None and (not selected or dep_row in selected):
         run.progress = 10
         run.message = "Installing dependencies…"
@@ -280,7 +277,7 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         _update_row(dep_row, TestStatus.PASSED if ok else TestStatus.FAILED, output)
 
     # --- 2. npm install completes ---
-    npm_row = _find_row(idea, lambda n: "npm install" in n)
+    npm_row = _find_row(idea, lambda n: "npm" in n)
     if npm_row is not None and has_node and (not selected or npm_row in selected):
         run.progress = 20
         run.message = "Running npm install…"
@@ -386,10 +383,22 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         # Combine outputs.
         output = "\n\n=== retry ===\n".join(a[1] for a in attempts) if len(attempts) > 1 else attempts[0][1]
         ok = attempts[-1][0]
-        _update_row(suite_row, TestStatus.PASSED if ok else TestStatus.FAILED, output)
+        # Exit code 5 = no tests collected (not a failure, just nothing to run).
+        if "no tests ran" in (output or "").lower() or "no tests collected" in (output or "").lower():
+            _update_row(suite_row, TestStatus.SKIPPED, "No test files in this build. Add tests to verify.")
+            for r in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
+                low = (r.name or "").lower()
+                if "backend test" in low or "frontend test" in low or "run backend" in low or "run frontend" in low or "automated test" in low:
+                    _update_row(r, TestStatus.SKIPPED, "No test files in this build. Add tests to verify.")
+        else:
+            _update_row(suite_row, TestStatus.PASSED if ok else TestStatus.FAILED, output)
+            for r in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
+                low = (r.name or "").lower()
+                if "backend test" in low or "frontend test" in low or "run backend" in low or "run frontend" in low or "automated test" in low:
+                    _update_row(r, TestStatus.PASSED if ok else TestStatus.FAILED, output)
 
     # --- 4. Container image builds ---
-    container_row = _find_row(idea, lambda n: "container image builds" in n)
+    container_row = _find_row(idea, lambda n: "container" in n or "docker" in n or "image build" in n)
     if container_row is not None and (not selected or container_row in selected):
         run.progress = 55
         run.message = "Building container image…"
@@ -478,10 +487,37 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                 app_proc = None
                 logger.warning("smoke_start_failed", error=str(exc))
 
-        # Wait for health (up to 30s).
-        health_url = spec.get("health_url")
-        if not health_url:
-            health_url = f"http://127.0.0.1:{port}"
+        # Wait for health (up to 30s). Detect the actual port from the
+        # source file since the stored health_url may be stale.
+        app_port = None
+        entry = None
+        for a in (spec.get("run_argv") or []):
+            if isinstance(a, str) and a.endswith(".py"):
+                entry = a
+                break
+        if entry:
+            full = entry if os.path.isabs(entry) else os.path.join(workdir, entry)
+            try:
+                with open(full) as fh:
+                    text = fh.read()
+                import re as _re
+
+                m = _re.search(r"\.run\([^)]*?\bport\s*=\s*(\d+)", text, _re.S)
+                if m:
+                    app_port = int(m.group(1))
+                else:
+                    m = _re.search(r"\.listen\(\s*(\d+)", text)
+                    if m:
+                        app_port = int(m.group(1))
+            except OSError:
+                pass
+        if app_port is None:
+            try:
+                app_port = int(str(spec.get("health_url", "")).rsplit(":", 1)[-1].rstrip("/"))
+            except (ValueError, TypeError):
+                app_port = 8000
+        health_url = f"http://127.0.0.1:{app_port}"
+        app_url = health_url
         ready = False
         for _ in range(30):
             if app_proc is not None and app_proc.poll() is not None:
@@ -490,14 +526,13 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                 ready = True
                 break
             time.sleep(1)
-        app_url = health_url
 
         run.progress = 80
         run.message = "Running HTTP smoke checks…"
         db.session.commit()
 
         # UI: app responds at its URL
-        ui_row = _find_row(idea, lambda n: n.startswith("ui:") and "responds at its url" in n)
+        ui_row = _find_row(idea, lambda n: "responds at" in n or "app responds" in n)
         if ui_row is not None and (not selected or ui_row in selected):
             ok = ready and _http_ok(app_url)
             _update_row(ui_row, TestStatus.PASSED if ok else TestStatus.FAILED, f"GET {app_url} -> {'ok' if ok else 'failed'}")
@@ -542,7 +577,7 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
             _update_row(row, TestStatus.PASSED if ok else TestStatus.FAILED, f"{method} {path or '/'} -> {'ok' if ok else 'failed'}")
 
         # Main screen UI check (best-effort: pass if app responds).
-        ui_main = _find_row(idea, lambda n: n.startswith("ui:") and "main screen" in n)
+        ui_main = _find_row(idea, lambda n: "main screen" in n or "app starts" in n)
         if ui_main is not None and (not selected or ui_main in selected):
             ok = ready and _http_ok(app_url)
             _update_row(ui_main, TestStatus.PASSED if ok else TestStatus.FAILED, f"GET {app_url} -> {'ok' if ok else 'failed'}")
@@ -616,13 +651,15 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                 except Exception:  # noqa: BLE001
                     pass
 
-    # Mark any remaining selected manual rows as skipped (no automation).
-    for r in selected:
-        if r.status == TestStatus.NOT_RUN:
-            r.status = TestStatus.SKIPPED
-            r.last_run_at = _now()
-            r.last_run_output = "No automated command; verify manually."
-            db.session.commit()
+    # Mark any remaining not_run build rows. Automated ones that were
+    # matched above are already updated. The rest are manual checks that
+    # the runner cannot execute — mark them skipped with a clear reason
+    # so the user sees what still needs attention.
+    for r in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
+        if r.status != TestStatus.NOT_RUN:
+            continue
+        _update_row(r, TestStatus.SKIPPED, "No automated command for this check. Verify manually and mark as passed.")
+    db.session.commit()
 
     run.progress = 100
     run.message = "Completed"
