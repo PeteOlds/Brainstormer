@@ -1688,15 +1688,42 @@ def list_idea_tests(user, idea_id):
 @bp.route("/ideas/<uuid:idea_id>/tests/run", methods=["POST"])
 @token_required
 def run_idea_tests_endpoint(user, idea_id):
-    """Kick off the build's generated test suite in the background."""
+    """Kick off the build's generated test suite (or selected subset) in the background."""
     idea = Idea.query.get_or_404(idea_id)
     denied = check_access(idea)
     if denied is not None:
         return denied
     from app.tasks.test_tasks import run_idea_tests
 
-    run_idea_tests.delay(str(idea.id))
-    return api_ok({"message": "Tests started; refresh to see results."}, 202)
+    data = request.get_json(silent=True) or {}
+    selected = data.get("test_ids") or []
+    if not isinstance(selected, list):
+        selected = []
+    selected = [str(x) for x in selected]
+    async_result = run_idea_tests.apply_async(args=[str(idea.id), selected], queue="default")
+    return api_ok(
+        {"message": "Tests started; refresh to see results.", "run_id": async_result.id},
+        202,
+    )
+
+
+@bp.route("/ideas/<uuid:idea_id>/tests/run-status", methods=["GET"])
+@token_required
+def idea_tests_run_status(user, idea_id):
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    from app.models import TestRun
+
+    row = (
+        TestRun.query.filter_by(idea_id=idea.id)
+        .order_by(TestRun.started_at.desc())
+        .first()
+    )
+    if row is None:
+        return api_ok({"run": None})
+    return api_ok({"run": row.to_dict()})
 @token_required
 def create_idea_test(user, idea_id):
     from app.models import IdeaTest, TestStatus, TestType

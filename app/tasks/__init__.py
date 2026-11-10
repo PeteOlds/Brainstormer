@@ -88,6 +88,7 @@ def init_celery(app):
             "app.tasks.supervision_tasks.*": {"queue": "supervision"},
             "app.tasks.release_tasks.*": {"queue": "default"},
             "app.tasks.github_tasks.*": {"queue": "github"},
+            "app.tasks.test_tasks.*": {"queue": "default"},
         },
         beat_schedule={
             "check-due-prompts": {
