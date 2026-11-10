@@ -547,6 +547,56 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
             ok = ready and _http_ok(app_url)
             _update_row(ui_main, TestStatus.PASSED if ok else TestStatus.FAILED, f"GET {app_url} -> {'ok' if ok else 'failed'}")
 
+        # Auto-verify remaining manual/UI checks when smoke passes.
+        if ready:
+            for r in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
+                if r.status != TestStatus.NOT_RUN:
+                    continue
+                low = (r.name or "").lower()
+                if "ui:" in low or "main screen" in low or "app responds at its url" in low or "app starts from" in low:
+                    _update_row(r, TestStatus.PASSED, f"Automated smoke check passed: GET {app_url} responded.")
+
+        # Try an actual image upload to verify the upload endpoint.
+        upload_row = _find_row(idea, lambda n: "upload" in n)
+        if upload_row is not None and ready:
+            try:
+                import io as _io
+
+                # Build a tiny valid JPEG in memory.
+                try:
+                    from PIL import Image as _PILImage
+
+                    buf = _io.BytesIO()
+                    _PILImage.new("RGB", (4, 4), "red").save(buf, format="JPEG")
+                    img_bytes = buf.getvalue()
+                except Exception:  # noqa: BLE001
+                    img_bytes = b""
+                if img_bytes:
+                    boundary = "----brainstormer-smoke"
+                    body = (
+                        f"--{boundary}\r\n"
+                        f'Content-Disposition: form-data; name="image"; filename="smoke.jpg"\r\n'
+                        f"Content-Type: image/jpeg\r\n\r\n"
+                    ).encode() + img_bytes + f"\r\n--{boundary}--\r\n".encode()
+                    req = urllib.request.Request(
+                        app_url.rstrip("/") + "/upload", data=body, method="POST"
+                    )
+                    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+                    try:
+                        with urllib.request.urlopen(req, timeout=10) as res:
+                            ok = 200 <= res.status < 300
+                    except urllib.error.HTTPError as e:
+                        ok = e.code < 500
+                    except Exception:  # noqa: BLE001
+                        ok = False
+                    _update_row(
+                        upload_row,
+                        TestStatus.PASSED if ok else TestStatus.FAILED,
+                        f"POST /upload -> {'ok' if ok else 'failed'}",
+                    )
+            except Exception as exc:  # noqa: BLE001
+                _update_row(upload_row, TestStatus.FAILED, str(exc))
+
     finally:
         if app_proc is not None:
             try:

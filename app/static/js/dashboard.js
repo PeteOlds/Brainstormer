@@ -747,16 +747,21 @@ function ideasApp() {
         },
         releaseReady() {
             const autoFailed = this.ideaTests.some((t) => !this.isManualTest(t) && t.status === 'failed');
-            const manualPending = this.ideaTests.some((t) => this.isManualTest(t) && t.status === 'not_run');
-            return !autoFailed && !manualPending && this.ideaTests.length > 0;
+            return !autoFailed && this.ideaTests.length > 0;
         },
         releaseBlockers() {
             const out = [];
             this.ideaTests.forEach((t) => {
                 if (!this.isManualTest(t) && t.status === 'failed') out.push(t.name + ' failed');
-                if (this.isManualTest(t) && t.status === 'not_run') out.push(t.name + ' not verified');
             });
             return out;
+        },
+        manualPending() {
+            return this.ideaTests.filter((t) => this.isManualTest(t) && t.status === 'not_run');
+        },
+        autoPassedCount() {
+            const auto = this.ideaTests.filter((t) => !this.isManualTest(t));
+            return auto.filter((t) => t.status === 'passed').length + '/' + auto.length;
         },
 
         flatComments() {

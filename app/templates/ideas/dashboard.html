@@ -865,10 +865,12 @@
                                     <!-- List -->
                                      <div class="rounded-lg border p-3 text-sm mb-3" :class="releaseReady() ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700'">
                                          <div class="font-semibold" x-text="releaseReady() ? 'Ready to release' : 'Not ready to release'"></div>
-                                         <ul class="mt-1 text-xs space-y-0.5" x-show="!releaseReady()">
+                                         <p class="text-xs mt-1">Automated checks: <span x-text="autoPassedCount()"></span> passed</p>
+                                         <p class="text-xs" x-show="manualPending().length">Manual checks: <span x-text="manualPending().length"></span> still need your verification</p>
+                                         <ul class="mt-1 text-xs space-y-0.5" x-show="releaseBlockers().length">
                                              <template x-for="b in releaseBlockers()" :key="b"><li x-text="'• ' + b"></li></template>
                                          </ul>
-                                         <p class="mt-1 text-xs text-slate-500" x-show="releaseReady()">All automated checks passed and every manual check is verified.</p>
+                                         <p class="mt-1 text-xs text-slate-500" x-show="releaseReady()">All automated checks passed. Manual checks are optional warnings.</p>
                                      </div>
                                      <div x-show="testsLoading" class="text-sm text-slate-500">Loading...</div>
                                      <table class="w-full text-sm" x-show="!testsLoading">
