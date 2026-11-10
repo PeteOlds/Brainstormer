@@ -49,6 +49,7 @@ function ideasApp() {
         scaleParent: null,
         scaleChildren: [],
         scaleReleases: [],
+        collapsedReleases: [],
         scaleTargets: [],
         buildStatus: {},
         // Test tab state (manual + imported test cases).
@@ -1075,6 +1076,46 @@ function ideasApp() {
         realReleases() {
             return (this.scaleReleases || []).filter((r) => r && r.id);
         },
+        isReleaseCollapsed(rel) {
+            if (!rel || !rel.id) return false;
+            if (rel.status === 'done') return !this.collapsedReleases.includes('open:' + rel.id);
+            return this.collapsedReleases.includes('closed:' + rel.id);
+        },
+        toggleReleaseCollapse(rel) {
+            if (!rel || !rel.id) return;
+            const key = (rel.status === 'done' ? 'open:' : 'closed:') + rel.id;
+            const i = this.collapsedReleases.indexOf(key);
+            if (i >= 0) this.collapsedReleases.splice(i, 1);
+            else this.collapsedReleases.push(key);
+        },
+        releaseStepper(rel) {
+            const p = (rel && rel.pipeline) || {};
+            const children = this.pipelineRows(rel);
+            const total = children.length || (rel.child_count || 0) || 1;
+            const phases = ['prd', 'design', 'build', 'test'];
+            return phases.map((ph) => {
+                let done = 0;
+                for (const c of children) {
+                    if (c[ph] === 'done') done++;
+                }
+                const count = p.counts ? (p.counts[ph] || 0) : done;
+                const allDone = count >= total && total > 0;
+                const inProgress = count > 0 && !allDone;
+                const failed = children.some((c) => c[ph] === 'failed');
+                let cls = 'bg-slate-200 dark:bg-slate-700 text-slate-500';
+                if (failed) cls = 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
+                else if (allDone) cls = 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
+                else if (inProgress) cls = 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+                return { phase: ph, label: ({ prd: 'PRD', design: 'Design', build: 'Build', test: 'Test' })[ph], count, total, cls, failed, allDone, inProgress };
+            });
+        },
+        releaseNextStep(rel) {
+            const steps = this.releaseStepper(rel);
+            for (const st of steps) {
+                if (!st.allDone) return st;
+            }
+            return null;
+        },
 
         // ---- Per-release AI settings -------------------------------------
         // The catalogue is cached per provider and shared by every release
@@ -1389,6 +1430,27 @@ function ideasApp() {
             const p = (rel && rel.pipeline) || {};
             const counts = p.counts || {};
             return (counts[phase] || 0) + '/' + (p.total || 0);
+        },
+
+        async runReleaseStep(rel, phase) {
+            if (!rel || !rel.id || !phase) return;
+            const count = rel.child_count || this.scaleKids(rel.id).length;
+            if (!(await this.showConfirmModal(`Run just the ${phase.toUpperCase()} step for ${count} idea(s)?`, '', 'Run step'))) return;
+            this.releaseBusy = true;
+            try {
+                const res = await authFetch(`/api/v1/releases/${rel.id}/pipeline`, {
+                    method: 'POST',
+                    body: JSON.stringify({ force: this.releaseForceRerun, target_phase: phase }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.message || data.error || 'Could not start');
+                await this.loadScaleFamily();
+                this.startPipelinePolling();
+            } catch (e) {
+                this.showAlertModal('Could not start the release: ' + e.message);
+            } finally {
+                this.releaseBusy = false;
+            }
         },
 
         async runReleasePipeline(rel) {

@@ -610,10 +610,17 @@
                                             <input type="checkbox" :checked="allKidsSelected(rel.id)" @change="toggleAllKids(rel.id)" class="rounded border-slate-300 dark:border-slate-600" :aria-label="'Select every idea in ' + rel.name">
                                             Select all
                                         </label>
+                                        <button @click="toggleReleaseCollapse(rel)" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" :aria-label="isReleaseCollapsed(rel) ? 'Expand' : 'Collapse'">
+                                            <svg class="w-4 h-4 transition-transform" :class="isReleaseCollapsed(rel) ? '' : 'rotate-90'" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                        </button>
                                         <span class="text-sm font-semibold text-slate-900 dark:text-white" x-text="rel.name"></span>
                                         <span x-show="releaseDate(rel)" class="text-xs text-slate-500 dark:text-slate-400" x-text="releaseDate(rel)"></span>
                                         <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300" x-text="releaseStageLabel(rel.status)"></span>
                                         <span x-show="rel.pipeline && rel.pipeline.status !== 'idle'" class="text-xs px-2 py-0.5 rounded-full" :class="rel.pipeline.status === 'failed' ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' : (pipelineRunning(rel) ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 animate-pulse' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800')" x-text="pipelineStatusLabel(rel)"></span>
+                                        <span x-show="rel.pipeline && rel.pipeline.status !== 'idle' && releaseNextStep(rel)" class="ml-2 text-xs text-slate-600 dark:text-slate-400">
+                                            Next: <strong x-text="releaseNextStep(rel)?.label"></strong>
+                                            <button @click="runReleaseStep(rel, releaseNextStep(rel)?.phase)" :disabled="releaseBusy" class="ml-1 text-indigo-600 dark:text-indigo-400 hover:underline font-medium">Run this step</button>
+                                        </span>
                                         <span class="flex gap-2 ml-auto" x-show="isAdmin && rel.id">
                                             <label x-show="!pipelineRunning(rel)" class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
                                                 <input type="checkbox" x-model="releaseForceRerun" class="rounded">
@@ -627,7 +634,7 @@
                                             <button @click="deleteRelease(rel.id)" :disabled="releaseBusy" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline px-4 py-2 min-h-[44px] disabled:opacity-50">Delete</button>
                                         </span>
                                     </div>
-                                    <div x-show="rel.id" class="flex flex-wrap items-center gap-2 mb-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                    <div x-show="rel.id && !isReleaseCollapsed(rel)" class="flex flex-wrap items-center gap-2 mb-2 text-[11px] text-slate-500 dark:text-slate-400">
                                         <span>Builds into</span>
                                         <span class="font-medium text-slate-700 dark:text-slate-300" x-text="rel.build_target ? rel.build_target.name : 'no repo yet'"></span>
                                         <select x-show="isAdmin" :value="rel.build_target_id || ''" @change="setReleaseTarget(rel, $event.target.value)" :disabled="releaseBusy" :aria-label="'Build repo for ' + rel.name" class="text-[11px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-1 py-1">
@@ -637,7 +644,7 @@
                                             </template>
                                         </select>
                                     </div>
-                                    <div x-show="rel.pipeline && rel.pipeline.status !== 'idle'" class="mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2 space-y-1">
+                                    <div x-show="rel.pipeline && rel.pipeline.status !== 'idle' && !isReleaseCollapsed(rel)" class="mb-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 p-2 space-y-1">
                                         <div class="grid grid-cols-4 gap-1 text-center">
                                             <template x-for="p in ['prd','design','build','test']" :key="p">
                                                 <div>
@@ -664,8 +671,8 @@
                                             </ul>
                                         </details>
                                     </div>
-                                    <div x-show="!scaleKids(rel.id).length" class="text-xs text-slate-500 dark:text-slate-400">Nothing here yet.</div>
-                                    <ul class="space-y-2">
+                                    <div x-show="!scaleKids(rel.id).length && !isReleaseCollapsed(rel)" class="text-xs text-slate-500 dark:text-slate-400">Nothing here yet.</div>
+                                    <ul class="space-y-2" x-show="!isReleaseCollapsed(rel)">
                                         <template x-for="k in scaleKids(rel.id)" :key="k.id">
                                             <li class="rounded-lg bg-slate-50 dark:bg-slate-900/50 px-3 py-2">
                                                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
@@ -704,7 +711,7 @@
                                             </li>
                                         </template>
                                     </ul>
-                                    <div x-show="isAdmin && rel.id && scaleKids(rel.id).length" class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                                    <div x-show="isAdmin && rel.id && scaleKids(rel.id).length && !isReleaseCollapsed(rel)" class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
                                         <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Move everything together:</p>
                                         <div class="flex flex-wrap items-center gap-2">
                                             <select x-model="releaseMove[rel.id]" :disabled="releaseBusy" class="text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-4 py-2 min-h-[44px]" aria-label="Move all to stage">
