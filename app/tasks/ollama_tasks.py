@@ -1830,6 +1830,121 @@ def _inject_root_route(files: list) -> None:
         entry["content"] = content.rstrip() + "\n" + snippet
 
 
+
+# Map common import names to their pip package names.
+_IMPORT_TO_PACKAGE = {
+    "PIL": "Pillow",
+    "cv2": "opencv-python",
+    "bs4": "beautifulsoup4",
+    "sklearn": "scikit-learn",
+    "yaml": "PyYAML",
+    "dotenv": "python-dotenv",
+    "jwt": "PyJWT",
+    "fitz": "PyMuPDF",
+    "docx": "python-docx",
+    "pptx": "python-pptx",
+    "serial": "pyserial",
+    "usb": "pyusb",
+    "magic": "python-magic",
+    "dateutil": "python-dateutil",
+    "exifread": "exifread",
+    "pytesseract": "pytesseract",
+    "flask": "Flask",
+    "werkzeug": "werkzeug",
+    "jinja2": "Jinja2",
+    "sqlalchemy": "SQLAlchemy",
+    "alembic": "alembic",
+    "celery": "celery",
+    "redis": "redis",
+    "requests": "requests",
+    "httpx": "httpx",
+    "numpy": "numpy",
+    "pandas": "pandas",
+    "matplotlib": "matplotlib",
+    "scipy": "scipy",
+    "bs4": "beautifulsoup4",
+}
+
+
+def _ensure_requirements(files: list) -> None:
+    """Make sure requirements.txt covers every third-party import.
+
+    Scans Python files for ``import`` / ``from … import`` statements,
+    filters out stdlib modules, and appends any missing packages to the
+    requirements.txt entry (creating one if needed). This prevents the
+    common 'ModuleNotFoundError' at startup for non-technical users.
+    """
+    import ast
+    import sys
+
+    stdlib = set(sys.stdlib_module_names) if hasattr(sys, "stdlib_module_names") else set()
+
+    imported = set()
+    for entry in files or []:
+        if not isinstance(entry, dict):
+            continue
+        path = str(entry.get("path") or "")
+        if not path.endswith(".py"):
+            continue
+        content = str(entry.get("content") or "")
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported.add(alias.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.level == 0:
+                    imported.add(node.module.split(".")[0])
+
+    # Filter to third-party (not stdlib, not local).
+    local_modules = set()
+    for entry in files or []:
+        if isinstance(entry, dict):
+            p = str(entry.get("path") or "")
+            if p.endswith(".py"):
+                local_modules.add(p.rsplit("/", 1)[-1].replace(".py", ""))
+                if "/" in p:
+                    local_modules.add(p.split("/")[0])
+    third_party = imported - stdlib - local_modules - {"os", "sys", "json", "re", "math", "datetime", "typing", "pathlib", "collections", "itertools", "functools", "io", "base64", "hashlib", "uuid", "time", "random", "string", "enum", "dataclasses", "abc", "contextlib", "logging", "warnings", "traceback", "inspect", "textwrap", "shutil", "tempfile", "subprocess", "socket", "http", "urllib", "html", "xml", "csv", "sqlite3", "argparse", "configparser", "secrets", "hmac", "struct", "array", "copy", "pprint", "textwrap", "types", "weakref", "gc", "atexit", "signal", "threading", "multiprocessing", "concurrent", "asyncio", "queue", "heapq", "bisect", "cmath", "decimal", "fractions", "statistics", "numbers", "operator", "pickle", "shelve", "dbm", "gzip", "bz2", "lzma", "zipfile", "tarfile", "csv", "configparser", "netrc", "xdrlib", "plistlib", "hashlib", "hmac", "secrets", "os", "sys"}
+
+    # Find or create requirements.txt entry.
+    req_entry = None
+    for entry in files or []:
+        if isinstance(entry, dict) and str(entry.get("path") or "").rsplit("/", 1)[-1] == "requirements.txt":
+            req_entry = entry
+            break
+
+    if not third_party:
+        return
+
+    existing = set()
+    if req_entry is not None:
+        for line in str(req_entry.get("content") or "").splitlines():
+            line = line.split("#", 1)[0].strip()
+            if line and not line.startswith("-"):
+                name = line.split("==", 1)[0].split(">=", 1)[0].split("<=", 1)[0].split("!=", 1)[0].split("~=", 1)[0].strip().lower()
+                existing.add(name)
+
+    missing = []
+    for mod in sorted(third_party):
+        pkg = _IMPORT_TO_PACKAGE.get(mod, mod)
+        if pkg.lower() not in existing and mod.lower() not in existing:
+            missing.append(pkg)
+
+    if not missing:
+        return
+
+    new_lines = "\n".join(missing)
+    if req_entry is not None:
+        content = str(req_entry.get("content") or "").rstrip()
+        req_entry["content"] = content + "\n" + new_lines + "\n"
+    else:
+        files.append({"path": "requirements.txt", "content": new_lines + "\n"})
+
+
 def _write_confirmed_build(idea, build_target, build_root, run_id):
     """Write a previewed manifest to its target (confirm run, no LLM).
 
@@ -1914,6 +2029,7 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
     # Ensure the app has a root route so "Open app" doesn't 404 for
     # non-technical users. Only inject if no existing root route.
     _inject_root_route(manifest_files)
+    _ensure_requirements(manifest_files)
     try:
         written, skipped = write_manifest(
             build_root,
