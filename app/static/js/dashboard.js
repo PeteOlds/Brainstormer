@@ -1304,6 +1304,24 @@ function ideasApp() {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message || 'Failed to finish release');
                 const d = data.data || data;
+                if (d.requires_confirmation) {
+                    const warnings = (d.warnings || []).join('\n');
+                    if (!(await this.showConfirmModal('Some checks are not complete:\n' + warnings + '\n\nShip anyway?', '', 'Ship anyway'))) {
+                        this.releaseBusy = false;
+                        return;
+                    }
+                    const res2 = await authFetch(`/api/v1/releases/${releaseId}/complete`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: target, force: true }),
+                    });
+                    const data2 = await res2.json();
+                    if (!res2.ok) throw new Error(data2.message || 'Failed to finish release');
+                    await this.loadScaleFamily();
+                    await this.showAlertModal('Release completed (override recorded).');
+                    this.releaseBusy = false;
+                    return;
+                }
                 if (!d.total) {
                     await this.showAlertModal('Nothing in this release yet — move ideas into it first.');
                 } else if (!d.updated_count && !d.skipped_illegal) {

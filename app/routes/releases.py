@@ -339,14 +339,13 @@ def complete_release(user, release_id):
         from app.models.idea_test import IdeaTest, TestStatus
 
         # Confirmed build?
-        has_build = (
-            SecondaryActionResult.query.filter_by(
-                idea_id=child.id, action_type="BUILD_CODE"
-            )
-            .filter(SecondaryActionResult.result_data["written"].astext == "true")
-            .first()
-            is not None
-        )
+        has_build = False
+        for sar in SecondaryActionResult.query.filter_by(
+            idea_id=child.id, action_type="BUILD_CODE"
+        ).all():
+            if (sar.result_data or {}).get("written"):
+                has_build = True
+                break
         if not has_build:
             missing.append(f"{child.reference_code}: no confirmed build")
 
@@ -359,7 +358,11 @@ def complete_release(user, release_id):
             "ui:",
             "generated test suite passes",
             "app installs without errors",
+            "install dependencies",
+            "dependencies install",
             "app builds as a container",
+            "container image builds",
+            "container builds",
         )
         for t in IdeaTest.query.filter_by(idea_id=child.id).all():
             low = (t.name or "").lower()
@@ -755,7 +758,8 @@ def start_release_pipeline_route(user, release_id):
 
     data = request.get_json() or {}
     force = bool(data.get("force"))
-    ok, message = start_release_pipeline(release, user, force=force)
+    target_phase = data.get("target_phase")
+    ok, message = start_release_pipeline(release, user, force=force, target_phase=target_phase)
     if not ok:
         return api_error(message, status_code=400)
     count = Idea.query.filter_by(release_id=release.id).count()
