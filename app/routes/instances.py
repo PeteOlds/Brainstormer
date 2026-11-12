@@ -458,7 +458,7 @@ def _spec_from_build_version(version_row, target, idea_ref):
         existing_repo_files,
         server_path,
     )
-    from app.tasks.ollama_tasks import (
+    from app.services.build_runtime import (
         _derive_runbook,
         _extract_runtime_info,
         _merge_files,
@@ -554,7 +554,7 @@ def _spec_from_build_version(version_row, target, idea_ref):
     if port is None and inferred_port:
         # Older rows never stored the inferred port; keep the URL honest.
         port = int(inferred_port)
-    from app.tasks.ollama_tasks import _host_network_ip
+    from app.services.build_runtime import _host_network_ip
 
     def _network_url(url):
         if not isinstance(url, str) or not url.strip():
