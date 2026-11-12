@@ -19,6 +19,7 @@ APPROVED = {
     "app/services/embedding_service.py",  # httpx only to local Ollama
     "app/services/opencode_backend.py",  # httpx to the LAN opencode server
     "app/services/runner.py",  # urllib only for local health probes
+    "app/tasks/test_tasks.py",  # urllib only for local smoke/health probes
     "app/services/frontend_proxy.py",  # stdlib reverse proxy for supervised apps
     "app/utils/net.py",  # URL validation only; no outbound requests
     "app/routes/health.py",  # httpx only to local Ollama readiness probe

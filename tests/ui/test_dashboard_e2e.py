@@ -91,3 +91,11 @@ def test_prompts_page_lists_seeded_prompt(admin_page, live_server):
     admin_page.wait_for_timeout(1500)
     assert "UI Seed Prompt" in admin_page.inner_text("body")
     assert_no_page_errors(admin_page)
+
+
+def test_upload_md_button_visible(admin_page):
+    """Regression: the Upload .md button must render in the dashboard header."""
+    admin_page.wait_for_selector("[data-testid='idea-card']", timeout=15000)
+    btn = admin_page.get_by_text("Upload .md")
+    assert btn.is_visible(), "Upload .md button not visible"
+    assert_no_page_errors(admin_page)

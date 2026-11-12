@@ -1060,8 +1060,12 @@
                                                     <button @click="stopManagedApp()" x-show="managedAppLive()" :disabled="appBusy" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg disabled:opacity-50">Stop</button>
                                                 </div>
                                                 <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Start runs this app here on the server — no terminal needed. Stop shuts it down again.</p>
-                                                <p x-show="managedApp && managedApp.last_error" class="mt-2 text-xs text-red-600 dark:text-red-400" x-text="managedApp.last_error"></p>
-                                                <p x-show="managedApp && managedApp.spec && managedApp.spec.port_note" class="mt-2 text-xs text-amber-700 dark:text-amber-400" x-text="managedApp.spec.port_note"></p>
+                                                <p x-show="managedApp && managedApp.last_error" class="mt-2 text-xs text-red-600 dark:text-red-400" x-text="managedApp ? managedApp.last_error : ''"></p>
+                                                <p x-show="managedApp && managedApp.spec && managedApp.spec.port_note" class="mt-2 text-xs text-amber-700 dark:text-amber-400" x-text="managedApp && managedApp.spec ? managedApp.spec.port_note : ''"></p>
+[Tool result]: Edited app/templates/ideas/dashboard.html (1 replacement)
+
+[Assistant tool call]: shell<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
+cd /mnt/General/OpenCode/brainstormer && docker run --rm -v /mnt/General/OpenCode/brainstormer:/app alpine rm -rf /app/app/templates/ideas/__pycache__ 2>/dev/null; docker restart brainstormer-web 2>&1 | tail -1; sleep 6; curl -sk https://127.0.0.1:8000/api/ready 2>&1 | head -c 40
                                                 <div x-show="managedApp" class="mt-2 flex flex-wrap items-center gap-2">
                                                     <button @click="loadAppLogs()" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Refresh logs</button>
                                                     <button @click="copyText(appLogText, 'Logs copied')" x-show="appLogText" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Copy logs</button>

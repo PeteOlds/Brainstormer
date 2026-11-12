@@ -482,6 +482,34 @@ function ideasApp() {
             this.showCreateDetails = false;
         },
 
+         async uploadIdeaFile(event) {
+            const file = event && event.target && event.target.files && event.target.files[0];
+            if (event && event.target) event.target.value = '';
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.md')) {
+                this.showAlertModal('Only .md (Markdown) files are accepted.');
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                this.showAlertModal('File must be under 10 MB.');
+                return;
+            }
+            this.createIdeaLoading = true;
+            try {
+                const form = new FormData();
+                form.append('file', file);
+                const res = await authFetch('/api/v1/ideas/upload', { method: 'POST', body: form });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data && (data.error || data.message)) || 'Upload failed');
+                await this.loadIdeas();
+                this.showAlertModal('Idea created from ' + file.name);
+            } catch (e) {
+                this.showAlertModal('Upload failed: ' + e.message);
+            } finally {
+                this.createIdeaLoading = false;
+            }
+        },
+
         async createIdea() {
             this.createIdeaError = '';
             const title = (this.createIdeaTitle || '').trim();

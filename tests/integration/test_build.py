@@ -1645,3 +1645,187 @@ class TestManagedApps:
             got = db.session.get(ManagedApp, rid)
             assert got.state == "failed"
             assert "confirm the build" in (got.last_error or "")
+
+
+class TestInjectRootRoute:
+    def test_injects_root_route(self, celery_app, tmp_path):
+        celery_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
+        with celery_app.app_context():
+            inst = make_instance(100, "IR")
+            idea = seed_idea(db, inst.id, email="ir@t.test")
+            seed_design(idea)
+            target = seed_target(inst.id, path=str(tmp_path))
+            from app.models import SecondaryActionResult
+            from app.tasks.ollama_tasks import _write_confirmed_build
+
+            manifest = {
+                "summary": "Implement a minimal Flask app with a single route.",
+                "files": [
+                    {
+                        "path": "app.py",
+                        "content": "from flask import Flask\napp = Flask(__name__)\n",
+                    }
+                ],
+            }
+            row = SecondaryActionResult(
+                idea_id=idea.id,
+                action_type="BUILD_CODE",
+                model_used="m",
+                provider_used="p",
+                result_data={**manifest, "written": False, "target_id": str(target.id)},
+                version=1,
+                is_current=True,
+                target_id=str(target.id),
+                target_name=target.name,
+                instance_id=idea.instance_id,
+            )
+            db.session.add(row)
+            db.session.commit()
+
+            _write_confirmed_build(idea, target, str(tmp_path), None)
+            content = (tmp_path / "app.py").read_text()
+            assert "@app.route('/')" in content or '@app.route("/")' in content
+
+
+class TestPortRewriteOnConfirm:
+    def test_rewrites_hardcoded_port(self, celery_app, tmp_path, monkeypatch):
+        celery_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
+        with celery_app.app_context():
+            inst = make_instance(101, "PR")
+            idea = seed_idea(db, inst.id, email="pr@t.test")
+            seed_design(idea)
+            target = seed_target(inst.id, path=str(tmp_path))
+            from app.models import SecondaryActionResult
+            from app.tasks.ollama_tasks import _write_confirmed_build
+            import app.services.build_service as bs
+
+            monkeypatch.setattr(bs, "port_in_use", lambda p: p == 8000)
+
+            manifest = {
+                "summary": "Implement a minimal Flask app with a single route.",
+                "files": [
+                    {
+                        "path": "app.py",
+                        "content": "from flask import Flask\napp = Flask(__name__)\nif __name__ == '__main__':\n    app.run(port=8000)\n",
+                    }
+                ],
+            }
+            row = SecondaryActionResult(
+                idea_id=idea.id,
+                action_type="BUILD_CODE",
+                model_used="m",
+                provider_used="p",
+                result_data={**manifest, "written": False, "target_id": str(target.id)},
+                version=1,
+                is_current=True,
+                target_id=str(target.id),
+                target_name=target.name,
+                instance_id=idea.instance_id,
+            )
+            db.session.add(row)
+            db.session.commit()
+
+            _write_confirmed_build(idea, target, str(tmp_path), None)
+            content = (tmp_path / "app.py").read_text()
+            assert "port=8000" not in content
+            assert "port=8001" in content or "port=800" in content
+
+
+class TestUploadCreatesIdea:
+    def test_upload_valid_md(self, app, client, tmp_path):
+        with app.app_context():
+            from app.models import User
+            u = User.query.filter_by(email="admin@test.local").first()
+            if u is None:
+                u = User(email="admin@test.local")
+                u.set_password("password123")
+                u.can_create_ideas = True
+                db.session.add(u)
+                db.session.commit()
+        # login
+        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        assert resp.status_code == 200
+        token = resp.get_json()["data"]["access_token"]
+        import io
+
+        data = {"file": (io.BytesIO(b"# Hello\n\nTest content"), "test.md")}
+        resp = client.post(
+            "/api/v1/ideas/upload",
+            data=data,
+            content_type="multipart/form-data",
+            headers={"Authorization": "Bearer " + token},
+        )
+        assert resp.status_code == 201, resp.get_json()
+        body = resp.get_json()["data"]
+        assert body["prompt_title"] == "test"
+        assert "Test content" in (body.get("content") or body.get("raw_content") or "")
+
+    def test_upload_oversized(self, app, client):
+        with app.app_context():
+            from app.models import User
+            u = User.query.filter_by(email="admin@test.local").first()
+            if u is None:
+                u = User(email="admin@test.local")
+                u.set_password("password123")
+                u.can_create_ideas = True
+                db.session.add(u)
+                db.session.commit()
+        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        token = resp.get_json()["data"]["access_token"]
+        import io
+
+        big = b"x" * (10 * 1024 * 1024 + 1)
+        data = {"file": (io.BytesIO(big), "big.md")}
+        resp = client.post(
+            "/api/v1/ideas/upload",
+            data=data,
+            content_type="multipart/form-data",
+            headers={"Authorization": "Bearer " + token},
+        )
+        assert resp.status_code in (400, 413)
+
+    def test_upload_non_md(self, app, client):
+        with app.app_context():
+            from app.models import User
+            u = User.query.filter_by(email="admin@test.local").first()
+            if u is None:
+                u = User(email="admin@test.local")
+                u.set_password("password123")
+                u.can_create_ideas = True
+                db.session.add(u)
+                db.session.commit()
+        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        token = resp.get_json()["data"]["access_token"]
+        import io
+
+        data = {"file": (io.BytesIO(b"hello"), "test.txt")}
+        resp = client.post(
+            "/api/v1/ideas/upload",
+            data=data,
+            content_type="multipart/form-data",
+            headers={"Authorization": "Bearer " + token},
+        )
+        assert resp.status_code == 400
+
+    def test_upload_binary(self, app, client):
+        with app.app_context():
+            from app.models import User
+            u = User.query.filter_by(email="admin@test.local").first()
+            if u is None:
+                u = User(email="admin@test.local")
+                u.set_password("password123")
+                u.can_create_ideas = True
+                db.session.add(u)
+                db.session.commit()
+        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        token = resp.get_json()["data"]["access_token"]
+        import io
+
+        data = {"file": (io.BytesIO(b"\x00\x01\x02"), "test.md")}
+        resp = client.post(
+            "/api/v1/ideas/upload",
+            data=data,
+            content_type="multipart/form-data",
+            headers={"Authorization": "Bearer " + token},
+        )
+        assert resp.status_code == 400

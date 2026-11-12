@@ -323,7 +323,7 @@ def upload_idea_file(user):
     db.session.add(idea)
     db.session.commit()
 
-    return api_created(idea.to_dict(user_vote=None))
+    return api_created(idea.to_dict(include_content=True, user_vote=None))
 @token_required
 def find_similar_ideas(user, idea_id):
     """Find ideas similar to the given idea using embedding similarity."""

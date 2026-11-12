@@ -992,6 +992,34 @@ def _extract_runtime_info(files: list, preferred_paths=None) -> dict:
         except (ValueError, AttributeError):
             pass
 
+    # Detect a hard-coded listener port from source BEFORE inferring a
+    # default, so a generated app that calls app.run(port=8000) reports
+    # 8000 rather than the framework default (5000/8000). This keeps the
+    # port-allocation rewrite honest.
+    if port is None:
+        for content in by_path.values():
+            m = re.search(r"\.run\([^)]*?\bport\s*=\s*(\d+)", content, re.S)
+            if m:
+                try:
+                    port = int(m.group(1))
+                    break
+                except ValueError:
+                    pass
+            m = re.search(r"\.listen\(\s*(\d+)", content)
+            if m:
+                try:
+                    port = int(m.group(1))
+                    break
+                except ValueError:
+                    pass
+            m = re.search(r"\bPORT\s*=\s*(\d+)", content)
+            if m:
+                try:
+                    port = int(m.group(1))
+                    break
+                except ValueError:
+                    pass
+
     # No Dockerfile CMD / package.json start script: infer from the app's
     # own entry file so a plain Flask/FastAPI app still gets a runbook.
     inferred_note = None
