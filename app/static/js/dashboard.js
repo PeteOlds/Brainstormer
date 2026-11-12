@@ -486,8 +486,8 @@ function ideasApp() {
             const file = event && event.target && event.target.files && event.target.files[0];
             if (event && event.target) event.target.value = '';
             if (!file) return;
-            if (!file.name.toLowerCase().endsWith('.md')) {
-                this.showAlertModal('Only .md (Markdown) files are accepted.');
+            if (!file.name.toLowerCase().match(/\\.(md|txt)$/)) {
+                this.showAlertModal('Only .md (Markdown) or .txt (text) files are accepted.');
                 return;
             }
             if (file.size > 10 * 1024 * 1024) {

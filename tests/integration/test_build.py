@@ -1760,6 +1760,33 @@ class TestUploadCreatesIdea:
         assert body["prompt_title"] == "test"
         assert "Test content" in (body.get("content") or body.get("raw_content") or "")
 
+    def test_upload_valid_txt(self, app, client, tmp_path):
+        with app.app_context():
+            from app.models import User
+            u = User.query.filter_by(email="admin@test.local").first()
+            if u is None:
+                u = User(email="admin@test.local")
+                u.set_password("password123")
+                u.can_create_ideas = True
+                db.session.add(u)
+                db.session.commit()
+        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        assert resp.status_code == 200
+        token = resp.get_json()["data"]["access_token"]
+        import io
+
+        data = {"file": (io.BytesIO(b"Plain text idea content"), "notes.txt")}
+        resp = client.post(
+            "/api/v1/ideas/upload",
+            data=data,
+            content_type="multipart/form-data",
+            headers={"Authorization": "Bearer " + token},
+        )
+        assert resp.status_code == 201, resp.get_json()
+        body = resp.get_json()["data"]
+        assert body["prompt_title"] == "notes"
+        assert "Plain text idea content" in (body.get("content") or body.get("raw_content") or "")
+
     def test_upload_oversized(self, app, client):
         with app.app_context():
             from app.models import User
@@ -1798,7 +1825,7 @@ class TestUploadCreatesIdea:
         token = resp.get_json()["data"]["access_token"]
         import io
 
-        data = {"file": (io.BytesIO(b"hello"), "test.txt")}
+        data = {"file": (io.BytesIO(b"hello"), "test.csv")}
         resp = client.post(
             "/api/v1/ideas/upload",
             data=data,

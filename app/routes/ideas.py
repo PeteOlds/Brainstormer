@@ -258,10 +258,10 @@ def create_idea(user):
 @bp.route("/ideas/upload", methods=["POST"])
 @token_required
 def upload_idea_file(user):
-    """Create a new idea from an uploaded markdown file.
+    """Create a new idea from an uploaded markdown or text file.
 
     The filename (without extension) becomes the title; the file body
-    becomes the idea content. Only .md text files up to 10 MB are accepted.
+    becomes the idea content. Only .md/.txt text files up to 10 MB are accepted.
     """
     if not user.can_create_ideas:
         return api_error(
@@ -275,8 +275,8 @@ def upload_idea_file(user):
         return api_error("No file selected.", status_code=400)
 
     filename = file.filename
-    if not filename.lower().endswith(".md"):
-        return api_error("Only .md (Markdown) files are accepted.", status_code=400)
+    if not (filename.lower().endswith(".md") or filename.lower().endswith(".txt")):
+        return api_error("Only .md (Markdown) or .txt (text) files are accepted.", status_code=400)
 
     # Size check (10 MB).
     file.seek(0, 2)
