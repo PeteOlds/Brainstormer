@@ -1,4 +1,5 @@
 import json
+import os
 import random
 import string
 import uuid
@@ -251,10 +252,78 @@ def create_idea(user):
     db.session.add(idea)
     db.session.commit()
 
+    return api_created(idea.to_dict(include_content=True, user_vote=None))
+
+
+@bp.route("/ideas/upload", methods=["POST"])
+@token_required
+def upload_idea_file(user):
+    """Create a new idea from an uploaded markdown file.
+
+    The filename (without extension) becomes the title; the file body
+    becomes the idea content. Only .md text files up to 10 MB are accepted.
+    """
+    if not user.can_create_ideas:
+        return api_error(
+            "Manual idea creation is disabled for your account.", status_code=403
+        )
+
+    if "file" not in request.files:
+        return api_error("No file uploaded.", status_code=400)
+    file = request.files["file"]
+    if not file or not file.filename:
+        return api_error("No file selected.", status_code=400)
+
+    filename = file.filename
+    if not filename.lower().endswith(".md"):
+        return api_error("Only .md (Markdown) files are accepted.", status_code=400)
+
+    # Size check (10 MB).
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    if size > 10 * 1024 * 1024:
+        return api_error("File must be under 10 MB.", status_code=413)
+    if size == 0:
+        return api_error("File is empty.", status_code=400)
+
+    raw = file.read()
+    if b"\x00" in raw:
+        return api_error("File must be text, not binary.", status_code=400)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return api_error("File must be UTF-8 text.", status_code=400)
+
+    title = os.path.splitext(filename)[0].strip() or filename
+    if len(title) > 200:
+        title = title[:200]
+    content = text.strip()
+    if not content:
+        return api_error("File content is empty.", status_code=400)
+
+    # Generate reference code
+    import random
+    import string
+
+    while True:
+        ref_code = f"IDEA-{''.join(random.choices(string.digits, k=4))}"
+        if not Idea.query.filter_by(reference_code=ref_code).first():
+            break
+
+    idea = Idea(
+        reference_code=ref_code,
+        prompt_title=title,
+        raw_content=content,
+        status="SPARK",
+        prompt_config_id=None,
+        created_by_id=user.id,
+    )
+    stamp(idea)
+    db.session.add(idea)
+    db.session.commit()
+
     return api_created(idea.to_dict(user_vote=None))
-
-
-@bp.route("/ideas/<uuid:idea_id>/similar", methods=["GET"])
 @token_required
 def find_similar_ideas(user, idea_id):
     """Find ideas similar to the given idea using embedding similarity."""
@@ -1724,6 +1793,7 @@ def idea_tests_run_status(user, idea_id):
     if row is None:
         return api_ok({"run": None})
     return api_ok({"run": row.to_dict()})
+@bp.route("/ideas/<uuid:idea_id>/tests", methods=["POST"])
 @token_required
 def create_idea_test(user, idea_id):
     from app.models import IdeaTest, TestStatus, TestType
