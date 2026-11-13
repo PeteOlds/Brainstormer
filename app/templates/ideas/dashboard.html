@@ -897,7 +897,8 @@
                                          <p class="mt-1 text-xs text-slate-500" x-show="releaseReady()">All automated checks passed. Manual checks are optional warnings.</p>
                                      </div>
                                      <div x-show="testsLoading" class="text-sm text-slate-500">Loading...</div>
-                                     <table class="w-full text-sm" x-show="!testsLoading">
+                                     <div x-show="!testsLoading && !ideaTests.length" class="text-sm text-slate-500">No tests recorded yet. Run a build to generate them, or add one manually.</div>
+                                     <table class="w-full text-sm" x-show="!testsLoading && ideaTests.length">
                                         <thead>
                                             <tr class="text-left text-xs text-slate-500 uppercase">
                                                 <th class="py-2 w-8"></th>

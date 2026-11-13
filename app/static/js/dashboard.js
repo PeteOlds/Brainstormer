@@ -423,6 +423,9 @@ function ideasApp() {
             this.buildTargetChoice = '';
             this.loadIdeaDetail(idea.id);
             this.loadComments(idea.id);
+            this.ideaTests = [];
+            const hasBuild = (idea.actions || []).some((a) => a.action_type === 'BUILD_CODE');
+            if (hasBuild) this.loadIdeaTests();
             this.detailModalOpen = true;
         },
 
@@ -2598,6 +2601,10 @@ function ideasApp() {
                 // would overwrite existing ones (then prompt first).
                 if (actionType === 'BUILD_CODE' && !(extra && extra.confirm_build)) {
                     setTimeout(() => { this.maybeAutoWriteBuild(); }, 0);
+                }
+                // Refresh the Tests tab so newly seeded build tests show up.
+                if (actionType === 'BUILD_CODE') {
+                    setTimeout(() => { this.loadIdeaTests(); }, 500);
                 }
                 return true;
             } catch (error) {
