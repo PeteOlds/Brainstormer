@@ -2593,6 +2593,11 @@ function ideasApp() {
                     await new Promise(r => setTimeout(r, 2000));
                     if (await poll()) break;
                 }
+                // Auto-write build files after a successful preview, unless files
+                // would overwrite existing ones (then prompt first).
+                if (actionType === 'BUILD_CODE' && !(extra && extra.confirm_build)) {
+                    setTimeout(() => { this.maybeAutoWriteBuild(); }, 0);
+                }
                 return true;
             } catch (error) {
                 this.showAlertModal('Failed to run action: ' + error.message);
@@ -2683,6 +2688,29 @@ function ideasApp() {
             const obj = typeof data === 'string' ? null : data;
             if (!obj || !Array.isArray(obj.files) || obj.written) return null;
             return cur;
+        },
+
+        async maybeAutoWriteBuild() {
+            const preview = this.buildPreview('BUILD_CODE');
+            if (!preview || !this.selectedIdea) return;
+            let existing = [];
+            try {
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/build/check-overwrite`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_id: preview.target_id }),
+                });
+                const data = await res.json();
+                existing = ((data.data || data).existing) || [];
+            } catch (e) { existing = []; }
+            if (existing.length) {
+                const ok = await this.showConfirmModal(
+                    'These files already exist and will be overwritten:\n' + existing.join('\n') + '\n\nContinue?',
+                    '', 'Overwrite'
+                );
+                if (!ok) return;
+            }
+            await this.writeBuildFiles('BUILD_CODE');
         },
 
         async writeBuildFiles(key) {

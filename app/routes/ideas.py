@@ -324,6 +324,64 @@ def upload_idea_file(user):
     db.session.commit()
 
     return api_created(idea.to_dict(include_content=True, user_vote=None))
+@bp.route("/ideas/<uuid:idea_id>/build/check-overwrite", methods=["POST"])
+@token_required
+def check_build_overwrite(user, idea_id):
+    """Report which preview files already exist in the target repo."""
+    from app.models import Idea, InstanceBuildTarget
+    import uuid as _uuid
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+
+    data = request.get_json() or {}
+    target_id = data.get("target_id")
+    bt = None
+    if target_id:
+        try:
+            bt = InstanceBuildTarget.query.filter_by(
+                id=_uuid.UUID(str(target_id)), instance_id=idea.instance_id
+            ).first()
+        except (ValueError, TypeError):
+            bt = None
+    if bt is None:
+        candidates = InstanceBuildTarget.query.filter_by(instance_id=idea.instance_id).all()
+        if len(candidates) == 1:
+            bt = candidates[0]
+    if bt is None:
+        return api_error("No build target.", status_code=400)
+
+    from app.services.build_service import resolve_target, join_target_path
+    try:
+        root = resolve_target(bt)
+    except Exception as exc:
+        return api_error(str(exc), status_code=400)
+
+    from app.models import SecondaryActionResult, ActionType
+
+    preview = SecondaryActionResult.query.filter_by(
+        idea_id=idea.id, action_type=ActionType.BUILD_CODE, is_current=True
+    ).first()
+    if not preview or preview.result_data.get("written"):
+        return api_ok({"existing": []})
+
+    files = (preview.result_data.get("files") or [])
+    existing = []
+    for f in files:
+        rel = f.get("path") if isinstance(f, dict) else None
+        if not rel:
+            continue
+        try:
+            full = join_target_path(root, rel)
+            if os.path.exists(full):
+                existing.append(rel)
+        except Exception:
+            pass
+    return api_ok({"existing": existing})
+
+
 @token_required
 def find_similar_ideas(user, idea_id):
     """Find ideas similar to the given idea using embedding similarity."""
