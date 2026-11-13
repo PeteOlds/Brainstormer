@@ -345,7 +345,7 @@
                                 <p class="font-medium" x-text="recommendedAction()?.why"></p>
                             </template>
                             <p class="text-xs text-indigo-700 dark:text-indigo-300" x-show="recommendedAction()?.type === 'action'" x-text="recommendedAction()?.why"></p>
-                            <p class="text-xs text-indigo-700 dark:text-indigo-300" x-show="recommendedAction()?.type === 'progress'">Use the status control above to move the idea to <span x-text="recommendedAction()?.phase"></span>.</p>
+                            <p class="text-xs text-indigo-700 dark:text-indigo-300" x-show="recommendedAction()?.type === 'progress'">Use the status control below to move the idea to <span x-text="recommendedAction()?.phase"></span>.</p>
                         </div>
                         <button x-show="recommendedAction()?.type === 'action'" @click="runAction(selectedIdea.id, recommendedAction().key)" class="shrink-0 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Run</button>
                     </div>
