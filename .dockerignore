@@ -68,3 +68,12 @@ venv/
 docs/
 *.md
 !README.md
+# Generated project repos (not needed in image)
+projects/
+
+venv/
+.git/
+
+flutter/
+backups/
+instance/
