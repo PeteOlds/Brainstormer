@@ -857,6 +857,51 @@ def stop_managed_app_route(user, instance_id, app_id):
 
 
 @bp.route(
+    "/instances/<uuid:instance_id>/managed-apps/<uuid:app_id>/diagnose",
+    methods=["POST"],
+)
+@token_required
+def diagnose_managed_app(user, instance_id, app_id):
+    """Ask the local LLM to diagnose a failed supervised app from its log."""
+    from app.models import ManagedApp
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    row = _managed_row(instance.id, app_id)
+    if row is None:
+        return api_error("Unknown supervised app for this instance.", status_code=404)
+
+    log_path = (row.spec or {}).get("log_path") or row.log_path
+    log_text = ""
+    if log_path and os.path.exists(log_path):
+        try:
+            with open(log_path, "r", errors="replace") as fh:
+                lines = fh.readlines()
+            log_text = "".join(lines[-80:])
+        except OSError:
+            log_text = ""
+
+    prompt = (
+        "You are a DevOps assistant. A supervised Python web app failed to start. "
+        "Diagnose the failure from the log below and propose concrete fixes. "
+        "Be concise: 1) root cause, 2) fix steps, 3) whether a human must act.\n\n"
+        f"App: {row.idea_id}\nCommand: {(row.spec or {}).get('command')}\n\n"
+        f"--- LOG TAIL ---\n{log_text}\n--- END ---"
+    )
+    try:
+        from app.services.ollama_client import OllamaClient
+
+        client = OllamaClient(timeout=60.0)
+        result = client.generate_sync(
+            prompt=prompt, model="llama3:8b", options={"temperature": 0.2}
+        )
+        diagnosis = result.get("response", "") if isinstance(result, dict) else str(result)
+    except Exception as exc:
+        return api_error(f"Diagnosis failed: {exc}", status_code=500)
+    return api_ok({"diagnosis": diagnosis})
+
+@bp.route(
     "/instances/<uuid:instance_id>/managed-apps/<uuid:app_id>/logs",
     methods=["GET"],
 )

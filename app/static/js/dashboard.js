@@ -43,6 +43,7 @@ function ideasApp() {
         docDrafts: {},
         docViewVersion: {},
         managedApp: null,
+        aiDiagnosis: '',
         appBusy: false,
         appLogText: '',
         // Scale-phase collaboration state.
@@ -2823,6 +2824,22 @@ function ideasApp() {
             }
         },
 
+        async diagnoseManagedApp() {
+            if (!this.selectedIdea || !this.managedApp) return;
+            this.appBusy = true;
+            this.aiDiagnosis = '';
+            try {
+                const res = await authFetch(`/api/v1/instances/${this.selectedIdea.instance_id}/managed-apps/${this.managedApp.id}/diagnose`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) throw new Error((data && (data.error || data.message)) || 'Diagnosis failed');
+                this.aiDiagnosis = (data.data || data).diagnosis || 'No diagnosis returned.';
+            } catch (e) {
+                this.aiDiagnosis = 'Diagnosis failed: ' + e.message;
+            } finally {
+                this.appBusy = false;
+            }
+        },
+        
         async loadAppLogs() {
             const idea = this.selectedIdea;
             if (!idea || !idea.instance_id || !this.managedApp) { this.appLogText = ''; return; }
