@@ -1891,6 +1891,26 @@ function ideasApp() {
             return true;
         },
 
+        recommendedAction() {
+            const idea = this.selectedIdea;
+            if (!idea) return null;
+            const st = idea.status;
+            const done = idea.actions_run || [];
+            if (st === 'SPARK' && !done.includes('REFINE')) {
+                return { key: 'REFINE', label: 'Refine Idea', why: 'Sharpen the concept before scoping.' };
+            }
+            if (st === 'SCOPE' && !done.includes('PRD_DOC')) {
+                return { key: 'PRD_DOC', label: 'PRD', why: 'Create the Product Requirements Document to progress to Map.' };
+            }
+            if (st === 'MAP' && !done.includes('DESIGN_DOC')) {
+                return { key: 'DESIGN_DOC', label: 'Design', why: 'Create the design document to enable Build.' };
+            }
+            if ((st === 'SHIP' || st === 'SCALE') && !done.includes('BUILD_CODE')) {
+                return { key: 'BUILD_CODE', label: 'Build', why: 'Generate code from the design document.' };
+            }
+            return null;
+        },
+
         async confirmDiscard(idea, close) {
             if (!(await this.showConfirmModal('Drop this idea? It will be hidden by the default filter.', '', 'Drop idea'))) return;
             await this.changeStatus('DROP', idea.id, true);

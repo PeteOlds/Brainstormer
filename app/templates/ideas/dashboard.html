@@ -335,6 +335,14 @@
                             <p class="text-xs text-amber-700 dark:text-amber-300">This can take a minute or two. The new tab will appear when it finishes — please wait.</p>
                         </div>
                     </div>
+                    <div x-show="recommendedAction()" class="mx-4 mt-3 mb-1 flex items-center gap-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2 text-sm text-indigo-800 dark:text-indigo-200" role="status">
+                        <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"></path></svg>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium">Next step: run <span x-text="recommendedAction()?.label"></span></p>
+                            <p class="text-xs text-indigo-700 dark:text-indigo-300" x-text="recommendedAction()?.why"></p>
+                        </div>
+                        <button @click="runAction(selectedIdea.id, recommendedAction().key)" class="shrink-0 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Run</button>
+                    </div>
                     <div class="sticky top-0 z-10 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                         <div class="flex items-stretch">
                         <div class="flex items-center gap-1 overflow-x-auto px-4 flex-1 min-w-0" role="tablist" aria-label="Idea sections">
@@ -371,6 +379,7 @@
                                 <template x-for="action in availableActions" :key="action.key">
                                     <button x-show="docActionVisible(action.key)" @click="openRunDialog(selectedIdea.id, action.key); newActionOpen = false" :disabled="actionLoading === action.key" :title="action.description" class="flex w-full items-start gap-2 text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50" role="menuitem">
                                         <span class="font-medium shrink-0" x-text="action.label"></span>
+                                        <span x-show="recommendedAction()?.key === action.key" class="ml-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">(Recommended)</span>
                                         <span class="ml-auto text-xs text-slate-500 dark:text-slate-400" x-show="(selectedIdea?.actions_run || []).includes(action.key)" x-text="'(' + action.done_label + ')'"></span>
                                         <svg x-show="actionLoading === action.key" class="animate-spin h-4 w-4 ml-auto shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
                                     </button>
