@@ -2720,7 +2720,16 @@ function ideasApp() {
             const extra = { target_id: row.target_id, confirm_build: true };
             if (row.model_used) extra.model_override = row.model_used;
             if (row.provider_used) extra.provider_override = row.provider_used;
-            await this.runAction(this.selectedIdea.id, key, extra);
+            const ok = await this.runAction(this.selectedIdea.id, key, extra);
+            if (ok) {
+                try {
+                    await authFetch(`/api/v1/instances/${this.selectedIdea.instance_id}/managed-apps`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ idea_id: this.selectedIdea.id, target_id: row.target_id }),
+                    });
+                } catch (e) { /* ignore */ }
+            }
             await this.loadManagedApp();
         },
 
