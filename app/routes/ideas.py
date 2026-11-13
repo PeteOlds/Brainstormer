@@ -1997,3 +1997,47 @@ def idea_tests_summary(user, idea_id):
             else None,
         }
     )
+
+@bp.route("/ideas/<uuid:idea_id>/tests/diagnose", methods=["POST"])
+@token_required
+def diagnose_idea_tests(user, idea_id):
+    """Ask the local LLM to diagnose failing tests for an idea."""
+    from app.models import Idea, IdeaTest, TestStatus, ManagedApp
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+
+    failed = IdeaTest.query.filter_by(idea_id=idea.id).filter(
+        IdeaTest.status == TestStatus.FAILED
+    ).all()
+    failed_names = [r.name for r in failed]
+    log_text = ""
+    ma = ManagedApp.query.filter_by(idea_id=idea.id).first()
+    if ma and (ma.spec or {}).get("log_path"):
+        lp = (ma.spec or {}).get("log_path")
+        if os.path.exists(lp):
+            try:
+                with open(lp, "r", errors="replace") as fh:
+                    log_text = "".join(fh.readlines()[-20:])[:500]
+            except OSError:
+                log_text = ""
+
+    prompt = (
+        "A generated app has failing tests. "
+        f"Failed tests: {', '.join(failed_names) or 'none'}. "
+        "Log tail: " + (log_text or "n/a") + ". "
+        "In 3-5 sentences, explain the likely root cause and concrete fix steps for a non-technical user."
+    )
+    try:
+        from app.services.ollama_client import OllamaClient
+
+        client = OllamaClient(timeout=60.0)
+        r = client.generate_sync(prompt=prompt, model="llama3:8b", format=None, options={"temperature": 0.2})
+        diagnosis = r.get("response", "") if isinstance(r, dict) else str(r)
+        if not diagnosis or diagnosis.strip() in ("{}", "{  }"):
+            diagnosis = "The AI could not produce a diagnosis. Check the app log and the failing test names above."
+    except Exception as exc:
+        return api_ok({"diagnosis": f"Diagnosis failed: {exc}"})
+    return api_ok({"diagnosis": diagnosis})

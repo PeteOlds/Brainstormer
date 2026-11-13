@@ -57,6 +57,8 @@ function ideasApp() {
         ideaTests: [],
         testsLoading: false,
         testsRunning: false,
+        testsDiagnosing: false,
+        testsDiagnosis: '',
         testsRunningMessage: '',
         testDetailsOpen: false,
         testDetailsRow: null,
@@ -583,6 +585,22 @@ function ideasApp() {
                 }
             } catch (e) {
                 console.error('Failed to load comments:', e);
+            }
+        },
+
+        async diagnoseTests() {
+            if (!this.selectedIdea) return;
+            this.testsDiagnosing = true;
+            this.testsDiagnosis = '';
+            try {
+                const res = await authFetch(`/api/v1/ideas/${this.selectedIdea.id}/tests/diagnose`, { method: 'POST' });
+                const data = await res.json();
+                if (!res.ok) throw new Error((data && (data.error || data.message)) || 'Diagnosis failed');
+                this.testsDiagnosis = (data.data || data).diagnosis || 'No diagnosis returned.';
+            } catch (e) {
+                this.testsDiagnosis = 'Diagnosis failed: ' + e.message;
+            } finally {
+                this.testsDiagnosing = false;
             }
         },
 
