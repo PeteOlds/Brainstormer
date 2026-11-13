@@ -890,15 +890,39 @@ def diagnose_managed_app(user, instance_id, app_id):
         f"--- LOG TAIL ---\n{log_text}\n--- END ---"
     )
     try:
-        from app.services.ollama_client import OllamaClient
+        from app.models import resolve_stage
 
-        client = OllamaClient(timeout=60.0)
-        result = client.generate_sync(
-            prompt=prompt, model="llama3:8b", options={"temperature": 0.2}
-        )
-        diagnosis = result.get("response", "") if isinstance(result, dict) else str(result)
+        stage_cfg = resolve_stage(instance.id, "SHIP") or {}
+    except Exception:
+        stage_cfg = {}
+    provider = (stage_cfg.get("provider") or "ollama").lower()
+    model = stage_cfg.get("model_name") or stage_cfg.get("model") or "llama3:8b"
+
+    class _Prompt:
+        pass
+
+    p = _Prompt()
+    p.provider = provider
+    p.model_name = model
+    p.instance_id = instance.id
+
+    try:
+        from app.services.llm_backends import generate_for_prompt
+
+        result = generate_for_prompt(p, prompt, json_mode=False, timeout=120.0)
+        diagnosis = result.text
     except Exception as exc:
-        return api_error(f"Diagnosis failed: {exc}", status_code=500)
+        # Fall back to local Ollama
+        try:
+            from app.services.ollama_client import OllamaClient
+
+            client = OllamaClient(timeout=60.0)
+            r = client.generate_sync(
+                prompt=prompt, model="llama3:8b", options={"temperature": 0.2}
+            )
+            diagnosis = r.get("response", "") if isinstance(r, dict) else str(r)
+        except Exception as exc2:
+            return api_error(f"Diagnosis failed: {exc2}", status_code=500)
     return api_ok({"diagnosis": diagnosis})
 
 @bp.route(
