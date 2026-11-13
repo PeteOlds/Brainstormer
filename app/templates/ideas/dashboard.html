@@ -338,10 +338,16 @@
                     <div x-show="recommendedAction()" class="mx-4 mt-3 mb-1 flex items-center gap-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2 text-sm text-indigo-800 dark:text-indigo-200" role="status">
                         <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"></path></svg>
                         <div class="flex-1 min-w-0">
-                            <p class="font-medium">Next step: run <span x-text="recommendedAction()?.label"></span></p>
-                            <p class="text-xs text-indigo-700 dark:text-indigo-300" x-text="recommendedAction()?.why"></p>
+                            <template x-if="recommendedAction()?.type === 'action'">
+                                <p class="font-medium">Next step: run <span x-text="recommendedAction()?.label"></span></p>
+                            </template>
+                            <template x-if="recommendedAction()?.type === 'progress'">
+                                <p class="font-medium" x-text="recommendedAction()?.why"></p>
+                            </template>
+                            <p class="text-xs text-indigo-700 dark:text-indigo-300" x-show="recommendedAction()?.type === 'action'" x-text="recommendedAction()?.why"></p>
+                            <p class="text-xs text-indigo-700 dark:text-indigo-300" x-show="recommendedAction()?.type === 'progress'">Use the status control above to move the idea to <span x-text="recommendedAction()?.phase"></span>.</p>
                         </div>
-                        <button @click="runAction(selectedIdea.id, recommendedAction().key)" class="shrink-0 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Run</button>
+                        <button x-show="recommendedAction()?.type === 'action'" @click="runAction(selectedIdea.id, recommendedAction().key)" class="shrink-0 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg">Run</button>
                     </div>
                     <div class="sticky top-0 z-10 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                         <div class="flex items-stretch">

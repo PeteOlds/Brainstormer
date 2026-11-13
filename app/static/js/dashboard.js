@@ -1896,17 +1896,35 @@ function ideasApp() {
             if (!idea) return null;
             const st = idea.status;
             const done = idea.actions_run || [];
-            if (st === 'SPARK' && !done.includes('REFINE')) {
-                return { key: 'REFINE', label: 'Refine Idea', why: 'Sharpen the concept before scoping.' };
+            // SPARK
+            if (st === 'SPARK') {
+                if (!done.includes('REFINE')) {
+                    return { type: 'action', key: 'REFINE', label: 'Refine Idea', why: 'Sharpen the concept before scoping.' };
+                }
+                return { type: 'progress', key: null, label: null, why: 'Refine run. Idea can be progressed to Scope.', phase: 'SCOPE' };
             }
-            if (st === 'SCOPE' && !done.includes('PRD_DOC')) {
-                return { key: 'PRD_DOC', label: 'PRD', why: 'Create the Product Requirements Document to progress to Map.' };
+            // SCOPE
+            if (st === 'SCOPE') {
+                if (!done.includes('PRD_DOC')) {
+                    return { type: 'action', key: 'PRD_DOC', label: 'PRD', why: 'Create the Product Requirements Document to progress to Map.' };
+                }
+                return { type: 'progress', key: null, label: null, why: 'PRD run. Idea can be progressed to Map.', phase: 'MAP' };
             }
-            if (st === 'MAP' && !done.includes('DESIGN_DOC')) {
-                return { key: 'DESIGN_DOC', label: 'Design', why: 'Create the design document to enable Build.' };
+            // MAP
+            if (st === 'MAP') {
+                if (!done.includes('DESIGN_DOC')) {
+                    return { type: 'action', key: 'DESIGN_DOC', label: 'Design', why: 'Create the design document to enable Build.' };
+                }
+                return { type: 'progress', key: null, label: null, why: 'Design run. Idea can be progressed to Ship.', phase: 'SHIP' };
             }
-            if ((st === 'SHIP' || st === 'SCALE') && !done.includes('BUILD_CODE')) {
-                return { key: 'BUILD_CODE', label: 'Build', why: 'Generate code from the design document.' };
+            // SHIP / SCALE
+            if (st === 'SHIP' || st === 'SCALE') {
+                if (!done.includes('BUILD_CODE')) {
+                    return { type: 'action', key: 'BUILD_CODE', label: 'Build', why: 'Generate code from the design document.' };
+                }
+                if (st === 'SHIP') {
+                    return { type: 'progress', key: null, label: null, why: 'Build run. Idea can be progressed to Scale.', phase: 'SCALE' };
+                }
             }
             return null;
         },
