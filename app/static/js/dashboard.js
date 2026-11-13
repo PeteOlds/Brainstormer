@@ -778,8 +778,9 @@ function ideasApp() {
             return base.filter((t) => this.isManualTest(t));
         },
         releaseReady() {
-            const autoFailed = this.ideaTests.some((t) => !this.isManualTest(t) && t.status === 'failed');
-            return !autoFailed && this.ideaTests.length > 0;
+            const auto = this.ideaTests.filter((t) => !this.isManualTest(t));
+            if (auto.length === 0) return this.ideaTests.length > 0;
+            return auto.every((t) => t.status === 'passed');
         },
         releaseBlockers() {
             const out = [];

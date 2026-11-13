@@ -894,7 +894,7 @@
                                          <ul class="mt-1 text-xs space-y-0.5" x-show="releaseBlockers().length">
                                              <template x-for="b in releaseBlockers()" :key="b"><li x-text="'• ' + b"></li></template>
                                          </ul>
-                                         <p class="mt-1 text-xs text-slate-500" x-show="releaseReady()">All automated checks passed. Manual checks are optional warnings.</p>
+                                         <p class="mt-1 text-xs text-slate-500" x-show="releaseReady()">All automated checks passed. Manual checks (marked below) still need your verification — they require a human eye.</p>
                                      </div>
                                      <div x-show="testsLoading" class="text-sm text-slate-500">Loading...</div>
                                      <div x-show="!testsLoading && !ideaTests.length" class="text-sm text-slate-500">No tests recorded yet. Run a build to generate them, or add one manually.</div>
