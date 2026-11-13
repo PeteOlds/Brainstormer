@@ -99,3 +99,20 @@ def test_upload_md_button_visible(admin_page):
     btn = admin_page.get_by_text("Upload .md/.txt")
     assert btn.is_visible(), "Upload .md button not visible"
     assert_no_page_errors(admin_page)
+
+
+def test_upload_txt_file_succeeds(admin_page):
+    """Regression: .txt uploads must not be rejected by the client-side check."""
+    admin_page.wait_for_selector("[data-testid='idea-card']", timeout=15000)
+    statuses = []
+    admin_page.on("response", lambda r: statuses.append((r.url, r.status)) if "/ideas/upload" in r.url else None)
+    file_input = admin_page.locator('input[x-ref="mdFileInput"]')
+    file_input.set_input_files({
+        "name": "Software Library Tracker.txt",
+        "mimeType": "text/plain",
+        "buffer": b"Plain text idea content",
+    })
+    admin_page.wait_for_timeout(3000)
+    assert_no_page_errors(admin_page)
+    upload_statuses = [s for (u, s) in statuses if "/ideas/upload" in u]
+    assert upload_statuses and upload_statuses[-1] == 201, f"upload status: {upload_statuses}"
