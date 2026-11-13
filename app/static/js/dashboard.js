@@ -2385,7 +2385,7 @@ function ideasApp() {
         },
 
         async confirmRunDialog() {
-            const extra = {};
+            const extra = { ...(this.pendingRunExtra || {}), ...{} };
             // Simple mode ("Run with recommended settings") must not override
             // the model or provider. The backend resolves stage/release config
             // and the idea's prompt defaults. Only advanced mode sends explicit
@@ -2410,6 +2410,7 @@ function ideasApp() {
             }
             this.closeRunDialog();
             await this.runAction(ideaId, actionType, extra);
+            this.pendingRunExtra = {};
         },
 
         // Bulk actions functions
@@ -2502,6 +2503,7 @@ function ideasApp() {
         },
 
         async executeAction(ideaId, actionType, extra) {
+            extra = { ...(this.pendingRunExtra || {}), ...(extra || {}) };
             this.actionLoading = actionType;
             try {
                 // Snapshot existing result ids so the poll below waits for the
