@@ -9,6 +9,9 @@ function ideasApp() {
         actionLoading: null,
         detailModalOpen: false,
         newActionOpen: false,
+        moreTabsOpen: false,
+        // Cap visible Analysis tabs; the rest move behind an overflow menu.
+        actionTabLimit: 6,
         selectedIdea: null,
         commentDraft: '',
         replyTo: null,
@@ -2647,24 +2650,86 @@ function ideasApp() {
             return (this.selectedIdea?.actions || []).some((a) => a.action_type === 'REFINE');
         },
 
+        // Idea detail tab strip. Action results are grouped into:
+        //   "action"   — stage-gated forward steps (PRD, Design, Build, Tests)
+        //   "analysis" — exploratory reads (Competitors, PESTEL, ...)
+        // The action group renders first so it stays visible when the strip
+        // overflows; within each group the most recent run comes first.
+        actionTabGroups() {
+            const idea = this.selectedIdea;
+            if (!idea) return [];
+            const when = (row) => {
+                const raw = row.executed_at || row.created_at || null;
+                const n = raw ? Date.parse(raw) : NaN;
+                return Number.isNaN(n) ? 0 : n;
+            };
+            const ordered = (idea.actions || []).slice().sort((a, b) => when(b) - when(a));
+            const seen = new Set();
+            const buckets = { action: [], analysis: [] };
+            for (const a of ordered) {
+                // Refine is pinned beside the Idea tab, so skip it here.
+                if (a.action_type === 'REFINE' || seen.has(a.action_type)) continue;
+                seen.add(a.action_type);
+                const reg = (this.availableActions || []).find((r) => r.key === a.action_type);
+                const label = reg
+                    ? reg.label
+                    : a.action_type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                buckets[reg && reg.category === 'action' ? 'action' : 'analysis'].push({
+                    key: a.action_type,
+                    label,
+                });
+            }
+            // Tests only exists once a build has run; keep it beside Build.
+            const hasBuild = (idea.actions || []).some((a) => a.action_type === 'BUILD_CODE');
+            if (hasBuild && !seen.has('TESTS')) {
+                const at = buckets.action.findIndex((t) => t.key === 'BUILD_CODE');
+                const testsTab = { key: 'TESTS', label: 'Tests' };
+                if (at === -1) buckets.action.unshift(testsTab);
+                else buckets.action.splice(at + 1, 0, testsTab);
+            }
+            const groups = [];
+            if (buckets.action.length) {
+                groups.push({ key: 'action', label: 'Next steps', tabs: buckets.action });
+            }
+            if (buckets.analysis.length) {
+                groups.push({ key: 'analysis', label: 'Analysis', tabs: buckets.analysis });
+            }
+            return groups;
+        },
+
+        // Flat list used by the tab panels, in display order.
         actionTabs() {
-            const seen = [];
-            const actions = (this.selectedIdea?.actions || []).slice().reverse();
-            for (const a of actions) {
-                if (a.action_type === 'REFINE') continue;                // Existing result tabs always display (history survives
-                // every transition); creation is gated by docActionVisible.
-                if (!seen.find((t) => t.key === a.action_type)) {
-                    const reg = (this.availableActions || []).find((r) => r.key === a.action_type);
-                    const label = reg ? reg.label : a.action_type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-                    seen.push({ key: a.action_type, label });
-                }
+            return this.actionTabGroups().reduce((all, g) => all.concat(g.tabs), []);
+        },
+
+        // Analysis is capped so casual users do not face a wall of tabs; the
+        // active tab always stays visible even when it sits in the overflow.
+        visibleTabsForGroup(group) {
+            if (!group) return [];
+            if (group.key !== 'analysis') return group.tabs;
+            const visible = group.tabs.slice(0, this.actionTabLimit);
+            const active = group.tabs
+                .slice(this.actionTabLimit)
+                .find((t) => t.key === this.activeTab);
+            if (active) {
+                if (visible.length >= this.actionTabLimit) visible.pop();
+                visible.push(active);
             }
-            // Tests tab: only once the idea has been built.
-            const hasBuild = (this.selectedIdea?.actions || []).some((a) => a.action_type === 'BUILD_CODE');
-            if (hasBuild && !seen.find((t) => t.key === 'TESTS')) {
-                seen.push({ key: 'TESTS', label: 'Tests' });
-            }
-            return seen;
+            return visible;
+        },
+
+        overflowTabsForGroup(group) {
+            if (!group || group.key !== 'analysis') return [];
+            return group.tabs
+                .slice(this.actionTabLimit)
+                .filter((t) => t.key !== this.activeTab);
+        },
+
+        selectActionTab(key) {
+            this.activeTab = key;
+            this.moreTabsOpen = false;
+            if (key === 'BUILD_CODE') this.loadManagedApp();
+            if (key === 'TESTS') this.loadIdeaTests();
         },
 
         actionTabResult(key) {
