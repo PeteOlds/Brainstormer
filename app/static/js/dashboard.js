@@ -38,6 +38,8 @@ function ideasApp() {
         lastUpdated: '',
         availableActions: [],
         activeTab: 'overview',
+        // Analysis is one tab; this key picks which document its chips show.
+        analysisKey: '',
         prdAnswers: {},
         docThreads: {},
         docDrafts: {},
@@ -418,6 +420,7 @@ function ideasApp() {
         openDetailModal(idea) {
             this.selectedIdea = { ...idea };
             this.activeTab = 'overview';
+            this.analysisKey = '';
             this.prdAnswers = {};
             this.docViewVersion = {};
             this.exportMsg = '';
@@ -448,6 +451,7 @@ function ideasApp() {
             this.newActionOpen = false;
             this.dropdownOpenId = null;
             this.selectedIdea = null;
+            this.analysisKey = '';
             this.commentDraft = '';
             this.replyTo = null;
             this.editingCommentId = null;
@@ -2647,24 +2651,83 @@ function ideasApp() {
             return (this.selectedIdea?.actions || []).some((a) => a.action_type === 'REFINE');
         },
 
-        actionTabs() {
-            const seen = [];
-            const actions = (this.selectedIdea?.actions || []).slice().reverse();
-            for (const a of actions) {
-                if (a.action_type === 'REFINE') continue;                // Existing result tabs always display (history survives
-                // every transition); creation is gated by docActionVisible.
-                if (!seen.find((t) => t.key === a.action_type)) {
-                    const reg = (this.availableActions || []).find((r) => r.key === a.action_type);
-                    const label = reg ? reg.label : a.action_type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-                    seen.push({ key: a.action_type, label });
-                }
+        // The tab strip mirrors the lifecycle, so required steps keep a fixed
+        // order no matter when they ran. Only steps with a result appear.
+        lifecycleTabs() {
+            const idea = this.selectedIdea;
+            if (!idea) return [];
+            const done = new Set((idea.actions || []).map((a) => a.action_type));
+            const tabs = [];
+            for (const key of ['PRD_DOC', 'DESIGN_DOC', 'BUILD_CODE']) {
+                if (!done.has(key)) continue;
+                const reg = (this.availableActions || []).find((r) => r.key === key);
+                tabs.push({ key, label: reg ? reg.label : key });
             }
-            // Tests tab: only once the idea has been built.
-            const hasBuild = (this.selectedIdea?.actions || []).some((a) => a.action_type === 'BUILD_CODE');
-            if (hasBuild && !seen.find((t) => t.key === 'TESTS')) {
-                seen.push({ key: 'TESTS', label: 'Tests' });
+            // Tests only exists once a build has run; keep it beside Build.
+            if (done.has('BUILD_CODE')) tabs.push({ key: 'TESTS', label: 'Tests' });
+            return tabs;
+        },
+
+        // Every non-lifecycle result lives behind the single Analysis tab.
+        // Newest run first: the freshest thinking is the default document.
+        analysisTabs() {
+            const idea = this.selectedIdea;
+            if (!idea) return [];
+            const rows = (idea.actions || []).map((row, i) => ({ row, i }));
+            const when = (r) => {
+                const raw = r.row.executed_at || r.row.created_at || null;
+                const n = raw ? Date.parse(raw) : NaN;
+                return Number.isNaN(n) ? 0 : n;
+            };
+            // The API returns results oldest-first; use its order as the
+            // tie-break so missing timestamps still sort newest-first.
+            rows.sort((a, b) => when(b) - when(a) || b.i - a.i);
+            const seen = new Set();
+            const tabs = [];
+            for (const { row: a } of rows) {
+                if (a.action_type === 'REFINE' || seen.has(a.action_type)) continue;
+                const reg = (this.availableActions || []).find((r) => r.key === a.action_type);
+                if (reg && reg.category === 'action') continue;
+                seen.add(a.action_type);
+                tabs.push({
+                    key: a.action_type,
+                    label: reg
+                        ? reg.label
+                        : a.action_type.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+                    executed_at: a.executed_at || a.created_at || null,
+                });
             }
-            return seen;
+            return tabs;
+        },
+
+        analysisLabel() {
+            const hit = this.analysisTabs().find((t) => t.key === this.analysisKey);
+            return hit ? hit.label : 'Analysis';
+        },
+
+        // Keep the selected chip valid; default to the newest analysis.
+        ensureAnalysisSelection() {
+            const tabs = this.analysisTabs();
+            if (!tabs.length) {
+                this.analysisKey = '';
+                return;
+            }
+            if (!tabs.some((t) => t.key === this.analysisKey)) {
+                this.analysisKey = tabs[0].key;
+            }
+        },
+
+        selectAnalysisTab(key) {
+            this.analysisKey = key;
+            this.activeTab = 'analysis';
+        },
+
+        selectTab(key) {
+            this.activeTab = key;
+            this.newActionOpen = false;
+            if (key === 'analysis') this.ensureAnalysisSelection();
+            if (key === 'BUILD_CODE') this.loadManagedApp();
+            if (key === 'TESTS') this.loadIdeaTests();
         },
 
         actionTabResult(key) {

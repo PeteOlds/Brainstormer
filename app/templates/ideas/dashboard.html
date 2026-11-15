@@ -332,7 +332,7 @@
                         <svg class="animate-spin h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
                         <div class="flex-1 min-w-0">
                             <p class="font-medium">Running <span x-text="(availableActions || []).find(a => a.key === actionLoading)?.label || actionLoading"></span>…</p>
-                            <p class="text-xs text-amber-700 dark:text-amber-300">This can take a minute or two. The new tab will appear when it finishes — please wait.</p>
+                            <p class="text-xs text-amber-700 dark:text-amber-300">This can take a minute or two. The result appears when it finishes — please wait.</p>
                         </div>
                     </div>
                     <div x-show="recommendedAction()" class="mx-4 mt-3 mb-1 flex items-center gap-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-2 text-sm text-indigo-800 dark:text-indigo-200" role="status">
@@ -352,23 +352,24 @@
                     <div class="sticky top-0 z-10 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                         <div class="flex items-stretch">
                         <div class="flex items-center gap-1 overflow-x-auto px-4 flex-1 min-w-0" role="tablist" aria-label="Idea sections">
-                        <a href="#"
-                           @click.prevent="window.location.href = '/ideas?prompt=' + selectedIdea.prompt_config_id"
-                           class="shrink-0 inline-flex items-center gap-1 px-3 py-2 min-h-[44px] text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
-                           title="Back to all ideas for this prompt">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                            <span>Prompt</span>
-                        </a>
                         <button @click="activeTab = 'overview'" role="tab" :aria-selected="activeTab === 'overview'" :aria-label="'View original idea content'" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'overview' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">
                             Idea
                         </button>
                         <template x-if="hasRefineTab()">
                             <button @click="activeTab = 'REFINE'" role="tab" :aria-selected="activeTab === 'REFINE'" aria-label="Refine this idea with AI" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'REFINE' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">Refine Idea</button>
                         </template>
-                        <template x-for="tab in actionTabs()" :key="tab.key">
-                            <button @click="activeTab = tab.key; if (tab.key === 'BUILD_CODE') loadManagedApp(); if (tab.key === 'TESTS') loadIdeaTests()" role="tab" :aria-selected="activeTab === tab.key" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === tab.key ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">
+                        <!-- Lifecycle steps keep a fixed order; Analysis collects the rest. -->
+                        <template x-for="tab in lifecycleTabs()" :key="tab.key">
+                            <button @click="selectTab(tab.key)" role="tab" :aria-selected="activeTab === tab.key" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === tab.key ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">
                                 <span x-text="tab.label"></span>
                                 <span x-show="actionLoading === tab.key" class="ml-1 inline-block align-middle"><svg class="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span>
+                            </button>
+                        </template>
+                        <template x-if="analysisTabs().length">
+                            <button @click="selectTab('analysis')" role="tab" :aria-selected="activeTab === 'analysis'" aria-label="Analysis documents" class="shrink-0 px-4 py-2 min-h-[44px] text-sm font-medium rounded-t-lg transition-colors" :class="activeTab === 'analysis' ? 'text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-700'">
+                                <span>Analysis</span>
+                                <span class="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400" x-text="'(' + analysisTabs().length + ')'"></span>
+                                <span x-show="analysisTabs().some(t => t.key === actionLoading)" class="ml-1 inline-block align-middle"><svg class="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span>
                             </button>
                         </template>
                         <template x-if="showScaleTab()">
@@ -832,7 +833,7 @@
                         </div>
                     </div>
                     </div>
-                    <template x-for="tab in actionTabs()" :key="'panel-' + tab.key">
+                    <template x-for="tab in lifecycleTabs()" :key="'panel-' + tab.key">
                         <div x-show="activeTab === tab.key" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
                             <div class="flex items-center justify-between mb-2">
                                 <h3 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="tab.label"></h3>
@@ -1101,10 +1102,6 @@
                                                 <button x-show="managedApp && (managedApp.state === 'failed' || managedApp.last_error)" @click="diagnoseManagedApp()" :disabled="appBusy" class="mt-2 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50">Diagnose with AI</button>
                                                 <p x-show="aiDiagnosis" class="mt-2 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap" x-text="aiDiagnosis"></p>
                                                 <p x-show="managedApp && managedApp.spec && managedApp.spec.port_note" class="mt-2 text-xs text-amber-700 dark:text-amber-400" x-text="managedApp && managedApp.spec ? managedApp.spec.port_note : ''"></p>
-[Tool result]: Edited app/templates/ideas/dashboard.html (1 replacement)
-
-[Assistant tool call]: shell<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
-cd /mnt/General/OpenCode/brainstormer && docker run --rm -v /mnt/General/OpenCode/brainstormer:/app alpine rm -rf /app/app/templates/ideas/__pycache__ 2>/dev/null; docker restart brainstormer-web 2>&1 | tail -1; sleep 6; curl -sk https://127.0.0.1:8000/api/ready 2>&1 | head -c 40
                                                 <div x-show="managedApp" class="mt-2 flex flex-wrap items-center gap-2">
                                                     <button @click="loadAppLogs()" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Refresh logs</button>
                                                     <button @click="copyText(appLogText, 'Logs copied')" x-show="appLogText" class="px-2 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Copy logs</button>
@@ -1205,6 +1202,27 @@ cd /mnt/General/OpenCode/brainstormer && docker run --rm -v /mnt/General/OpenCod
                             </template>
                         </div>
                     </template>
+                    <!-- Analysis: one tab, chips switch between stored documents. -->
+                    <div x-show="activeTab === 'analysis'" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
+                        <div class="flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Analysis documents">
+                            <template x-for="chip in analysisTabs()" :key="'chip-' + chip.key">
+                                <button @click="selectAnalysisTab(chip.key)" role="tab" :aria-selected="analysisKey === chip.key" class="px-3 py-1.5 min-h-[36px] text-xs font-medium rounded-full border transition-colors" :class="analysisKey === chip.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'" x-text="chip.label"></button>
+                            </template>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="analysisLabel()"></h3>
+                            <span class="flex items-center gap-2">
+                                <span class="text-xs text-slate-500 dark:text-slate-400" x-text="formatDate(docViewResult(analysisKey)?.executed_at)"></span>
+                                <span class="flex items-center gap-1" x-show="docViewResult(analysisKey)">
+                                    <button @click="copyDocMarkdown(analysisKey)" title="Copy this analysis as Markdown" class="px-3 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Copy MD</button>
+                                    <button @click="downloadDocMarkdown(analysisKey)" title="Download this analysis as a .md file" class="px-3 py-1.5 min-h-[44px] text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">.md</button>
+                                    <span class="text-xs text-green-700 dark:text-green-400" x-show="exportMsg" x-text="exportMsg"></span>
+                                </span>
+                            </span>
+                        </div>
+                        <div class="prose prose-sm prose-slate dark:prose-invert max-w-none" x-html="docViewResult(analysisKey)?.rendered_output"></div>
+                        <p x-show="!analysisTabs().length" class="text-sm text-slate-500 dark:text-slate-400">No analyses yet. Run one from <span class="font-medium">+ New</span>.</p>
+                    </div>
                     </div>
                     <template x-if="docEditorResult()">
                         <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-800">
