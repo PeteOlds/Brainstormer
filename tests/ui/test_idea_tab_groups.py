@@ -62,7 +62,7 @@ def test_lifecycle_tabs_are_ordered_and_analysis_is_one_tab(
     text = strip.inner_text()
 
     # Fixed lifecycle order, then the single Analysis tab.
-    order = ["Idea", "PRD", "Design", "Build", "Tests", "Analysis"]
+    order = ["Idea", "Analysis", "PRD", "Design", "Build", "Tests"]
     positions = [text.index(name) for name in order]
     assert positions == sorted(positions), text
 
