@@ -1042,7 +1042,7 @@ def run_action(user, idea_id):
         )
         if not has_prd:
             return api_error(
-                "A Design needs a current PRD first. Run PRD on this idea.",
+                "A Design needs a current Brief first. Run Brief on this idea.",
                 status_code=400,
             )
     if action_type == "BUILD_CODE":

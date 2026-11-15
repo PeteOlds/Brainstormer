@@ -1,4 +1,4 @@
-Act as an expert technical product manager and business analyst. Take the product idea below and translate it into a comprehensive, production-ready Product Requirements Document (PRD).
+Act as an expert technical product manager and business analyst. Take the product idea below and translate it into a comprehensive, production-ready Brief.
 
 ### PRODUCT IDEA:
 ${ORIGINAL_IDEA_CONTENT}
@@ -10,7 +10,7 @@ ${SUPPORTING_MATERIAL}
 ---
 
 ### INSTRUCTIONS:
-1. Structure the PRD with professional rigor across these sections:
+1. Structure the Brief with professional rigor across these sections:
    - Executive Summary & Vision: core problem, proposed solution, target audience, business goals/KPIs.
    - User Personas & Pain Points: primary profiles, current workflows, pain points eliminated.
    - Product Scope & Features: MVP scope versus future phases, split into Must-Have and Nice-to-Have.

@@ -1,6 +1,6 @@
 """Registry metadata used by the idea detail tab strip.
 
-The UI gives ``action`` entries their own lifecycle tab (PRD, Design, Build)
+The UI gives ``action`` entries their own lifecycle tab (Brief, Design, Build)
 and folds everything else into the single Analysis tab, so the split has to
 live on the registry rather than in a hardcoded UI list.
 """

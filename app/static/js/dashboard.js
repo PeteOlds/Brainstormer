@@ -1166,7 +1166,7 @@ function ideasApp() {
                 if (failed) cls = 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400';
                 else if (allDone) cls = 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400';
                 else if (inProgress) cls = 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
-                return { phase: ph, label: ({ prd: 'PRD', design: 'Design', build: 'Build', test: 'Test' })[ph], count, total, cls, failed, allDone, inProgress };
+                return { phase: ph, label: ({ prd: 'Brief', design: 'Design', build: 'Build', test: 'Test' })[ph], count, total, cls, failed, allDone, inProgress };
             });
         },
         releaseNextStep(rel) {
@@ -1496,7 +1496,7 @@ function ideasApp() {
         },
 
         pipelinePhaseLabel(phase) {
-            return ({ prd: 'PRD', design: 'Design', build: 'Build', test: 'Test', done: 'Done' })[phase] || phase || '';
+            return ({ prd: 'Brief', design: 'Design', build: 'Build', test: 'Test', done: 'Done' })[phase] || phase || '';
         },
 
         pipelineRows(rel) {
@@ -1536,7 +1536,7 @@ function ideasApp() {
             const count = rel.child_count || this.scaleKids(rel.id).length;
             const repo = (rel.build_target && rel.build_target.name) || 'the automatic repo';
             if (!(await this.showConfirmModal(
-                `Run ${count} idea(s) through PRD → Design → Build → Test?\n\nBuilds write into “${repo}” one at a time. Finished steps are kept if you stop or something fails.`,
+                `Run ${count} idea(s) through Brief → Design → Build → Test?\n\nBuilds write into “${repo}” one at a time. Finished steps are kept if you stop or something fails.`,
                 '', 'Run release'))) return;
             this.releaseBusy = true;
             try {
@@ -1933,9 +1933,9 @@ function ideasApp() {
             // SCOPE
             if (st === 'SCOPE') {
                 if (!done.includes('PRD_DOC')) {
-                    return { type: 'action', key: 'PRD_DOC', label: 'PRD', why: 'Create the Product Requirements Document to progress to Map.' };
+                    return { type: 'action', key: 'PRD_DOC', label: 'Brief', why: 'Create the Brief to progress to Map.' };
                 }
-                return { type: 'progress', key: null, label: null, why: 'PRD run. Idea can be progressed to Map.', phase: 'MAP' };
+                return { type: 'progress', key: null, label: null, why: 'Brief run. Idea can be progressed to Map.', phase: 'MAP' };
             }
             // MAP
             if (st === 'MAP') {
@@ -2043,7 +2043,7 @@ function ideasApp() {
                 return false;
             }
             if (actionType === 'PRD_DOC' && (!st || st === 'SPARK')) {
-                await this.showAlertModal('PRD creation requires the idea to reach Scope stage.');
+                await this.showAlertModal('Brief creation requires the idea to reach Scope stage.');
                 return false;
             }
             if (actionType === 'DESIGN_DOC' && !['MAP', 'SHIP', 'SCALE', 'FREEZE'].includes(st)) {

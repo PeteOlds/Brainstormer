@@ -37,7 +37,7 @@ PHASES = ("prd", "design", "build", "test")
 PHASE_ACTION = {"prd": "PRD_DOC", "design": "DESIGN_DOC", "build": "BUILD_CODE"}
 PHASE_STAGE = {"prd": "SCOPE", "design": "MAP", "build": "SHIP"}
 PHASE_LABEL = {
-    "prd": "PRD",
+    "prd": "Brief",
     "design": "Design",
     "build": "Build",
     "test": "Test",

@@ -142,11 +142,11 @@ def test_release_card_shows_pipeline_progress(
 
     detail = _open_scale(admin_page, live_server, seeded)
     assert detail.get_by_text("Running · Design").first.is_visible()
-    assert detail.get_by_text("2/2").first.is_visible()  # both PRDs done
+    assert detail.get_by_text("2/2").first.is_visible()  # both Briefs done
     assert detail.get_by_text("Builds into").first.is_visible()
     assert detail.get_by_role("button", name="Stop").first.is_visible()
     detail.get_by_text("Per-idea progress").click()
-    assert detail.get_by_text(f"PRD done").first.is_visible()
+    assert detail.get_by_text(f"Brief done").first.is_visible()
     assert_no_page_errors(admin_page)
 
 
@@ -159,7 +159,7 @@ def test_run_and_stop_release_from_the_card(
     release_id, _ = _seed_release(live_app, assign=True)
     detail = _open_scale(admin_page, live_server, seeded)
 
-    run_button = detail.get_by_role("button", name="Run release")
+    run_button = detail.get_by_role("button", name="Run pipeline")
     assert run_button.first.is_visible()
     run_button.first.click()
     confirm = admin_page.locator(CONFIRM)
@@ -167,7 +167,7 @@ def test_run_and_stop_release_from_the_card(
     confirm.get_by_role("button", name="Run release").click()
 
     assert _wait_for(
-        lambda: "Running · PRD"
+        lambda: "Running · Brief"
         in detail.inner_text(),
     ), "release did not show as running after start"
 

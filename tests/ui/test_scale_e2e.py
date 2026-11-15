@@ -93,7 +93,7 @@ def test_create_child_idea_appears_in_scale_tab(scale_idea_page, live_server, se
 
     body = page.locator(DETAIL).inner_text()
     assert "E2E test enhancement" in body
-    assert "PRD" in body
+    assert "Brief" in body
     assert "Design" in body
     assert_no_page_errors(page)
 

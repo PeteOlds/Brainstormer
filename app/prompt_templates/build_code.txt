@@ -4,7 +4,7 @@ Act as a senior software engineer. Take the product idea below — together with
 ${ORIGINAL_IDEA_CONTENT}
 
 ---
-### SUPPORTING MATERIAL (idea, PRD, Design doc, comments, prior analyses, votes):
+### SUPPORTING MATERIAL (idea, Brief, Design doc, comments, prior analyses, votes):
 ${SUPPORTING_MATERIAL}
 
 ---

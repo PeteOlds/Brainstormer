@@ -1,7 +1,7 @@
 """Idea detail tab strip: fixed lifecycle tabs plus one Analysis tab.
 
 A wall of analysis tabs used to bury the latest result. Regression cover for
-the replacement: PRD/Design/Build/Tests stay in lifecycle order, every
+the replacement: Brief/Design/Build/Tests stay in lifecycle order, every
 analysis lives behind a single Analysis tab whose chips pick a document.
 """
 
@@ -62,7 +62,7 @@ def test_lifecycle_tabs_are_ordered_and_analysis_is_one_tab(
     text = strip.inner_text()
 
     # Fixed lifecycle order, then the single Analysis tab.
-    order = ["Idea", "Analysis", "PRD", "Design", "Build", "Tests"]
+    order = ["Idea", "Analysis", "Brief", "Design", "Build", "Tests"]
     positions = [text.index(name) for name in order]
     assert positions == sorted(positions), text
 

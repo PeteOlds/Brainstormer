@@ -12,7 +12,7 @@ Adding a new action takes four steps, nothing else to touch:
    ``docActionVisible`` if the action is stage-restricted).
 
 ``category`` drives the idea detail tab strip: ``action`` entries get their
-own lifecycle tab (PRD, Design, Build), everything else shows in the single
+own lifecycle tab (Brief, Design, Build), everything else shows in the single
 Analysis tab. New actions therefore group themselves.
 
 ``GET /api/v1/actions`` serves this list, the admin UI renders its
@@ -63,8 +63,8 @@ ACTION_REGISTRY = [
     },
     {
         "key": "PRD_DOC",
-        "label": "PRD",
-        "description": "Full Product Requirements Document: vision, personas, scope, user stories, NFRs, UX, risks — plus open questions you can answer and rerun.",
+        "label": "Brief",
+        "description": "Full Brief: vision, personas, scope, user stories, NFRs, UX, risks — plus open questions you can answer and rerun.",
         "template": "prd_doc",
         "category": "action",
         "done_label": "Documented",
@@ -72,7 +72,7 @@ ACTION_REGISTRY = [
     {
         "key": "DESIGN_DOC",
         "label": "Design",
-        "description": "Build-ready design document from the PRD: architecture, screens and components, data model, API contracts, build notes. Requires an existing PRD and Design stage.",
+        "description": "Build-ready design document from the Brief: architecture, screens and components, data model, API contracts, build notes. Requires an existing Brief and Design stage.",
         "template": "design_doc",
         "category": "action",
         "done_label": "Designed",

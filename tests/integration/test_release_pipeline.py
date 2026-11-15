@@ -91,7 +91,7 @@ class FakeOllama:
     def generate_sync(
         self, model, prompt, system=None, format=None, options=None, keep_alive=None
     ):
-        if "Product Requirements Document (PRD)" in prompt:
+        if "Act as an expert technical product manager" in prompt:
             payload = PRD
         elif "Design Document a developer can implement" in prompt:
             payload = DESIGN
