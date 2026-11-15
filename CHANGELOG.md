@@ -4,6 +4,254 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.88.2] - 2026-11-16
+### Changed
+- The user-facing "PRD" is now "Brief" everywhere: the lifecycle tab, action
+  button, confirmation and gate messages, release pipeline labels, and the
+  prompt templates. Internal names (`PRD_DOC`, `prd_doc`, the DB enum) are
+  unchanged, so existing documents and APIs keep working.
+
+## [0.88.1] - 2026-11-15
+### Changed
+- The Analysis tab sits beside Idea, ahead of PRD, so the existing reads stay
+  together on the left of the forward steps.
+
+## [0.88.0] - 2026-11-15
+### Added
+- Idea detail tabs now follow the lifecycle. `PRD`, `Design`, `Build` and
+  `Tests` keep a fixed order, so the next required step is never buried by
+  analysis results.
+- All exploratory results (competitors, feasibility, forces, PESTEL, VRIO,
+  3Cs, market sizing, canvas, hypothesis test, GTM) live behind one
+  `Analysis` tab. A chip row picks the document, newest first, with the date
+  and the Copy MD / .md export beside the heading.
+- Each registry entry gains a `category` (`action` or `analysis`), so new
+  actions group themselves with no UI change.
+
+### Changed
+- The redundant "Prompt" tab is gone from the sticky tab strip; the prompt
+  link remains in the modal meta row.
+
+## [0.79.0] - 2026-11-06
+### Added
+- A release can store the repo its builds write into. The release card shows
+  the resolved repo and, for admins, a picker to change it.
+- A standalone idea gets a build repo named after its reference code, created
+  under the first build root the first time a build runs.
+- The release card's failure message now names the failed ideas and shows the
+  first reason, so "Needs attention" explains itself. The per-idea section is
+  labelled "Per-idea progress and reasons".
+
+### Fixed
+- Release builds now use the parent idea's repo when no repo is named after
+  the release. Previously a release with several registered repos failed at
+  the build phase after already spending PRD and Design calls.
+- The release pipeline, the Build tab and bulk release actions share one repo
+  resolver, so they can no longer choose different repos for the same idea.
+- Starting a release now checks (and creates, when allowed) every child's repo
+  before any model call, and refuses to start if one is unusable.
+
+## [0.78.1] - 2026-11-05
+### Fixed
+- Release pipeline steps could be picked up by a worker before their
+  `prompt_runs` row committed. The step then ran and saved its document but
+  the run stayed `PENDING`, so the pipeline waited forever. Runs are now
+  enqueued only after the tick commits.
+- A Dockerfile with a `HEALTHCHECK ... CMD` before the real `CMD` derived the
+  healthcheck command as the start command. The last `CMD` is now used, and
+  `gunicorn --bind ... app:app` resolves a runbook even when flags come before
+  the app target.
+
+## [0.78.0] - 2026-11-04
+### Added
+- Scale tab child ideas can be multi-selected and added to an existing release
+  (or a new one) in one action. Each block has a select-all box; the toolbar
+  shows how many are selected.
+- "Run release" runs the whole release in one action: PRD → Design → Build →
+  Test. Progress, per-idea state and a Stop button live on the release card;
+  the existing step-by-step phase buttons still work. State is persisted on
+  the release, so a worker restart resumes instead of forgetting.
+- Release builds are sequential and receive the build repo's current files,
+  so each child's fix extends the previous one instead of overwriting it. A
+  child that already has a current written build is left unchanged.
+- Failures do not stop the release: the failed child is reported, its later
+  phases are skipped, and the remaining children continue. A release with
+  failures stays `in_progress` for review.
+- Tests stay a human step: the Test phase seeds the build checklist; running
+  and recording checks is unchanged.
+
+### Changed
+- Release AI settings now apply to skills, guidelines and generation params
+  as well as the model, including bulk phase runs.
+- The BUILD_CODE prompt now tells the model to preserve an existing app's
+  routes and features when the repo already has files.
+
+### Fixed
+- Bulk phase runs copied the previous run's model/provider instead of using
+  the release's AI panel, so a changed setting could appear to be ignored.
+
+## [0.77.0] - 2026-11-03
+### Added
+- Written builds now populate the Test tab. The BUILD_CODE prompt asks for 3-8
+  reviewer checks (always including at least one e2e UI check naming the
+  screen and URL), and the confirm step adds deterministic endpoint,
+  dependency, container and generated-suite checks derived from the manifest.
+  Checks are stored with `source="build"`; re-building updates them in place
+  (keeping any recorded pass/fail), prunes checks the new build no longer
+  produces, and never touches hand-written tests.
+- `scripts/backfill_build_tests.py` seeds checks for builds written before
+  this release (`--dry-run` and `--idea REF` supported).
+
+### Fixed
+- The Test tab queried `idea_tests`, a table no migration ever created;
+  Postgres answered every `/api/v1/ideas/<id>/tests` request with 500 and the
+  tab stayed empty. Added the missing migration (with the `testtype` and
+  `teststatus` enums and the new `source` column).
+- Listing or adding a test now shows an error in the tab instead of failing
+  silently, and build-seeded checks carry a "build" badge.
+
+## [0.76.0] - 2026-11-02
+### Changed
+- Choosing an AI model and its parameters now works the same way everywhere:
+  Admin → AI Settings stage defaults, the run dialog, the per-release override
+  and the prompt editor all use one shared control (`static/js/ai_controls.js`
+  + `templates/partials/ai_controls.html`). The model is always a dropdown of
+  the provider's catalogue with a "Custom model…" fallback, never a free-text
+  box with no options.
+- Skills and Guidelines are multiselect dropdowns on every surface. A release
+  override now stores them as lists end to end instead of comma-separated
+  text, so names containing commas survive a save.
+
+## [0.75.1] - 2026-11-02
+### Fixed
+- An idea in Scale no longer lists its unassigned children twice. The releases
+  API returns a pseudo "No release yet" bucket alongside real releases, and the
+  Scale tab drew that bucket both in its own block and as a release card.
+- The pasteable Setup/Run commands in "How to run" now build `.venv-local`
+  instead of `.venv`. Pasting them on the host used to replace the supervised
+  app's venv with a host-python one the worker container cannot execute, so the
+  next Start failed. One-click run keeps `.venv` untouched.
+
+## [0.75.0] - 2026-11-01
+### Added
+- Builds without a Dockerfile, docker-compose file, or `package.json` now get a
+  start command inferred from their own entry file (`app.py`, `main.py`,
+  `server.py`, `run.py`, or a `src/`/`backend/` equivalent). Flask and FastAPI
+  apps are detected and bound to `0.0.0.0` so they are reachable from other
+  machines.
+- Runbooks now derive a supervised run command for bare `uvicorn`, `gunicorn`,
+  `flask run`, and `npm start` invocations, not just commands beginning with
+  `python`.
+- Existing builds recorded without a start command re-derive one from their
+  stored manifest when one-click run is enabled, so older builds no longer
+  fail with "no runnable command recorded".
+- Builds now prefer a repo named after the idea (`IDEA-1234`) over the
+  instance's only repo, and the run dialog warns when the selected repo
+  belongs to another idea.
+
+### Changed
+- Confirming a build with no runnable entry point now fails before anything is
+  written, so a "Built" badge always means the app can be started.
+
+## [0.73.0] - 2026-10-29
+### Added
+- Admin Jobs view now combines AI generation/action runs with supervised app
+  start/stop events.
+- Jobs can be filtered by status, job type, prompt/idea, error condition, and
+  7-90 day window.
+- Job rows store normalized error categories and per-job duration.
+
+## [0.72.11] - 2026-10-29
+### Added
+- Admin Jobs view now includes AI and app-supervision jobs for a selectable
+  7-90 day window, with status, prompt, error-condition, and text filters.
+- Normalized error categories and per-job duration are stored and displayed.
+
+## [0.72.11] - 2026-10-29
+### Fixed
+- Fixed orphaned managed-app processes when startup fails or Stop is pressed.
+
+## [0.72.10] - 2026-10-28
+### Fixed
+- Fixed the supervised frontend proxy server so "Open app" serves the generated UI.
+
+## [0.72.9] - 2026-10-28
+### Added
+- Supervised builds now start both the backend API and a small frontend server,
+  so "Open app" points at a live UI instead of an unused port.
+
+### Fixed
+- Fixed the frontend proxy server startup (`ThreadingTCPServer`).
+
+## [0.72.8] - 2026-10-28
+### Fixed
+- Docker instructions now create the required log directory and `.env` file before
+  starting Compose.
+
+## [0.72.7] - 2026-10-28
+### Fixed
+- Docker instructions now install the Compose plugin first on hosts where
+  `docker compose` is unavailable.
+
+## [0.72.6] - 2026-10-28
+### Fixed
+- Fixed a JavaScript error in build run instructions that prevented the How to run
+  panel from rendering.
+
+## [0.72.5] - 2026-10-28
+### Changed
+- Added an "Open UI" link for supervised builds when a frontend URL is available.
+
+## [0.72.4] - 2026-10-28
+### Changed
+- Build instructions now label backend/API and dashboard links separately and explain
+  that the supervised runner starts the backend only.
+
+## [0.72.3] - 2026-10-28
+### Changed
+- Build tab labels now distinguish the supervised backend/API link from the
+  dashboard link, so non-technical users can tell which URL to open.
+
+## [0.72.2] - 2026-10-28
+### Fixed
+- Build "Open" links and run instructions now use the machine's LAN IP instead of
+  `localhost`, so other users on the local network can reach a running build.
+- Supervised builds open the live backend API instead of a frontend port that is
+  not started by the runner.
+
+## [0.72.1] - 2026-10-27
+### Fixed
+- `PATCH /api/v1/actions/<id>` now validates `result_data` against the action's
+  output schema, so malformed documents (missing required sections or a
+  non-object body) are rejected with HTTP 400 instead of being stored.
+
+## [0.72.0] - 2026-10-25
+### Added
+- Backup & Restore admin UI at `/admin/backup`: site admins can export the whole
+  site, download and restore a saved file, list server-side backups and turn the
+  daily automation on or off. Instance admins can download and restore their own
+  instance. Uploads are verified (schema + SHA-256) before a typed confirmation.
+- Self-contained TLS: mount a certificate/key, set `TLS_CERT_FILE` and
+  `TLS_KEY_FILE`, and the container serves HTTPS itself (redirect + HSTS +
+  Secure cookies). Unreadable files fall back to plain HTTP.
+- `TRUST_PROXY_HEADERS` for reverse-proxy deployments (ProxyFix, one hop).
+- `flutter-integration-chrome` CI job: web build + widget/unit tests in Chrome.
+
+### Fixed
+- Builds no longer retry after a timeout: `run_secondary_action` has its own
+  30-minute ceiling and excludes `SoftTimeLimitExceeded` from autoretry.
+- `/home` no longer throws `messages`/`canMessageAnyone` reference errors.
+- Idea 3-dot menu no longer throws `cloneNode` once per card (`x-if` must be on
+  a `<template>`).
+- Top navigation no longer overflows horizontally at 768-818 px.
+- Backup downloads work with the default relative `BACKUP_DIR`.
+- File uploads no longer lose their multipart body to a forced JSON header.
+
+### Changed
+- Archive is a plain-language action ("Archive this idea") with confirmation; the raw `ARCHIVE` status is no longer offered in
+  status-change dropdowns (it remains a filter). Archive is reversible: restore
+  returns the idea to the stage it left.
+
 ## [0.67.0] - 2026-10-18
 ### Fixed
 - Plain-language stage labels: lifecycle stages now show as "Spark", "Scope", "Map", "Ship", "Scale", "Dropped", "Frozen", "Archived" instead of all-caps enum text (SPARK, SCOPE, MAP, SHIP, SCALE, DROP, FREEZE, ARCHIVE) across homepage and dashboard

@@ -565,7 +565,7 @@ def _schedule(release_id: str, countdown: int = TICK_SECONDS) -> None:
     )
 
 
-def start_release_pipeline(release, user=None, force=False):
+def start_release_pipeline(release, user=None, force=False, target_phase=None):
     """Start (or resume) the one-action run. Returns (ok, message)."""
     from app.models import Idea
 
@@ -610,6 +610,8 @@ def start_release_pipeline(release, user=None, force=False):
             )
 
     state = _load_state(release, children)
+    if target_phase:
+        state["target_phase"] = target_phase
     # Re-runs keep finished work and retry the rest. Skipped steps are
     # retried too (they were skipped because an earlier step failed), but
     # rejected ideas stay untouched.
@@ -761,6 +763,11 @@ def advance_release(release_id) -> bool:
                 entry = state["children"][str(child.id)]
                 if entry[phase] == "failed":
                     _skip_later(entry, phase)
+
+        target_phase = state.get("target_phase")
+        if target_phase and phase == target_phase:
+            _finish(release, state, children)
+            return False
 
     _finish(release, state, children)
     return False

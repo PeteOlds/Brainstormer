@@ -173,6 +173,7 @@ def _supervision_env(workdir: str, argv: list) -> dict:
         "HOME": workdir,
         "LANG": "C.UTF-8",
         "PYTHONDONTWRITEBYTECODE": "1",
+        "PIP_NO_CACHE_DIR": "1",
     }
 
 

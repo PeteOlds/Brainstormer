@@ -878,21 +878,25 @@ def diagnose_managed_app(user, instance_id, app_id):
         try:
             with open(log_path, "r", errors="replace") as fh:
                 lines = fh.readlines()
-            log_text = "".join(lines[-80:])
+            log_text = "".join(lines[-10:])
         except OSError:
             log_text = ""
 
+    # Build a short prompt from the last error line of the log.
+    last_error_line = ""
+    for line in reversed(log_text.splitlines()):
+        if line.strip():
+            last_error_line = line.strip()
+            break
     prompt = (
-        "You are a DevOps assistant. A supervised Python web app failed to start. "
-        "Diagnose the failure from the log below and propose concrete fixes. "
-        "Be concise: 1) root cause, 2) fix steps, 3) whether a human must act.\n\n"
-        f"App: {row.idea_id}\nCommand: {(row.spec or {}).get('command')}\n\n"
-        f"--- LOG TAIL ---\n{log_text}\n--- END ---"
+        "A Python Flask web app failed to start. "
+        f"The last error line is: {last_error_line[:200]}. "
+        "In 2-3 sentences, explain the likely root cause and how to fix it."
     )
     try:
         from app.models import resolve_stage
 
-        stage_cfg = resolve_stage(instance.id, "SHIP") or {}
+        stage_cfg = resolve_stage(instance.id, "SPARK") or {}
     except Exception:
         stage_cfg = {}
     provider = (stage_cfg.get("provider") or "ollama").lower()
@@ -909,20 +913,20 @@ def diagnose_managed_app(user, instance_id, app_id):
     try:
         from app.services.llm_backends import generate_for_prompt
 
-        result = generate_for_prompt(p, prompt, json_mode=False, timeout=120.0)
+        result = generate_for_prompt(p, prompt, json_mode=False, timeout=20.0)
         diagnosis = result.text
     except Exception as exc:
         # Fall back to local Ollama
         try:
             from app.services.ollama_client import OllamaClient
 
-            client = OllamaClient(timeout=60.0)
+            client = OllamaClient(timeout=20.0)
             r = client.generate_sync(
-                prompt=prompt, model="llama3:8b", options={"temperature": 0.2}
+                prompt=prompt, model="llama3:8b", format=None, options={"temperature": 0.2}
             )
             diagnosis = r.get("response", "") if isinstance(r, dict) else str(r)
         except Exception as exc2:
-            return api_error(f"Diagnosis failed: {exc2}", status_code=500)
+            return api_ok({"diagnosis": f"Diagnosis failed: {exc2}"})
     return api_ok({"diagnosis": diagnosis})
 
 @bp.route(

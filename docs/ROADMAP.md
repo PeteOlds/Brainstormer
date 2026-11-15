@@ -194,6 +194,53 @@ and healthy.
   `PATCH /admin/settings/account` endpoint.
 - **Idea→repository**: added `ideas.repository` field to the Idea model.
 
+### Bugs fixed (2026-10-24)
+- **`/admin/ai` page blank**: `#` instead of `//` in a JS comment caused a
+  SyntaxError that prevented Alpine from initializing. Fixed; page renders all
+  sections.
+- **Per-stage Model field**: converted from free text to a `<select>` populated
+  from the provider's model catalogue, with a "Custom model…" escape hatch.
+- **"Unknown build target for this instance"**: release-wide build-all never
+  sent `target_id`; `_enqueue_action` returned a 2-tuple where 3 were expected
+  (500). Fixed repo resolution (explicit → previous run's repo → instance's only
+  repo; ambiguous → clean 400 listing repos) and response shape (started/skipped/
+  summary, 202).
+- **Build tab repo selector**: added "Write this build into" dropdown (admin) +
+  "Manage repos" link to `/admin/ai`.
+- **Queue routing for OpenCode**: `enqueue_generation()` is now the only enqueue
+  path; `opencode` queue registered in `task_queues`; binary mounted on worker.
+- **"Mark release done"**: status values normalized (SHIP/shipped, DROP/drop);
+  release marked done with completed_at; notes generated; returns shape the
+  frontend reads.
+- **Child-idea validation**: children require a SCALE parent + child_kind;
+  nesting rejected; family embedding (parent_reference_code, parent_title,
+  child_count) added.
+- **Moderation comments GET**: implemented `GET /api/v1/ideas/<id>/comments`
+  with is_ignored filtering for non-admins; route at `/comments/<id>/flag`.
+- **GitHub push guards**: release must be done; GitHub must be configured; no
+  re-commit once pushed.
+
+### Known bugs / missing features
+- **OpenCode attach-mode auth**: LAN server password (in `~/.config/opencode/
+  service.json`) rejected by the v2 CLI client even with `OPENCODE_PASSWORD`
+  set. Worked around by switching SHIP/SCALE stages to ollama. Needs investigation.
+- ~~**OpenCode CLI v2 flag drift**~~ — **fixed 2026-10-25**: uses `--server`
+  and passes the project directory as a positional argument (v2 removed
+  `--dir`).
+- **GitHub flow tests** need a configured PAT in CI; currently skipped without
+  secrets.
+- **Device CI maiden run**: Chrome job added to `guardrails.yml`
+  (`flutter-integration-chrome`); needs one green run to close.
+- **Coverage ratchet**: 81% → 85% target.
+- ~~**SSL**~~ — **done 2026-10-25**: self-contained in-container TLS
+  (see `docs/Design.md` §6c).
+- ~~**Complete UI review**~~ — **done 2026-10-25**: every Jinja page
+  exercised in headless Chromium; punch list in `docs/UI_REVIEW_2026-10-25.md`.
+- ~~**Backup/Restore UI**~~ — **done 2026-10-25** at `/admin/backup`
+  (see `docs/Design.md` §6a).
+- ~~**C5 Archive UX**~~ — **done 2026-10-25**: friendly "Archive this
+  idea" / "Restore to <stage>" actions (reversible, see `docs/Design.md` §6b).
+
 ### Housekeeping (no phase; do anytime)
 6. Untracked files: decide on `TODOS.md` (stale V1 notes — archive or
    refresh), `docs/APPLICATION_DOCUMENTATION.md`, the pasted status
@@ -202,10 +249,33 @@ and healthy.
    restored.)
 7. Coverage ratchet: 81% today — hold the line on every build, aim 85%+.
 
+### New: Backup & Restore (UI)
+- Per-instance backup/restore exposed in the admin UI (currently CLI-only:
+  `flask backup-instance`, `flask restore-instance`).
+- Per-instance: manual export (download JSON bundle) + upload/restore with
+  confirmation modal and progress.
+- Site-level: automated (scheduled job / beat task) + manual.
+- Scope: instance admins + site admins.
+- Keep CLI as the automation path; UI for non-technical users.
+
+### New: C5 Archive UX reconsideration
+- "Terminal Archive" concept exposed via CLI-ish flows is inappropriate for
+  technically illiterate users.
+- Plan: expose Archive as a simple, labelled UI action ("Archive this idea")
+  with a confirmation dialog; hide terminal/low-level transitions from
+  non-admins. State machine unchanged.
+- Update C5 to reflect the UX change.
+
 ### E. Recommendations
-- Implementing SSL (see `Guides/Guide_SecuringWithSSL.md` for a
-  potential approach)
-- A complete review of the UI to make the flow more logical
+- ~~Implementing SSL~~ — **done 2026-10-25**: self-contained in-container
+  TLS (gunicorn `--certfile/--keyfile` via the entrypoint, `certs/` mount),
+  HTTPS redirect + HSTS + Secure cookies. Documented in
+  `docs/getting-started.md` §10 and `Guides/Guide_SecuringWithSSL.md`.
+- ~~A complete review of the UI to make the flow more logical~~ — **done
+  2026-10-25**: every Jinja page exercised in headless Chromium; punch list
+  in `docs/UI_REVIEW_2026-10-25.md`.
+- Flutter cutover (C10): **hard flip now** — set `LEGACY_WEB_ENABLED=False`
+  after parity check; delete templates next release.
 
 ---
 
@@ -251,7 +321,14 @@ Recommendation: **keep**. RLS overhead measured nil on production
 data (0.49ms vs 0.86ms noise floor, 2026-10-01) — keep policies but
 re-measure only past 100k rows. Never remove the layer.
 
-### C5. Archive is terminal; skip-level moves allowed; no gates
+### C5. Archive is reversible; skip-level moves allowed; no gates
+**Amended 2026-10-26 (user decision):** a one-way Archive is effectively
+Delete, so Archive is reversible. Any live stage can archive; restore returns
+the idea to the stage it left (`Idea.archived_from`, from status history).
+The original terminal rule is superseded. Archived ideas are read-only for
+secondary actions (`ACTIONS_BLOCKED_STATES`).
+
+Original decision (superseded):
 Why: the business moves ideas non-linearly (Spark straight to Map
 happens); gates would encode process guesses that rot. The matrix
 prevents nonsense (nothing leaves Archive) while the UI confirm +
@@ -259,6 +336,9 @@ history row keeps humans honest.
 Rejected: enforced linear pipeline and prerequisite gates.
 Recommendation: **keep**. If audit ever shows chaotic jumps causing
 harm, add per-transition *reasons* (free text), not gates.
+**UX note (2026-10-24):** Archive is exposed as a simple, labelled UI
+action ("Archive this idea") with a confirmation dialog; terminal/low-level
+transitions are hidden from non-admins. State machine unchanged.
 
 ### C6. LiteLLM library first, sidecar for virtual keys (not bespoke, not direct SDKs)
 Why: one routing interface, OpenAI-compatible everywhere, offline
@@ -310,8 +390,9 @@ Why: killing the only working UI before Flutter proves itself in
 users' hands would be self-harm. The 410 path is coded, tested, and
 one env var away.
 Rejected: hard cutover with the Flutter release.
-Recommendation: **flip to False after two weeks of Flutter production
-use with zero P1s**, then delete the templates a release later. Do not
+Recommendation: **flip to False now** (hard flip, 2026-10-24 decision):
+verify Flutter parity first, then set `LEGACY_WEB_ENABLED=False`, monitor
+2 weeks with zero P1s, then delete templates a release later. Do not
 let both UIs live indefinitely — dual maintenance is where parity
 goes to die.
 
@@ -335,3 +416,11 @@ Make recommendations on
 - Implementing SSL (see `Guides/Guide_SecuringWithSSL.md` for a
   potential approach)
 - A complete review of the UI to make the flow more logical
+
+
+
+----
+
+Suggest how to manage users so they can join more than one instance
+Add Forgotten Password functionality
+When an Idea has been built, add an additional tab for test.  It should show all tests amd show 

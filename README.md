@@ -131,7 +131,7 @@ python tests/ui/test_scale_e2e.py
 - `GET /api/v1/ideas/{parent_id}/children` — paginated child list
 - `GET /api/v1/ideas/{parent_id}/releases` — release list (newest first)
 - `POST /api/v1/ideas/{parent_id}/releases` — create release
-- `PATCH /api/v1/releases/{id}` — update release (name, status, target_date, notes)
+- `PATCH /api/v1/releases/{id}` — update release (name, status, target_date, notes, build_target_id)
 - `PATCH /api/v1/releases/{id}/assign` — move child ideas into release
 - `PATCH /api/v1/releases/{id}/unassign` — move children back to "No release"
 - `POST /api/v1/releases/{id}/complete` — bulk-complete children (SHIP/DROP), auto-notes
@@ -141,6 +141,13 @@ python tests/ui/test_scale_e2e.py
 - `POST /api/v1/releases/{id}/github-push` — push build output to GitHub (admin)
 
 ### Build Targets & GitHub
+
+Builds resolve their repo in this order: an explicit choice (Build tab or a
+release's stored repo), a repo named after the release, the child's reference
+code, the parent idea's reference code, the last repo used, then the
+instance's only repo. If none match, a repo named after the root idea is
+created under the first build root when the build starts. A release checks
+every child's repo before it spends PRD/Design calls.
 
 - `GET /api/v1/instances/{id}/build-targets` — registered build repos
 - `POST /api/v1/instances/{id}/build-targets` — register a build repo

@@ -83,7 +83,7 @@ health, similarity, Slack mapping and spend queries are all instance-scoped.
 ## 2. Lifecycle states
 
 Fresh diagram (normative with `PRD_V2.md` §5.2; admin-only moves, UI confirms
-every change, no gates, Archive terminal):
+every change, no gates, Archive reversible):
 
 ```mermaid
 stateDiagram-v2
@@ -239,7 +239,68 @@ Rate limits (extends Guardrail §5): login/social-start 5/min/IP, run-now
 
 ---
 
-## 6. Build notes
+## 6a. Backup & Restore (UI) (2026-10-24, implemented 2026-10-25)
+
+- Page: `/admin/backup` (`app/templates/admin/backup.html`, Alpine
+  `backupApp()`), linked from the Admin dashboard.
+- API (`app/routes/backup.py`, all admin-gated):
+  - `GET  /api/v1/admin/backup` — instances you can admin, stored files
+    (site admins), automation flag.
+  - `POST /api/v1/admin/backup/site/run` — write a timestamped site file to
+    `BACKUP_DIR` now.
+  - `GET  /api/v1/admin/backup/site/download` — fresh export as a download.
+  - `GET  /api/v1/admin/backup/files/<name>` — download a stored file.
+  - `POST /api/v1/admin/backup/site/verify|restore` — upload, verify
+    (schema + SHA-256), then restore after typing `RESTORE`.
+  - `POST /api/v1/instances/<id>/backup/verify|restore` — per-instance
+    equivalent; confirmation is the instance number.
+  - `GET  /api/v1/instances/<id>/export` — existing instance download.
+  - `PUT  /api/v1/admin/backup/settings` — site backup automation on/off
+    (stored in `SystemSettings.platform.site_backup_automated`).
+- Scope: instance admins (their instances, manual only) + site admins
+  (whole site, automated daily job respects the toggle).
+- Restores are synchronous with staged UI progress; no worker/DB race.
+- CLI remains the automation path for scripts; the UI is for people.
+- Tests: `tests/integration/test_backup_ui.py` (9 cases, real bundles).
+
+## 6b. Archive UX (2026-10-24, implemented 2026-10-25)
+
+- Archive is reversible (amends C5, 2026-10-26): any live stage can archive;
+  restore returns the idea to the stage it left.
+- The raw `ARCHIVE` option is gone from every status dropdown. Cards and the
+  detail modal show **"Archive this idea"** (only for stages the matrix allows;
+  already archived) with a plain-language confirmation.
+- Bulk bar has a separate **"Archive selected"** button.
+- Restore: "Restore to <stage>" uses `archived_from` (latest ARCHIVE row in
+  status history). Archived ideas are read-only for secondary actions.
+- Terminal/low-level transitions stay admin-only (`isAdmin`); non-admins
+  never see them.
+- Skip-level moves remain allowed (C5).
+
+## 6c. Self-contained TLS (2026-10-24, implemented 2026-10-25)
+
+- TLS terminated inside the container: `docker-entrypoint.sh` appends
+  `--certfile/--keyfile` to gunicorn (or hypercorn) when both
+  `TLS_CERT_FILE` and `TLS_KEY_FILE` are readable. Empty/unreadable files
+  fall back to plain HTTP, so a misconfiguration never takes the site down.
+- `./certs` is mounted read-only at `/certs` in compose. Any PEM pair works
+  (self-signed for a local install, full chain for a public domain).
+- A readable pair implies `FORCE_HTTPS`: Talisman redirects HTTP→HTTPS,
+  sends HSTS for one year (`HSTS_MAX_AGE`), and `SESSION_COOKIE_SECURE` /
+  `JWT_COOKIE_SECURE` are forced on.
+- Reverse-proxy deployments leave the TLS vars empty and set
+  `TRUST_PROXY_HEADERS=True` (ProxyFix, one trusted hop).
+- Cert provisioning documented in `docs/getting-started.md` §10 and
+  `Guides/Guide_SecuringWithSSL.md` (self-signed for dev, Let's Encrypt for prod).
+- Minimal host config: only a cert/key volume mount.
+- Tests: `tests/unit/test_tls_config.py` (defaults stay HTTP, TLS implies
+  redirect/HSTS/Secure cookies, ProxyFix is opt-in, entrypoint passthrough).
+
+## 6d. Flutter cutover (2026-10-24)
+
+- Hard flip: set `LEGACY_WEB_ENABLED=False` after Flutter parity verified.
+- Monitor 2 weeks with zero P1s, then delete Jinja templates a release later.
+- 410 path remains coded and tested.
 
 Order riskiest-first (mirrors `PRD_V2.md` §15):
 
@@ -274,6 +335,112 @@ provider, Developer/Deployment/BA matrix, push/offline, cache warming,
 pricing auto-sync.
 
 ---
+
+## 6e. Build runbook derivation (2026-11-01)
+
+- A build is only written and marked Built when a runbook (supervised
+  `run_argv`) can be derived; otherwise the confirm run fails with a plain
+  message and nothing is written. "Built" therefore always means runnable.
+- `_extract_runtime_info` derives the start command from, in order: a
+  Dockerfile `CMD`, a `package.json` `start` script, then inference from the
+  manifest's own entry file (`app.py`, `main.py`, `server.py`, `run.py`, or the
+  same under `src/`, `backend/`, `app/`, `api/`). Flask and FastAPI are bound
+  to `0.0.0.0` on 5000/8000 so the URL works from other machines; a missing
+  `requirements.txt` is called out in the run notes.
+- `_derive_runbook` builds `run_argv` for `python …`, bare `uvicorn`/
+  `gunicorn`/`hypercorn`/`daphne`, `flask run`, and `npm`/`npx`/`yarn`/`pnpm`/
+  `node` (with `npm install` as the setup step). Anything else stays
+  underivable and is refused at confirm time.
+- Builds target a repo named after the idea (`IDEA-1234`) when one exists,
+  before falling back to the last-used/only repo; the run dialog warns when
+  the selected repo belongs to a different idea.
+- The pasteable `setup`/`run` strings build `.venv-local`, never `.venv`.
+  `.venv` belongs to the supervised process inside its worker container, and
+  a host-built venv (different Python) cannot be executed there — pasting the
+  old commands used to break the next Start. Supervision keeps using
+  `.venv` via `setup_argv`/`run_argv`.
+- Scale tab: `/releases` returns a pseudo "No release yet" entry (`id: null`)
+  for unassigned children, so release cards and "Move to…" menus iterate
+  `realReleases()` (id-bearing only). The unassigned bucket renders once, in
+  its own block.
+- Tests: `tests/integration/test_build.py` (`TestBuildRuntimeInfo`,
+  `TestDeriveRunbook`, `TestBuildTargetResolution`, `TestBuildTask`);
+  `tests/ui/test_scale_e2e.py` guards the single listing.
+
+## 6f. AI selection controls (2026-11-02)
+
+- Every surface that picks a model renders the same control pair:
+  `templates/partials/ai_controls.html` (markup) + `static/js/ai_controls.js`
+  (behaviour). Surfaces: Admin → AI Settings stage defaults (the reference),
+  the run dialog, the per-release override on a SCALE idea, and the prompt
+  editor.
+- Model fields are `<select>` lists of the provider's catalogue with a
+  "Custom model…" escape hatch that reveals a text input. A saved model that
+  is no longer in the catalogue is shown through that same input rather than
+  reading as "inherit". `AIControls.fetchModels()` is the single catalogue
+  call and `selectValue()`/`isCustom()` the single rule for what a saved id
+  means.
+- Skills and Guidelines are multiselect dropdowns (button with a count that
+  expands an inline checkbox list). The release override stores arrays end to
+  end: no comma splitting, so names containing commas survive.
+- Tests: `tests/ui/test_ai_controls.py` (release override, run dialog, Admin →
+  AI Settings) plus the `/admin/ai` smoke page.
+
+## 6g. Build → Test tab (2026-11-03)
+
+- A written BUILD_CODE seeds `idea_tests` rows (`source="build"`). The UI
+  check comes first: every runnable build gets an e2e check naming the URL
+  and what should be visible, because that is the step reviewers skip.
+- Sources for the checklist: the model's `tests` list in the manifest (the
+  prompt requires 3-8 checks, at least one e2e UI check), then deterministic
+  coverage inferred from the files (Flask/FastAPI/Express routes, dependency
+  installs, container build, generated test suite).
+- `app/services/build_tests.py` owns derivation and seeding. Seeding is
+  idempotent by name within `source="build"`: status/coverage/last-run are
+  preserved on re-build, stale generated checks are pruned, manual rows are
+  never touched. The build write report records the counts.
+- The table shipped in v0.74.0 without a migration; Postgres answered every
+  `/tests` request with 500 until the `ii0b1c2d3e4f` migration created it.
+  New model columns need a migration even though SQLite `create_all()` hides
+  the gap.
+- Backfill: `scripts/backfill_build_tests.py [--dry-run] [--idea REF]`.
+
+## 6h. One-action release run (2026-11-04, implemented 2026-11-04)
+
+A release card on the Scale tab can run every child through
+PRD → Design → Build → Test in one action. The step-by-step phase buttons
+remain for manual control.
+
+- **State** lives on `releases` (`pipeline_status`, `pipeline_phase`,
+  `pipeline_state` JSON, timestamps, error). The JSON tracks each child per
+  phase (`pending`, `running`, `preview_ready`, `writing`, `done`, `skipped`,
+  `failed`) plus run ids and a short report.
+- **Drive**: a short Celery tick (`app.tasks.release_tasks.release_pipeline_tick`,
+  default queue) advances one step and schedules the next tick. Each tick
+  polls the run it started; no long-lived task holds the release.
+- **Status moves** walk SPARK → SCOPE → MAP → SHIP one legal step at a time
+  and record `IdeaStatusHistory` against the user who started the run.
+- **Docs** are generated only when the child has no current PRD/Design.
+- **Builds** are sequential: preview (LLM) → confirm write (deterministic),
+  one child at a time. Each preview sees the repo snapshot
+  (`existing_repo_snapshot`, capped at 30k chars) so later fixes extend
+  earlier ones. Children with a current written build for the release repo
+  are skipped. Every build goes through one resolver
+  (`app.services.build_targets`): the release's explicit repo, a repo
+  named after the release, the child's reference code, the parent idea's
+  reference code, the last repo used, the instance's only repo, then a
+  lazily created repo named after the root idea. The release preflights
+  every child's repo before spending PRD/Design calls.
+- **Tests**: the write seeds the checklist as usual; the Test phase is a
+  safety net for older builds and never runs checks automatically.
+- **Failure policy**: continue and report. The release is marked `done`
+  (children at SHIP, notes regenerated) only when nothing failed; otherwise
+  it stays `in_progress` with `pipeline_status=failed` and reasons per child.
+  Starting again keeps finished work and retries the rest.
+- **Stop** sets `stopping`; the next tick stops without starting a new step.
+  Work already written is kept.
+- **Assignment**: `PATCH /releases/<id>/assign` already took a list; the UI
+  now exposes multi-select so several children can join a release at once.
 
 ## 7. Open questions
 
