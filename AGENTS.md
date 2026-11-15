@@ -68,13 +68,18 @@ Enum values (`ideastatus`, `actiontype`) need `ALTER TYPE ... ADD VALUE` via psq
 - Supervision pids are container-local; status is health-first and Stop runs as a worker task.
 - `git stash` is broken in this repo; use a patch file instead.
 
+## Build and release
+
+- Run the full test suite before committing. If tests cannot run or failures are pre-existing, document why.
+- Bump `VERSION` for every build (semantic: patch for fixes, minor for features, major for breaking).
+- Update `ReleaseNotes.md` on every release: add version/date and list features and bug fixes shipped.
+- Keep `docs/ROADMAP.md` as outstanding work only — no completed items. Every item must have a unique ID and belong to a phased release; remove items when shipped and record them in `ReleaseNotes.md`.
+
 ## Git
 
 - No pushes to `main`.
 - Semantic commit prefixes.
-- Commit code, tests, migrations, and `VERSION` only.
-- Leave `*.md`, `TODOS.md`, guideline content, `.env`, and secrets uncommitted.
-- Changelog entries stay in the working tree only.
+- Commit code, tests, migrations, `VERSION`, and release records: include `ReleaseNotes.md` (and `docs/ROADMAP.md` when outstanding work changes) in the release commit. Keep `CHANGELOG.md` working-tree only unless a release explicitly requires it. Never commit `.env`, secrets, or private keys (e.g. `certs/`).
 - Bump `VERSION` for every build: patch, minor, or major.
 
 ## Verification

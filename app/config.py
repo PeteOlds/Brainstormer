@@ -149,9 +149,10 @@ class Config:
     STRIPE_WEBHOOK_SECRET = get_env("STRIPE_WEBHOOK_SECRET", "")
     STRIPE_SECRET_KEY = get_env("STRIPE_SECRET_KEY", "")
 
-    # Legacy Jinja web UI (Phase 7): True keeps serving it; False makes
-    # the pages blueprint answer 410 pointing at the Flutter client.
-    LEGACY_WEB_ENABLED = get_env("LEGACY_WEB_ENABLED", "True") == "True"
+    # Phase 7 (Flutter replatform): legacy Jinja routes are retired by
+    # default. Set LEGACY_WEB_ENABLED=True to temporarily re-enable them
+    # (410s when False). Jinja templates remain for a following removal.
+    LEGACY_WEB_ENABLED = get_env("LEGACY_WEB_ENABLED", "False") == "True"
 
     # Email (password reset). SMTP_HOST unset => console logging in dev.
     SMTP_HOST = get_env("SMTP_HOST", None)
@@ -229,6 +230,8 @@ class TestingConfig(Config):
     JWT_COOKIE_CSRF_PROTECT = False
     JWT_ACCESS_CSRF_HEADER_NAME = "X-CSRF-TOKEN"
     JWT_REFRESH_CSRF_HEADER_NAME = "X-CSRF-TOKEN"
+    # Keep legacy Jinja pages available in tests; production/default is off.
+    LEGACY_WEB_ENABLED = True
 
 
 config = {
