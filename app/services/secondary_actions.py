@@ -16,17 +16,12 @@ buttons from it, and ``POST /api/v1/ideas/<id>/actions`` validates
 against it — so the new action works end to end with no UI changes.
 """
 
-# ``category`` drives the idea detail tab strip: "analysis" tabs are
-# exploratory reads, "action" tabs are stage-gated forward steps. Keep the
-# analysis/action split in sync with the lifecycle gates in
-# ``app/routes/ideas.py`` when adding an action.
 ACTION_REGISTRY = [
     {
         "key": "REFINE",
         "label": "Refine Idea",
         "description": "Distill the concept into a 1-paragraph elevator pitch, core target audience, and primary revenue model.",
         "template": "refine",
-        "category": "analysis",
         "done_label": "Refined",
     },
     {
@@ -34,7 +29,6 @@ ACTION_REGISTRY = [
         "label": "Competitor Analysis",
         "description": "Identify direct and indirect competitors (global and local), key differentiators, and barriers to entry.",
         "template": "competitors",
-        "category": "analysis",
         "done_label": "Analyzed",
     },
     {
@@ -42,7 +36,6 @@ ACTION_REGISTRY = [
         "label": "Feasibility Score",
         "description": "Score technical and market feasibility from 1–10 with reasoning and a verdict.",
         "template": "feasibility",
-        "category": "analysis",
         "done_label": "Scored",
     },
     {
@@ -50,7 +43,6 @@ ACTION_REGISTRY = [
         "label": "Five Forces",
         "description": "Porter's Five Forces: rivalry, substitutes, entrants, buyers, suppliers, plus risks and recommendations.",
         "template": "forces",
-        "category": "analysis",
         "done_label": "Assessed",
     },
     {
@@ -58,7 +50,6 @@ ACTION_REGISTRY = [
         "label": "PESTEL",
         "description": "Macro-environment scan: political, economic, social, technological, environmental, legal, plus opportunities, threats and recommendations.",
         "template": "pestel",
-        "category": "analysis",
         "done_label": "Scanned",
     },
     {
@@ -66,7 +57,6 @@ ACTION_REGISTRY = [
         "label": "PRD",
         "description": "Full Product Requirements Document: vision, personas, scope, user stories, NFRs, UX, risks — plus open questions you can answer and rerun.",
         "template": "prd_doc",
-        "category": "action",
         "done_label": "Documented",
     },
     {
@@ -74,7 +64,6 @@ ACTION_REGISTRY = [
         "label": "Design",
         "description": "Build-ready design document from the PRD: architecture, screens and components, data model, API contracts, build notes. Requires an existing PRD and Design stage.",
         "template": "design_doc",
-        "category": "action",
         "done_label": "Designed",
     },
     {
@@ -82,7 +71,6 @@ ACTION_REGISTRY = [
         "label": "VRIO Framework",
         "description": "VRIO Capability Assessment: Value, Rarity, Imitability, Organization — classify competitive implication and prioritize recommendations.",
         "template": "vrio",
-        "category": "analysis",
         "done_label": "Assessed",
     },
     {
@@ -90,7 +78,6 @@ ACTION_REGISTRY = [
         "label": "3Cs Analysis",
         "description": "3Cs Strategic Analysis: Customer, Competitor, Company — find strategic sweet spot and prioritized recommendations.",
         "template": "three_cs",
-        "category": "analysis",
         "done_label": "Analyzed",
     },
     {
@@ -98,7 +85,6 @@ ACTION_REGISTRY = [
         "label": "Market Sizing",
         "description": "TAM/SAM/SOM with top-down and bottom-up formulas, filtering criteria, and key risk assumptions.",
         "template": "market_sizing",
-        "category": "analysis",
         "done_label": "Sized",
     },
     {
@@ -106,7 +92,6 @@ ACTION_REGISTRY = [
         "label": "Business Model Canvas",
         "description": "Complete 9-block BMC: value props, segments, channels, relationships, revenue, resources, activities, partnerships, costs — plus vulnerabilities and validation experiments.",
         "template": "business_model_canvas",
-        "category": "analysis",
         "done_label": "Mapped",
     },
     {
@@ -114,7 +99,6 @@ ACTION_REGISTRY = [
         "label": "Hypothesis Test",
         "description": "Lean Startup experiment roadmap: risk-ranked assumptions, formal hypotheses, low-cost experiments, phased roadmap with pivot/persevere gates.",
         "template": "hypothesis_test",
-        "category": "analysis",
         "done_label": "Designed",
     },
     {
@@ -122,7 +106,6 @@ ACTION_REGISTRY = [
         "label": "GTM Strategy",
         "description": "Go-To-Market execution: segmentation, positioning, pricing, channels, launch plan, AARRR metrics — phased roadmap with owners and timelines.",
         "template": "gtm_strategy",
-        "category": "analysis",
         "done_label": "Planned",
     },
     {
@@ -130,7 +113,6 @@ ACTION_REGISTRY = [
         "label": "Build",
         "description": "Implement the Design document as code files in a registered instance target repo: manifest preview first, files written on confirm. Requires a Design doc and Ship stage.",
         "template": "build_code",
-        "category": "action",
         "done_label": "Built",
     },
 ]
