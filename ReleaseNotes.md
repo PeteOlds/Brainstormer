@@ -20,6 +20,7 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ### Documentation
 - Roadmap updated: RM-010 completed (cutover flip) and replaced by RM-013 for template removal after monitoring.
+- Roadmap cleanup: removed RM-012 (forgotten password flow) and RM-020 (multi-instance membership/switching) as already shipped in earlier releases.
 
 ## v0.88.2 — 2026-11-16
 

@@ -26,16 +26,13 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 
 ## R2 — Product and UX
 
-| ID     | Status  | Item                                        | Notes / acceptance                                                                                                                                               |
-| ------ | ------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| RM-012 | planned | **Forgotten password flow**                 | Add a secure password-reset flow (request, time-limited token, reset) with clear user messaging and audit-appropriate logging; no secret leakage in emails/logs. |
-| RM-013 | planned | **Remove legacy Jinja templates**           | After the Flutter cutover has been monitored with no P1 regressions, delete the retired Jinja templates/routes and related assets to end dual maintenance.        |
+| ID     | Status  | Item                              | Notes / acceptance                                                                                                                                        |
+| ------ | ------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RM-013 | planned | **Remove legacy Jinja templates** | After the Flutter cutover has been monitored with no P1 regressions, delete the retired Jinja templates/routes and related assets to end dual maintenance. |
 
 ## R3 — Accounts and tenancy
 
-| ID | Status | Item | Notes / acceptance |
-| --- | --- | --- | --- |
-| RM-020 | planned | **Join multiple instances** | Allow a user to belong to and switch between more than one instance with clear membership/role boundaries, instance picker UX, and scoped tokens/permissions preserved. Define migration/onboarding for existing users. |
+_No outstanding items._
 
 ## R4 — Operations (external / manual)
 
@@ -46,10 +43,10 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 
 ## Release Unassigned — 
 
-| ID     | Status  | Item                       | Notes / acceptance |
-| ------ | ------- | -------------------------- | ------------------ |
-| RM-030 | planned | **Guides**                 | Guides should be   |
-| RM-031 | planned | **##**Free / Paid versions |                    |
+| ID     | Status  | Item                     | Notes / acceptance                                                                                                                                                               |
+| ------ | ------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RM-030 | planned | **Guides**               | Site Administrator should be able to configure default Guides for each phase, and this will apply across all instances.Instance administrator should be able to Guides should be |
+| RM-031 | planned | **Free / Paid versions** |                                                                                                                                                                                  |
 
 
 
