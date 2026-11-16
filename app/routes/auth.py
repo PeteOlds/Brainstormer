@@ -143,7 +143,10 @@ def login():
 
         inst = _Instance.query.get(m.instance_id)
         if inst is not None:
-            instances.append({"id": str(inst.id), "number": inst.number, "name": inst.name, "role": m.role})
+            data = {"id": str(inst.id), "number": inst.number, "name": inst.name, "role": m.role}
+            if m.role in ("INSTANCE_ADMIN", "SITE_ADMIN") or Membership.is_site_admin(user.id):
+                data.update(inst.to_dict(include_billing=True))
+            instances.append(data)
 
     resp, code = api_ok(
         {
@@ -368,8 +371,19 @@ def switch_instance(current_user):
 def me(current_user):
     from flask import g
 
+    from app.models import ROLE_INSTANCE_ADMIN, Membership
+
+    user_payload = current_user.to_dict()
+    user_payload["is_site_admin"] = Membership.is_site_admin(current_user.id)
+    user_payload["admin_instance_ids"] = [
+        str(m.instance_id)
+        for m in Membership.query.filter_by(
+            user_id=current_user.id, role=ROLE_INSTANCE_ADMIN
+        ).all()
+        if m.instance_id is not None
+    ]
     return api_ok(
-        {"user": current_user.to_dict(), "instance_id": getattr(g, "instance_id", None)}
+        {"user": user_payload, "instance_id": getattr(g, "instance_id", None)}
     )
 
 

@@ -87,23 +87,6 @@ SETTINGS_TEMPLATE = """
         </div>
 
         <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">AI Connections</h2>
-            <div class="space-y-4" x-data="settingsForm('ai_connections')">
-                <p class="text-sm text-slate-500 dark:text-slate-400">Placeholder for future AI service connections (OpenAI, Anthropic, etc.)</p>
-                <div class="p-4 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
-                    <p class="text-sm text-slate-600 dark:text-slate-400">No AI connections configured yet.</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">This section will support external LLM provider integrations in future releases.</p>
-                </div>
-                <div class="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <button @click="save('ai_connections')" :disabled="saving" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                        <span x-show="!saving">Save (Placeholder)</span>
-                        <span x-show="saving" class="flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Saving...</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Builds</h2>
             <div class="space-y-4" x-data="settingsForm('builds')">
                 <p class="text-sm text-slate-500 dark:text-slate-400">Default folder for new build repos. When you build an idea into code and create its repo on the spot, it lands here unless you type another path.</p>
@@ -155,7 +138,6 @@ SETTINGS_TEMPLATE = """
                     if (section === 'platform') { endpoint = '/api/v1/admin/settings/platform'; payload = { title: this.form.title, description: this.form.description, types: this.form.types }; }
                     else if (section === 'location') { endpoint = '/api/v1/admin/settings/location'; payload = { country: this.form.country }; }
                     else if (section === 'builds') { endpoint = '/api/v1/admin/settings/builds'; payload = { default_root: this.form.default_root }; }
-                    else { endpoint = '/api/v1/admin/settings/ai_connections'; payload = {}; }
                     const res = await authFetch(endpoint, { method: 'PATCH', headers: { 'Content-Type': 'application/json', }, body: JSON.stringify(payload) });
                     const data = await res.json();
                     if (res.ok) { this.showToast('Saved successfully'); } else { this.showToast(data.message || 'Save failed', 'error'); }

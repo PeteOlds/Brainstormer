@@ -1,5 +1,6 @@
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, current_app, request
 
@@ -37,17 +38,21 @@ def list_instances(user):
     """Own instances (memberships); site admins see everything."""
     if is_site_admin(user):
         instances = Instance.query.order_by(Instance.number.asc()).all()
-    else:
-        memberships = Membership.query.filter_by(user_id=user.id).all()
-        ids = [m.instance_id for m in memberships if m.instance_id is not None]
-        instances = (
-            Instance.query.filter(Instance.id.in_(ids))
-            .order_by(Instance.number.asc())
-            .all()
-            if ids
-            else []
-        )
-    return api_ok({"instances": [i.to_dict() for i in instances]})
+        return api_ok({"instances": [i.to_dict(include_billing=True) for i in instances]})
+    memberships = Membership.query.filter_by(user_id=user.id).all()
+    ids = [m.instance_id for m in memberships if m.instance_id is not None]
+    instances = (
+        Instance.query.filter(Instance.id.in_(ids))
+        .order_by(Instance.number.asc())
+        .all()
+        if ids
+        else []
+    )
+    payload = []
+    for inst in instances:
+        role = Membership.get_role(user.id, inst.id)
+        payload.append(inst.to_dict(include_billing=role in ("INSTANCE_ADMIN", "SITE_ADMIN")))
+    return api_ok({"instances": payload})
 
 
 @bp.route("/instances", methods=["POST"])
@@ -77,6 +82,95 @@ def create_instance_route(user):
     return api_ok({"instance": instance.to_dict()}, "Instance created.", 201)
 
 
+@bp.route("/instances/<uuid:instance_id>", methods=["PATCH"])
+@site_admin_required
+def update_instance(user, instance_id):
+    """Update paid/free details for one instance (site admin only)."""
+    instance = Instance.query.get(instance_id)
+    if instance is None:
+        return api_error("Not found.", 404)
+
+    data = request.get_json(silent=True) or {}
+    updates = {}
+
+    if "is_free" in data:
+        if not isinstance(data["is_free"], bool):
+            return api_error("is_free must be a boolean.", status_code=400)
+        updates["is_free"] = data["is_free"]
+
+    if "renewal_date" in data:
+        raw = data["renewal_date"]
+        if raw is None or raw == "":
+            updates["renewal_date"] = None
+        elif isinstance(raw, str):
+            try:
+                updates["renewal_date"] = date.fromisoformat(raw)
+            except ValueError:
+                return api_error("renewal_date must be an ISO date (YYYY-MM-DD).", status_code=400)
+        else:
+            return api_error("renewal_date must be an ISO date or null.", status_code=400)
+
+    if "comment" in data:
+        raw = data["comment"]
+        if raw is not None and not isinstance(raw, str):
+            return api_error("comment must be a string or null.", status_code=400)
+        updates["comment"] = (raw or "").strip() or None
+
+    if "payment_reference" in data:
+        raw = data["payment_reference"]
+        if raw is not None and not isinstance(raw, str):
+            return api_error("payment_reference must be a string or null.", status_code=400)
+        if raw and len(raw.strip()) > 200:
+            return api_error("payment_reference must be 200 characters or fewer.", status_code=400)
+        updates["payment_reference"] = raw.strip() if raw and raw.strip() else None
+
+    if "amount_paid" in data:
+        raw = data["amount_paid"]
+        if raw is None or raw == "":
+            updates["amount_paid"] = None
+        else:
+            try:
+                amount = Decimal(str(raw))
+            except (InvalidOperation, ValueError):
+                return api_error("amount_paid must be a number or null.", status_code=400)
+            if amount < 0:
+                return api_error("amount_paid must be zero or greater.", status_code=400)
+            updates["amount_paid"] = amount.quantize(Decimal("0.01"))
+
+    if "currency" in data:
+        raw = data["currency"]
+        if raw is None or raw == "":
+            updates["currency"] = "NZD"
+        elif isinstance(raw, str) and len(raw.strip()) == 3 and raw.strip().isalpha():
+            updates["currency"] = raw.strip().upper()
+        else:
+            return api_error("currency must be a 3-letter ISO code.", status_code=400)
+
+    if "paid_by" in data:
+        raw = data["paid_by"]
+        if raw is not None and not isinstance(raw, str):
+            return api_error("paid_by must be a string or null.", status_code=400)
+        if raw and len(raw.strip()) > 200:
+            return api_error("paid_by must be 200 characters or fewer.", status_code=400)
+        updates["paid_by"] = raw.strip() if raw and raw.strip() else None
+
+    for flag in ("promotional", "charitable"):
+        if flag in data:
+            if not isinstance(data[flag], bool):
+                return api_error(f"{flag} must be a boolean.", status_code=400)
+            updates[flag] = data[flag]
+
+    # Free→Paid transition auto-sets renewal_date to +12 months if not supplied.
+    became_paid = updates.get("is_free") is False and instance.is_free
+    if became_paid and "renewal_date" not in updates:
+        updates["renewal_date"] = date.today().replace(year=date.today().year + 1)
+
+    for key, value in updates.items():
+        setattr(instance, key, value)
+    db.session.commit()
+    return api_ok({"instance": instance.to_dict(include_billing=True)})
+
+
 @bp.route("/instances/<uuid:instance_id>", methods=["GET"])
 @token_required
 def get_instance(user, instance_id):
@@ -90,7 +184,8 @@ def get_instance(user, instance_id):
             return api_error("Not found.", 404)
         if current_instance_id() is not None and current_instance_id() != instance.id:
             return api_error("Not found.", 404)
-    return api_ok({"instance": instance.to_dict()})
+        return api_ok({"instance": instance.to_dict(include_billing=role in ("INSTANCE_ADMIN", "SITE_ADMIN"))})
+    return api_ok({"instance": instance.to_dict(include_billing=True)})
 
 
 @bp.route("/instances/<uuid:instance_id>/ai-configs", methods=["GET"])

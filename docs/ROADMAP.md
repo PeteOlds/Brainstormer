@@ -1,7 +1,7 @@
 # Brainstormer — Roadmap
 
 **Single source of truth for outstanding work.** Update on every build: add new items, refine scope, and remove items only when released (record them in `ReleaseNotes.md`).
-**Version:** 0.89.0 · **Date:** 2026-11-16 · **Branch:** `main`
+**Version:** 0.90.0 · **Date:** 2026-11-16 · **Branch:** `main`
 
 Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decisions: see **Decisions** below.
 
@@ -43,10 +43,14 @@ _No outstanding items._
 
 ## Release Unassigned — 
 
-| ID     | Status  | Item                     | Notes / acceptance                                                                                                                                                               |
-| ------ | ------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| RM-030 | planned | **Guides**               | Site Administrator should be able to configure default Guides for each phase, and this will apply across all instances.Instance administrator should be able to Guides should be |
-| RM-031 | planned | **Free / Paid versions** |                                                                                                                                                                                  |
+| ID       | Status  | Item                                    | Notes / acceptance                                                                                                                                                                                                                                                                                                                                                                            |
+| -------- | ------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RM-040.1 | planned | **Default Guides**                      | Site Administrator should be able to configure default Guides for each phase, and this will apply across all instances.  On first configuration, this should be copied to all instances.  Instance administrator should be able to Guides should be                                                                                                                                           |
+| RM-040.2 | planned | **Instance Guides**                     | Instance Administrators should be able to select default Guides for each phase (and edit on individual runs)                                                                                                                                                                                                                                                                                  |
+| RM-045.2 | planned | **Paid users - Guides**                 | Instance Administrators who have paid for usage should be able to upload their own Guides (markdown files only, under 10 Mb)                                                                                                                                                                                                                                                                  |
+| RM050    | planned | Updated README                          |                                                                                                                                                                                                                                                                                                                                                                                               |
+| RM042    | planned | Allow a full run from Spark             | Allow the Instance Administrator to run a new Idea (in Spark) right through to Build.  This would allow quick preview of Ideas.  When there are Questions, brainstormer should make a "best guess" from the information available (and not wait for the user input).  (Currently only Child items can be pushed straigh to Build)                                                             |
+|          |         |                                         |                                                                                                                                                                                                                                                                                                                                                                                               |
 
 
 

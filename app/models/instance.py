@@ -36,6 +36,16 @@ class Instance(db.Model):
     name = db.Column(db.String(200), nullable=False)
     start_date = db.Column(db.DateTime(timezone=True), nullable=True)
     end_date = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Paid/free usage details (RM-045). Site-admin editable; instance admins see read-only.
+    renewal_date = db.Column(db.Date(), nullable=True)
+    comment = db.Column(db.Text, nullable=True)
+    payment_reference = db.Column(db.String(200), nullable=True)
+    amount_paid = db.Column(db.Numeric(12, 2), nullable=True)
+    currency = db.Column(db.String(3), nullable=False, default="NZD", server_default="NZD")
+    paid_by = db.Column(db.String(200), nullable=True)
+    promotional = db.Column(db.Boolean, default=False, nullable=False)
+    charitable = db.Column(db.Boolean, default=False, nullable=False)
+
     # Placeholders in V2: stored, not enforced.
     is_free = db.Column(db.Boolean, default=True, nullable=False)
     status = db.Column(db.String(20), default="active", nullable=False)
@@ -55,8 +65,8 @@ class Instance(db.Model):
         "Membership", backref="instance", lazy="dynamic", cascade="all, delete-orphan"
     )
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_billing=False):
+        data = {
             "id": str(self.id),
             "number": self.number,
             "name": self.name,
@@ -67,6 +77,20 @@ class Instance(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+        if include_billing:
+            data.update(
+                {
+                    "renewal_date": self.renewal_date.isoformat() if self.renewal_date else None,
+                    "comment": self.comment,
+                    "payment_reference": self.payment_reference,
+                    "amount_paid": str(self.amount_paid) if self.amount_paid is not None else None,
+                    "currency": self.currency,
+                    "paid_by": self.paid_by,
+                    "promotional": self.promotional,
+                    "charitable": self.charitable,
+                }
+            )
+        return data
 
     def __repr__(self):
         return f"<Instance {self.number}:{self.name}>"

@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.90.0 — 2026-11-16
+
+### Features
+- **Instance Free/Paid details (site admin):** site administrators can view and edit an instance's plan status, renewal date (auto-set to 12 months from Free→Paid transition but editable), comment, payment reference, amount paid with ISO currency (default NZD), paid by, promotional and charitable flags.
+- **Admin dashboard instance details:** Admin Dashboard now shows instance plan/billing details; instance administrators see their own instance read-only; site administrators can edit any instance from the same card.
+- **System Settings cleanup:** removed the non-functional AI Connections placeholder from System Settings (AI Settings remain at `/admin/ai`).
+
 ## v0.89.0 — 2026-11-16
 
 ### Features
