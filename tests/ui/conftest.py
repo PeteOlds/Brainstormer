@@ -81,6 +81,12 @@ def live_app():
         JWT_COOKIE_SECURE = False
         LEGACY_WEB_ENABLED = True
         FORCE_HTTPS = False
+        # A repo .env may point at real certs. create_app() treats a cert+key
+        # pair as "serve HTTPS", which would make this plain-HTTP test server
+        # answer TLS and break every Playwright navigation with
+        # ERR_SSL_PROTOCOL_ERROR. Clear them so tests stay on HTTP.
+        TLS_CERT_FILE = ""
+        TLS_KEY_FILE = ""
 
     app = create_app(LiveConfig, init_celery_app=True)
     with app.app_context():

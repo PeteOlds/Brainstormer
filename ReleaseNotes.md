@@ -13,6 +13,12 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.92.1 — 2026-11-16
+
+### Bug fixes
+- **Tests no longer inherit deployment TLS:** `TestingConfig` clears `TLS_CERT_FILE`/`TLS_KEY_FILE`, so a `.env` that enables HTTPS for the live app can no longer make the HTTP test client and Playwright servers answer TLS. Fixes `ERR_SSL_PROTOCOL_ERROR` and login-fixture failures across the suite.
+- **UI harness pinned to HTTP:** the Playwright `live_app` fixture now explicitly clears TLS cert/key config, keeping browser tests on plain HTTP regardless of repo `.env` state.
+
 ## v0.92.0 — 2026-11-16
 
 ### Features

@@ -36,7 +36,12 @@ def test_dashboard_renders_seeded_ideas(admin_page, seeded):
 def test_dashboard_filters_by_status(admin_page, seeded):
     admin_page.wait_for_selector("[data-testid='idea-card']", timeout=15000)
     admin_page.select_option("#status-filter", "SCALE")
-    admin_page.wait_for_timeout(800)
+    # Wait for the filter to actually apply instead of a fixed sleep, which
+    # races the client-side render on a loaded CI box.
+    admin_page.wait_for_function(
+        "() => !document.body.innerText.includes('IDEA-9001')",
+        timeout=15000,
+    )
     body = admin_page.inner_text("body")
     assert "IDEA-9005" in body
     assert "IDEA-9001" not in body

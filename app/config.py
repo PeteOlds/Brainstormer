@@ -232,6 +232,11 @@ class TestingConfig(Config):
     JWT_COOKIE_CSRF_PROTECT = False
     JWT_ACCESS_CSRF_HEADER_NAME = "X-CSRF-TOKEN"
     JWT_REFRESH_CSRF_HEADER_NAME = "X-CSRF-TOKEN"
+    # A deployment .env may point at real certs; create_app() treats a
+    # cert+key pair as "serve HTTPS", which breaks the HTTP test client
+    # (Talisman redirects, login fixtures get a 302 instead of JSON).
+    TLS_CERT_FILE = ""
+    TLS_KEY_FILE = ""
     # Keep legacy Jinja pages available in tests; production/default is off.
     LEGACY_WEB_ENABLED = True
     FLUTTER_WEB_ROOT = ""
