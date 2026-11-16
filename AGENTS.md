@@ -20,6 +20,18 @@ docker restart brainstormer-web brainstormer-worker-default brainstormer-worker-
 
 Template changes reload live; Python changes do not.
 
+## Flutter web
+
+The app served at `/` is a Flutter web bundle from `flutter/build/web`. Rebuild it with:
+
+```bash
+./scripts/build_web.sh
+```
+
+Never use plain `flutter build web`. The script passes `--no-web-resources-cdn`, which is required: the default build points CanvasKit at `www.gstatic.com`, and the app's CSP (`script-src`/`connect-src 'self'`) blocks it, leaving a blank page with console errors. With the flag, CanvasKit is served same-origin from `build/web/canvaskit/`.
+
+`flutter/build/` is git-ignored, so rebuild after pulling or changing Dart code.
+
 ## Migrations
 
 Model changes need an Alembic migration. SQLite `create_all()` hides missing migrations.

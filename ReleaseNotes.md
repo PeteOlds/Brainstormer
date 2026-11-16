@@ -13,6 +13,12 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.93.1 — 2026-11-16
+
+### Bug fixes
+- **Blank page at /login fixed:** the Flutter web build loaded CanvasKit from `https://www.gstatic.com/flutter-canvaskit/...`, which the app's Content-Security-Policy blocks (`script-src`/`connect-src` allow `'self'`). The engine never started, so the page stayed blank with CSP errors in the console. Web builds now use `--no-web-resources-cdn`, serving CanvasKit same-origin from `build/web/canvaskit/` — no external CDN, works on a LAN and offline.
+- **Build step is now guarded:** added `scripts/build_web.sh`, which always passes the required flag, and documented it in `AGENTS.md` so a plain `flutter build web` cannot reintroduce the blank page.
+
 ## v0.93.0 — 2026-11-16
 
 ### Features
