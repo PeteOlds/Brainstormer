@@ -13,6 +13,12 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.93.4 — 2026-11-16
+
+### Bug fixes
+- The site chip now shows the selected site number and name, and a username/avatar chip appears in the header on wider screens.
+- Header identity is refreshed from `/api/v1/me` on app start so admin flags are current.
+
 ## v0.93.3 — 2026-11-16
 
 ### Bug fixes

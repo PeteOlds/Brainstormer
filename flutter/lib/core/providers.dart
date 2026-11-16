@@ -27,6 +27,9 @@ final currentUserProvider =
 /// Active instance id for scoped requests (null = unscoped legacy).
 final currentInstanceProvider = StateProvider<String?>((ref) => null);
 
+/// Human-readable label for the current instance (e.g. "Site 90 · Manual Test"), if known.
+final currentInstanceLabelProvider = StateProvider<String?>((ref) => null);
+
 final notificationServiceProvider = Provider<NotificationService>((ref) {
   final service = NotificationService();
   service.init();

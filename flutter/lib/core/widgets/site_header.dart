@@ -19,6 +19,7 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final current = ref.watch(currentInstanceProvider);
+    final label = ref.watch(currentInstanceLabelProvider);
     final isAdmin = currentUserIsAdmin(user);
 
     Widget navLink(String label, String route) {
@@ -58,13 +59,45 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
           if (isAdmin) navLink('Admin', '/admin'),
           if (isAdmin) navLink('Settings', '/settings'),
         ],
-        if (current != null)
+        if (current != null || label != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             child: Chip(
-              label: Text('Site $current'),
+              label: Text(label ?? 'Selected site'),
               avatar: const Icon(Icons.language, size: 18),
             ),
+          ),
+        if (user != null)
+          Builder(
+            builder: (context) {
+              final name = (user['name'] as String?)?.trim();
+              final labelText = (name?.isNotEmpty == true) ? name! : (user['email'] as String? ?? 'User');
+              final initial = (labelText.isNotEmpty) ? labelText[0].toUpperCase() : 'U';
+              return Tooltip(
+                message: labelText,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                      child: Text(initial, style: const TextStyle(fontSize: 14)),
+                    ),
+                    if (MediaQuery.of(context).size.width >= 900) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 160),
+                        child: Text(
+                          labelText,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            },
           ),
         if (user != null)
           PopupMenuButton<String>(
@@ -75,6 +108,7 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
                 await ref.read(authStoreProvider).clear();
                 ref.read(currentUserProvider.notifier).state = null;
                 ref.read(currentInstanceProvider.notifier).state = null;
+                ref.read(currentInstanceLabelProvider.notifier).state = null;
                 if (context.mounted) {
                   await Navigator.of(context).pushNamedAndRemoveUntil(
                     '/login',

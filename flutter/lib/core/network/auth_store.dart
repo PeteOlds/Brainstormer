@@ -13,10 +13,12 @@ class AuthStore {
   static const _refreshKey = 'bs_refresh_token';
   static const _userKey = 'bs_user_json';
   static const _instanceKey = 'bs_instance_id';
+  static const _instanceLabelKey = 'bs_instance_label';
 
   Future<String?> readAccessToken() => _storage.read(key: _accessKey);
   Future<String?> readRefreshToken() => _storage.read(key: _refreshKey);
   Future<String?> readInstanceId() => _storage.read(key: _instanceKey);
+  Future<String?> readInstanceLabel() => _storage.read(key: _instanceLabelKey);
 
   Future<Map<String, dynamic>?> readUser() async {
     final raw = await _storage.read(key: _userKey);
@@ -33,6 +35,7 @@ class AuthStore {
     required String refreshToken,
     Map<String, dynamic>? user,
     String? instanceId,
+    String? instanceLabel,
   }) async {
     await _storage.write(key: _accessKey, value: accessToken);
     await _storage.write(key: _refreshKey, value: refreshToken);
@@ -42,6 +45,9 @@ class AuthStore {
     if (instanceId != null) {
       await _storage.write(key: _instanceKey, value: instanceId);
     }
+    if (instanceLabel != null) {
+      await _storage.write(key: _instanceLabelKey, value: instanceLabel);
+    }
   }
 
   Future<void> saveTokens(String access, String refresh) async {
@@ -49,7 +55,13 @@ class AuthStore {
     await _storage.write(key: _refreshKey, value: refresh);
   }
 
-  Future<void> clear() => _storage.deleteAll();
+  Future<void> clear() async {
+    await _storage.delete(key: _accessKey);
+    await _storage.delete(key: _refreshKey);
+    await _storage.delete(key: _userKey);
+    await _storage.delete(key: _instanceKey);
+    await _storage.delete(key: _instanceLabelKey);
+  }
 
   bool isAdmin(Map<String, dynamic>? user) {
     final role = user?['role'] as String?;

@@ -26,6 +26,7 @@ class FakeAuthStore extends AuthStore {
     required String refreshToken,
     Map<String, dynamic>? user,
     String? instanceId,
+    String? instanceLabel,
   }) async {
     _data['a'] = accessToken;
     _data['r'] = refreshToken;

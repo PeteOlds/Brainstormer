@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.93.4] - 2026-11-16
+### Fixed
+- Site chip now shows the selected site number and name; header shows a username/avatar chip on wider screens.
+- App session is refreshed from `/api/v1/me` on startup so admin flags are current.
+
 ## [0.93.3] - 2026-11-16
 ### Fixed
 - Flutter web deep links (e.g. refreshing on `/admin`) now route correctly because `initialRoute` is derived from the web URL/fragment.
