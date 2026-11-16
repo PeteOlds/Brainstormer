@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:brainstormer/core/auth_helpers.dart';
 
 import '../providers.dart';
 import '../theme/tokens.dart';
 import 'connectivity_banner.dart';
+import 'package:brainstormer/core/widgets/site_header.dart';
 
 /// App shell: nav rail/drawer, version footer (golden rule — the build
 /// number is always available), and the routed child.
@@ -24,8 +26,7 @@ class AppShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Settings exposes instance AI keys and budgets (server-side admin
     // only), so it must not appear in a regular user's nav.
-    final isAdmin =
-        (ref.watch(currentUserProvider)?['role'] as String?) == 'ADMIN';
+    final isAdmin = currentUserIsAdmin(ref.watch(currentUserProvider));
     final destinations = isAdmin
         ? _destinations
         : _destinations.where((d) => d.$3 != '/settings').toList();
@@ -63,7 +64,7 @@ class AppShell extends ConsumerWidget {
         );
         if (wide) {
           return Scaffold(
-            appBar: AppBar(title: Text(title)),
+            appBar: SiteHeader(title: 'Brainstormer'),
             body: Row(
               children: [
                 nav,
@@ -74,7 +75,7 @@ class AppShell extends ConsumerWidget {
           );
         }
         return Scaffold(
-          appBar: AppBar(title: Text(title)),
+          appBar: SiteHeader(title: 'Brainstormer'),
           drawer: Drawer(
             child: ListView(
               children: [

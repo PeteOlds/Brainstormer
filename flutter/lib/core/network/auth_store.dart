@@ -51,6 +51,12 @@ class AuthStore {
 
   Future<void> clear() => _storage.deleteAll();
 
-  bool isAdmin(Map<String, dynamic>? user) =>
-      (user?['role'] as String?) == 'ADMIN';
+  bool isAdmin(Map<String, dynamic>? user) {
+    final role = user?['role'] as String?;
+    if (role == 'ADMIN') return true;
+    if (user?['is_site_admin'] == true) return true;
+    final adminInstances = user?['admin_instance_ids'];
+    if (adminInstances is List && adminInstances.isNotEmpty) return true;
+    return false;
+  }
 }

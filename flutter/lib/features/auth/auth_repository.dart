@@ -11,13 +11,27 @@ class AuthRepository {
 
   Future<AuthSession> _save(Map<String, dynamic> data, String? instanceId) async {
     final session = AuthSession.fromJson(data);
+    final userMap = (data['user'] is Map<String, dynamic>) ? data['user'] as Map<String, dynamic> : session.user.toJson();
     await store.saveSession(
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
-      user: session.user.toJson(),
+      user: Map<String, dynamic>.from(userMap),
       instanceId: instanceId,
     );
     return session;
+  }
+
+  Future<Map<String, dynamic>> loginUser(String email, String password,
+      {bool remember = false, String? instanceId}) async {
+    final payload = <String, dynamic>{
+      'email': email,
+      'password': password,
+      'remember': remember,
+    };
+    if (instanceId != null) payload['instance_id'] = instanceId;
+    final data =
+        await api.post('/api/v1/login', body: payload) as Map<String, dynamic>;
+    return Map<String, dynamic>.from((data['user'] as Map?) ?? const {});
   }
 
   Future<AuthSession> login(String email, String password,

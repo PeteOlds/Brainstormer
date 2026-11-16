@@ -7,6 +7,8 @@ import '../chat/chat_repository.dart';
 import 'idea_models.dart';
 import 'ideas_controller.dart';
 import 'ideas_page.dart';
+import 'package:brainstormer/core/auth_helpers.dart';
+import 'package:brainstormer/core/widgets/site_header.dart';
 
 final _detailProvider =
     FutureProvider.family<IdeaDetail, String>((ref, id) async {
@@ -57,16 +59,21 @@ class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage>
   Widget build(BuildContext context) {
     final detail = ref.watch(_detailProvider(widget.ideaId));
     final user = ref.watch(currentUserProvider);
-    final isAdmin = (user?['role'] as String?) == 'ADMIN';
+    final isAdmin = currentUserIsAdmin(user);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Idea detail'),
-        bottom: TabBar(
-          controller: _tabs,
-          tabs: const [
-            Tab(text: 'Idea'),
-            Tab(text: 'Analysis'),
-            Tab(text: 'Chat'),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(88),
+        child: Column(
+          children: [
+            SiteHeader(title: 'Brainstormer'),
+            TabBar(
+              controller: _tabs,
+              tabs: const [
+                Tab(text: 'Idea'),
+                Tab(text: 'Analysis'),
+                Tab(text: 'Chat'),
+              ],
+            ),
           ],
         ),
       ),

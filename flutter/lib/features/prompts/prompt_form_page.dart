@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
 import 'prompts_repository.dart';
+import 'package:brainstormer/core/widgets/site_header.dart';
 
 const _providers = ['ollama', 'openai', 'anthropic', 'gemini'];
 
@@ -61,8 +62,7 @@ class _PromptFormPageState extends ConsumerState<PromptFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-          title: Text(widget.promptId == null ? 'Create Prompt' : 'Edit Prompt')),
+      appBar: SiteHeader(title: 'Brainstormer'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(

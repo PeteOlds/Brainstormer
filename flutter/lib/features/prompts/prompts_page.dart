@@ -6,6 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_shell.dart';
 import 'prompt_models.dart';
 import 'prompts_repository.dart';
+import 'package:brainstormer/core/auth_helpers.dart';
 
 /// Prompt list: title, provider/model, active toggle state, run-now.
 class PromptsPage extends ConsumerWidget {
@@ -15,7 +16,7 @@ class PromptsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final prompts = ref.watch(promptsListProvider);
     final user = ref.watch(currentUserProvider);
-    final isAdmin = (user?['role'] as String?) == 'ADMIN';
+    final isAdmin = currentUserIsAdmin(user);
     return AppShell(
       title: 'Prompts',
       child: Column(

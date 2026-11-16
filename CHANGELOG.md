@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.93.2] - 2026-11-16
+### Fixed
+- Flutter Ideas multi-select and bulk status-change are visible to site admins
+  and instance admins (previously: only global ADMIN).
+- Flutter admin route now uses the same admin check as the Jinja runtime, so it
+  no longer flickers to the login screen for site/instance admins.
+- Removed the implicit AppBar back arrow from the shared header.
+
 ## [0.92.0] - 2026-11-16
 ### Added
 - Flutter web build is served at `/` via new `FLUTTER_WEB_ROOT` Flask static mount, with client-side routing fallback to `index.html`.

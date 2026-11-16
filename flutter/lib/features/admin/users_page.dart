@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/network/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme/tokens.dart';
+import 'package:brainstormer/core/widgets/site_header.dart';
 
 /// Instance member roster. Server enforces the guards (never self,
 /// never the last admin); the UI surfaces the messages.
@@ -20,13 +21,13 @@ class _UsersPageState extends ConsumerState<UsersPage> {
     final iid = ref.watch(currentInstanceProvider);
     if (iid == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Users')),
+        appBar: SiteHeader(title: 'Brainstormer'),
         body: const Center(child: Text('Pick an instance first.')),
       );
     }
     final members = ref.watch(_membersProvider(iid));
     return Scaffold(
-      appBar: AppBar(title: const Text('Users')),
+      appBar: SiteHeader(title: 'Brainstormer'),
       body: members.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Failed to load: $e')),

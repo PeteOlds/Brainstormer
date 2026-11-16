@@ -102,18 +102,29 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
         if os.path.isdir(flutter_path):
             from flask import send_from_directory
 
+            from flask import make_response
+
+            def _flutter_response(path):
+                # Serve real files (assets, canvaskit, flutter.js, etc.)
+                file_path = os.path.join(flutter_path, path)
+                if os.path.exists(file_path) and os.path.isfile(file_path):
+                    resp = make_response(send_from_directory(flutter_path, path))
+                    # Safari/Chromium service-worker caching must not pin stale Flutter shells.
+                    if path == "flutter_service_worker.js":
+                        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                        resp.headers["Pragma"] = "no-cache"
+                        resp.headers["Expires"] = "0"
+                    return resp
+                # SPA fallback for client-side routes
+                return send_from_directory(flutter_path, "index.html")
+
             @app.route("/", defaults={"path": ""})
             @app.route("/<path:path>")
             def serve_flutter(path):
                 # Root of SPA: index.html lives at build/web/index.html
                 if path == "" or path == "index.html":
                     return send_from_directory(flutter_path, "index.html")
-                # Serve real files (assets, canvaskit, flutter.js, etc.)
-                file_path = os.path.join(flutter_path, path)
-                if os.path.exists(file_path) and os.path.isfile(file_path):
-                    return send_from_directory(flutter_path, path)
-                # SPA fallback for client-side routes
-                return send_from_directory(flutter_path, "index.html")
+                return _flutter_response(path)
 
     # API error handlers
     @app.errorhandler(404)

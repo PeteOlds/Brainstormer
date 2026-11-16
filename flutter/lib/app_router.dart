@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/auth_helpers.dart';
 import '../core/providers.dart';
 import '../features/admin/admin_pages.dart';
 import '../features/admin/users_page.dart';
@@ -82,7 +83,7 @@ class _AdminGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     if (user == null) return const LoginPage();
-    if ((user['role'] as String?) != 'ADMIN') {
+    if (!currentUserIsAdmin(user)) {
       // IdeasPage already renders its own AppShell. Wrapping it again here
       // stacked two nav rails (the "menu appears twice" bug).
       return const IdeasPage();

@@ -5,6 +5,7 @@ import '../../core/providers.dart';
 import '../../core/theme/tokens.dart';
 import 'auth_controller.dart';
 import 'auth_models.dart';
+import 'package:brainstormer/core/widgets/site_header.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -30,7 +31,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Create account')),
+      appBar: SiteHeader(title: 'Brainstormer'),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
@@ -121,7 +122,7 @@ class _InstancePickerPageState extends ConsumerState<InstancePickerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Choose workspace')),
+      appBar: SiteHeader(title: 'Brainstormer'),
       body: FutureBuilder<List<InstanceSummary>>(
         future: _future,
         builder: (context, snapshot) {

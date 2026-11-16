@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_shell.dart';
 import 'admin_repository.dart';
+import 'package:brainstormer/core/widgets/site_header.dart';
 
 /// Admin dashboard: stat cards, breakdowns linking into filtered Ideas.
 class AdminPage extends ConsumerWidget {
@@ -98,7 +99,7 @@ class AdminActivityPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final activity = ref.watch(adminActivityProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Activity')),
+      appBar: SiteHeader(title: 'Brainstormer'),
       body: activity.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Failed to load: $e')),

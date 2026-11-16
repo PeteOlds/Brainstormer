@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
 import 'auth_controller.dart';
+import 'package:brainstormer/core/widgets/site_header.dart';
 
 /// Sign-in screen. Dumb by design: renders AuthState, delegates to the
 /// controller, navigates on success.
@@ -29,7 +30,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign in')),
+      appBar: SiteHeader(title: 'Brainstormer'),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),

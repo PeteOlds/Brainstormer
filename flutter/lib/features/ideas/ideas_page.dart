@@ -6,6 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_shell.dart';
 import 'idea_models.dart';
 import 'ideas_controller.dart';
+import 'package:brainstormer/core/auth_helpers.dart';
 
 /// Ideas dashboard: server-side filters, list, votes, admin status menu.
 class IdeasPage extends ConsumerStatefulWidget {
@@ -48,7 +49,7 @@ class _IdeasPageState extends ConsumerState<IdeasPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(ideasControllerProvider);
     final user = ref.watch(currentUserProvider);
-    final isAdmin = (user?['role'] as String?) == 'ADMIN';
+    final isAdmin = currentUserIsAdmin(user);
     return AppShell(
       title: 'Ideas',
       child: Column(

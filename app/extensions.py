@@ -42,7 +42,7 @@ def init_extensions(app):
         "style-src": "'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.googleapis.com",
         "font-src": "'self' data: https://fonts.gstatic.com",
         "img-src": "'self' data: https:",
-        "connect-src": "'self'",
+        "connect-src": "'self' https://fonts.gstatic.com",
         "frame-ancestors": "'none'",
     }
     talisman.init_app(

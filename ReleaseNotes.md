@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.93.2 — 2026-11-16
+
+### Bug fixes
+- Flutter Ideas multi-select and bulk status-change are visible to site admins and instance admins, not only global ADMIN users.
+- Flutter Admin route uses the same admin check as the Jinja runtime, so it no longer flickers to the login screen for site/instance admins.
+- Removed the implicit AppBar back arrow from the shared header.
+
 ## v0.93.1 — 2026-11-16
 
 ### Bug fixes
