@@ -153,6 +153,8 @@ class Config:
     # default. Set LEGACY_WEB_ENABLED=True to temporarily re-enable them
     # (410s when False). Jinja templates remain for a following removal.
     LEGACY_WEB_ENABLED = get_env("LEGACY_WEB_ENABLED", "False") == "True"
+    # Flutter web root (served at /). Empty disables the Flutter SPA mount.
+    FLUTTER_WEB_ROOT = get_env("FLUTTER_WEB_ROOT", "").strip()
 
     # Email (password reset). SMTP_HOST unset => console logging in dev.
     SMTP_HOST = get_env("SMTP_HOST", None)
@@ -232,6 +234,7 @@ class TestingConfig(Config):
     JWT_REFRESH_CSRF_HEADER_NAME = "X-CSRF-TOKEN"
     # Keep legacy Jinja pages available in tests; production/default is off.
     LEGACY_WEB_ENABLED = True
+    FLUTTER_WEB_ROOT = ""
 
 
 config = {

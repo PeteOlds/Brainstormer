@@ -79,20 +79,41 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     from .routes.pages import bp as pages_bp
     from .routes.prompts import bp as prompts_bp
 
-    app.register_blueprint(pages_bp)
+    flutter_root = (app.config.get("FLUTTER_WEB_ROOT") or "").strip()
+    jinia_prefix = "/jinja" if flutter_root else None
+    # Deployment wiring: Flutter replaces the root app; Jinja remains under /jinja as emergency fallback.
+    app.register_blueprint(pages_bp, url_prefix=jinia_prefix)
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp, url_prefix="/api/v1")
     app.register_blueprint(ollama_bp, url_prefix="/api/v1")
     app.register_blueprint(prompts_bp, url_prefix="/api/v1")
     app.register_blueprint(ideas_bp, url_prefix="/api/v1")
     app.register_blueprint(messages_bp, url_prefix="/api/v1")
-    app.register_blueprint(admin_pages_bp)
+    app.register_blueprint(admin_pages_bp, url_prefix=jinia_prefix)
     app.register_blueprint(admin_api_bp, url_prefix="/api/v1")
     app.register_blueprint(instances_bp, url_prefix="/api/v1")
     app.register_blueprint(backup_bp, url_prefix="/api/v1")
     app.register_blueprint(oauth_bp, url_prefix="/api/v1")
     app.register_blueprint(billing_bp, url_prefix="/api/v1")
     app.register_blueprint(releases_bp, url_prefix="/api/v1")
+
+    if flutter_root:
+        flutter_path = os.path.abspath(flutter_root)
+        if os.path.isdir(flutter_path):
+            from flask import send_from_directory
+
+            @app.route("/", defaults={"path": ""})
+            @app.route("/<path:path>")
+            def serve_flutter(path):
+                # Root of SPA: index.html lives at build/web/index.html
+                if path == "" or path == "index.html":
+                    return send_from_directory(flutter_path, "index.html")
+                # Serve real files (assets, canvaskit, flutter.js, etc.)
+                file_path = os.path.join(flutter_path, path)
+                if os.path.exists(file_path) and os.path.isfile(file_path):
+                    return send_from_directory(flutter_path, path)
+                # SPA fallback for client-side routes
+                return send_from_directory(flutter_path, "index.html")
 
     # API error handlers
     @app.errorhandler(404)

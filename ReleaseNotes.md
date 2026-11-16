@@ -13,6 +13,16 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.92.0 — 2026-11-16
+
+### Features
+- **Flutter web app at /:** Brainstormer now serves the Flutter web build at the root path (`/`), with same-origin `/api/v1/*` unchanged. Jinja remains available under `/jinja/*` as an emergency fallback.
+- **Version parity:** Flutter `pubspec.yaml` now mirrors backend `VERSION` (0.91.0 -> 0.92.0 with this release) so the app footer matches the backend.
+- **Deployment wiring:** Added `FLUTTER_WEB_ROOT` env var; Flask statically serves `flutter/build/web` and falls back to `index.html` for client-side routes.
+
+### Breaking changes
+- The default root application is now the Flutter web build, not the legacy Jinja UI. Jinja routes are moved under `/jinja/*` (e.g. `/jinja/login`, `/jinja/ideas`). Set `LEGACY_WEB_ENABLED=True` only to keep Jinja visible under those paths.
+
 ## v0.91.0 — 2026-11-16
 
 ### Features

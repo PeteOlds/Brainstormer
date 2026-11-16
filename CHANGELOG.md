@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.92.0] - 2026-11-16
+### Added
+- Flutter web build is served at `/` via new `FLUTTER_WEB_ROOT` Flask static mount, with client-side routing fallback to `index.html`.
+- Legacy Jinja routes are now served under `/jinja/*` for rollback, while `/api/v1/*` is unchanged.
+- Flutter `pubspec.yaml` version bumped to mirror the backend (0.91.0) for footer version parity.
+
+### Changed
+- Root route `/` now returns the Flutter web application instead of redirecting to Jinja login.
+
 ## [0.91.0] - 2026-11-16
 ### Added
 - New admin page: `/admin/instance-details`, accessible from the Admin Dashboard Quick Actions. Shows the same Free/Paid plan, renewal and payment details as before, as its own page instead of an inline dashboard card.
