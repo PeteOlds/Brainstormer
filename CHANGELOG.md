@@ -4,6 +4,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.90.1] - 2026-11-16
+### Fixed
+- Admin Dashboard instance details failed to render for unscoped instance
+  admins (e.g. Site 90 Test Admin). The card now lists every instance the
+  caller administers, with the current/scoped instance pre-selected.
+  Server-side scoping still blocks editing instances the user does not
+  administer.
+
+## [0.90.0] - 2026-11-16
+### Added
+- Instance Free/Paid details (site-admin editable): renewal_date, comment,
+  payment_reference, amount_paid with ISO currency (default NZD), paid_by,
+  promotional and charitable flags. Renewal date is auto-set to 12 months from
+  the Free→Paid transition if unset, but remains editable.
+- Admin Dashboard now shows an Instance details card: site admins can edit
+  these fields for any instance; instance admins see their own instance
+  read-only.
+- Removed the non-functional AI Connections placeholder from System Settings
+  (AI provider configuration remains in Admin → AI Settings).
+
+## [0.89.0] - 2026-11-16
+### Changed
+- Legacy Jinja web routes are retired by default (`LEGACY_WEB_ENABLED` defaults
+  to `False`, returning 410). Set `LEGACY_WEB_ENABLED=True` to temporarily
+  re-enable them. Jinja templates remain for removal in a later release.
+
 ## [0.88.2] - 2026-11-16
 ### Changed
 - The user-facing "PRD" is now "Brief" everywhere: the lifecycle tab, action

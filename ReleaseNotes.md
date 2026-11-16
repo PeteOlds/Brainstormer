@@ -13,6 +13,11 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.90.1 — 2026-11-16
+
+### Bug fixes
+- Admin Dashboard instance details now show for any instance the user administers, even when the request is unscoped. Previously, unscoped instance admins only saw the currently scoped instance (or none), so e.g. Site 90 Test Admin saw no details until they scoped the session. Server-side scoping still prevents seeing or editing instances the user is not an admin of.
+
 ## v0.90.0 — 2026-11-16
 
 ### Features

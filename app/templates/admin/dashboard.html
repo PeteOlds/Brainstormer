@@ -240,7 +240,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
         const isSiteAdmin = !!(me && me.user && me.user.is_site_admin);
         const currentId = me && me.instance_id;
-        const mine = (list.instances || []).filter(i => isSiteAdmin || i.id === currentId || (me.user.admin_instance_ids || []).includes(i.id));
+        const adminIds = new Set((me && me.user && me.user.admin_instance_ids) || []);
+        const mine = (list.instances || []).filter(i => isSiteAdmin || adminIds.has(i.id) || i.id === currentId);
         if (!mine.length) { details.innerHTML = '<p class="text-sm text-slate-500">No instance details available.</p>'; edit.classList.add('hidden'); return; }
         sel.innerHTML = mine.map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.number != null ? 'Site ' + i.number : 'Instance')} · ${escapeHtml(i.name || '')}</option>`).join('');
         sel.value = currentId && mine.some(i => i.id === currentId) ? currentId : mine[0].id;
