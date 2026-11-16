@@ -13,6 +13,12 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.91.0 — 2026-11-16
+
+### Features
+- Moved **Instance details** to its own Admin page at `/admin/instance-details`, linked from the admin dashboard Quick Actions, matching the layout and access pattern of the other admin pages.
+- Removed the inline Instance details card from the dashboard; the selector and Free/Paid/billing details are now shown on the dedicated page.
+
 ## v0.90.1 — 2026-11-16
 
 ### Bug fixes

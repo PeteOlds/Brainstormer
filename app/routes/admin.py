@@ -328,6 +328,13 @@ def jobs_page(user):
     return render_template("admin/activity.html", user=user, current_user=user)
 
 
+@admin_pages_bp.route("/admin/instance-details", methods=["GET"])
+@admin_required
+def admin_instance_details(user):
+    """Instance details page (site/instance admins)."""
+    return render_template("admin/instance_details.html", user=user, current_user=user)
+
+
 @admin_pages_bp.route("/admin/ai", methods=["GET"])
 @admin_required
 def ai_settings_page(user):

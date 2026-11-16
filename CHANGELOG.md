@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.91.0] - 2026-11-16
+### Added
+- New admin page: `/admin/instance-details`, accessible from the Admin Dashboard Quick Actions. Shows the same Free/Paid plan, renewal and payment details as before, as its own page instead of an inline dashboard card.
+
 ## [0.90.1] - 2026-11-16
 ### Fixed
 - Admin Dashboard instance details failed to render for unscoped instance

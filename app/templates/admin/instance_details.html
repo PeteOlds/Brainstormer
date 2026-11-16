@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Instance Details - Brainstormer{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Instance details</h1>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Free/Paid plan, renewal, and payment details for your workspace.</p>
+        </div>
+        <a href="/admin" class="px-4 py-2 min-h-[44px] inline-flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700">Admin Dashboard</a>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <label class="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                <span>Instance</span>
+                <select id="instance-details-select" class="px-3 py-2 min-h-[44px] border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-sm"></select>
+            </label>
+        </div>
+        <div id="instance-details" class="space-y-3"><div class="animate-pulse">Loading…</div></div>
+        <div id="instance-details-edit" class="hidden mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" id="instance-is-free" class="rounded"> Free
+                </label>
+                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" id="instance-promotional" class="rounded"> Promotional
+                </label>
+                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" id="instance-charitable" class="rounded"> Charitable
+                </label>
+                <label class="text-sm text-slate-700 dark:text-slate-300">Renewal date<br><input type="date" id="instance-renewal-date" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></label>
+                <label class="text-sm text-slate-700 dark:text-slate-300 md:col-span-2 lg:col-span-4">Comment<br><textarea id="instance-comment" rows="2" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></textarea></label>
+                <label class="text-sm text-slate-700 dark:text-slate-300">Payment reference<br><input type="text" id="instance-payment-ref" maxlength="200" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></label>
+                <label class="text-sm text-slate-700 dark:text-slate-300">Amount paid<br><input type="number" id="instance-amount-paid" min="0" step="0.01" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></label>
+                <label class="text-sm text-slate-700 dark:text-slate-300">Currency<br><input type="text" id="instance-currency" maxlength="3" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></label>
+                <label class="text-sm text-slate-700 dark:text-slate-300">Paid by<br><input type="text" id="instance-paid-by" maxlength="200" class="mt-1 block w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700"></label>
+            </div>
+            <div class="flex items-center gap-2 mt-3">
+                <button id="instance-save-btn" class="px-4 py-2 min-h-[44px] text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">Save</button>
+                <span id="instance-save-msg" class="text-sm text-slate-500"></span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce() }}">
+document.addEventListener('DOMContentLoaded', async () => {
+    async function loadInstanceDetails() {
+        const sel = document.getElementById('instance-details-select');
+        const details = document.getElementById('instance-details');
+        const edit = document.getElementById('instance-details-edit');
+        const msg = document.getElementById('instance-save-msg');
+        if (!sel || !details || !edit) return;
+        let me = null, list = { instances: [] };
+        try {
+            const r1 = await authFetch('/api/v1/me');
+            if (r1.ok) me = (await r1.json()).data || {};
+        } catch (e) { console.error('Failed to load me:', e); }
+        try {
+            const r2 = await authFetch('/api/v1/instances');
+            if (r2.ok) list = (await r2.json()).data || {};
+        } catch (e) { console.error('Failed to load instances:', e); }
+        const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+        const isSiteAdmin = !!(me && me.user && me.user.is_site_admin);
+        const currentId = me && me.instance_id;
+        const mine = (list.instances || []).filter(i => isSiteAdmin || (me && me.user && (me.user.admin_instance_ids || []).includes(i.id)));
+        if (!mine.length) { details.innerHTML = '<p class="text-sm text-slate-500">No instance details available.</p>'; edit.classList.add('hidden'); return; }
+        sel.innerHTML = mine.map(i => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.number != null ? 'Site ' + i.number : 'Instance')} · ${escapeHtml(i.name || '')}</option>`).join('');
+        sel.value = currentId && mine.some(i => i.id === currentId) ? currentId : mine[0].id;
+        function render(inst) {
+            const paid = !inst.is_free;
+            details.innerHTML = [
+                `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">`,
+                `<div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50"><div class="text-xs text-slate-500">Status</div><div class="font-medium">${paid ? 'Paid' : 'Free'}</div></div>`,
+                `<div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50"><div class="text-xs text-slate-500">Renewal</div><div class="font-medium">${escapeHtml(inst.renewal_date || '—')}</div></div>`,
+                `<div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50"><div class="text-xs text-slate-500">Amount paid</div><div class="font-medium">${escapeHtml(inst.amount_paid != null ? (inst.amount_paid + ' ' + (inst.currency || 'NZD')) : '—')}</div></div>`,
+                `<div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50"><div class="text-xs text-slate-500">Paid by</div><div class="font-medium">${escapeHtml(inst.paid_by || '—')}</div></div>`,
+                `<div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 sm:col-span-2"><div class="text-xs text-slate-500">Payment reference</div><div class="font-medium">${escapeHtml(inst.payment_reference || '—')}</div></div>`,
+                `<div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 sm:col-span-2"><div class="text-xs text-slate-500">Comment</div><div class="font-medium whitespace-pre-wrap">${escapeHtml(inst.comment || '—')}</div></div>`,
+                `<div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50"><div class="text-xs text-slate-500">Promotional</div><div class="font-medium">${inst.promotional ? 'Yes' : 'No'}</div></div>`,
+                `<div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50"><div class="text-xs text-slate-500">Charitable</div><div class="font-medium">${inst.charitable ? 'Yes' : 'No'}</div></div>`,
+                `</div>`,
+            ].join('');
+        }
+        function fillForm(inst) {
+            document.getElementById('instance-is-free').checked = !!inst.is_free;
+            document.getElementById('instance-promotional').checked = !!inst.promotional;
+            document.getElementById('instance-charitable').checked = !!inst.charitable;
+            document.getElementById('instance-renewal-date').value = inst.renewal_date || '';
+            document.getElementById('instance-comment').value = inst.comment || '';
+            document.getElementById('instance-payment-ref').value = inst.payment_reference || '';
+            document.getElementById('instance-amount-paid').value = inst.amount_paid != null ? inst.amount_paid : '';
+            document.getElementById('instance-currency').value = inst.currency || 'NZD';
+            document.getElementById('instance-paid-by').value = inst.paid_by || '';
+            msg.textContent = '';
+        }
+        function refresh() {
+            const id = sel.value;
+            const inst = mine.find(i => i.id === id);
+            if (!inst) return;
+            render(inst);
+            if (isSiteAdmin) {
+                edit.classList.remove('hidden');
+                fillForm(inst);
+            } else {
+                edit.classList.add('hidden');
+            }
+        }
+        sel.addEventListener('change', refresh);
+        if (isSiteAdmin) {
+            document.getElementById('instance-save-btn')?.addEventListener('click', async () => {
+                msg.textContent = 'Saving…'; msg.className = 'text-sm text-slate-500';
+                const body = {
+                    is_free: document.getElementById('instance-is-free').checked,
+                    promotional: document.getElementById('instance-promotional').checked,
+                    charitable: document.getElementById('instance-charitable').checked,
+                    renewal_date: document.getElementById('instance-renewal-date').value || null,
+                    comment: document.getElementById('instance-comment').value || null,
+                    payment_reference: document.getElementById('instance-payment-ref').value || null,
+                    amount_paid: document.getElementById('instance-amount-paid').value === '' ? null : Number(document.getElementById('instance-amount-paid').value),
+                    currency: document.getElementById('instance-currency').value || 'NZD',
+                    paid_by: document.getElementById('instance-paid-by').value || null,
+                };
+                try {
+                    const res = await authFetch('/api/v1/instances/' + sel.value, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                    const data = await res.json();
+                    if (res.ok) {
+                        const inst = (data.data && data.data.instance) || null;
+                        if (inst) {
+                            const idx = mine.findIndex(i => i.id === inst.id);
+                            if (idx >= 0) mine[idx] = inst;
+                        }
+                        msg.textContent = 'Saved.'; msg.className = 'text-sm text-green-600';
+                        refresh();
+                    } else {
+                        msg.textContent = data.message || 'Save failed'; msg.className = 'text-sm text-red-600';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    msg.textContent = 'Save failed'; msg.className = 'text-sm text-red-600';
+                }
+            });
+        }
+        refresh();
+    }
+    loadInstanceDetails();
+});
+</script>
+{% endblock %}
