@@ -457,7 +457,7 @@ def get_idea(user, idea_id):
     ]
 
     payload = {
-        "idea": idea.to_dict(user_vote=user.id, include_content=True),
+        "idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id), include_content=True),
         "actions": actions,
         "parent": parent_context_data,
         "child_count": child_count,
@@ -521,7 +521,7 @@ def update_idea_status(user, idea_id):
 
     return api_ok(
         {
-            "idea": idea.to_dict(user_vote=user.id),
+            "idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)),
             "status": idea.status.value,
             "previous_status": old_status.value,
             "new_status": idea.status.value,
@@ -1568,7 +1568,7 @@ def chat_iterate(user, idea_id):
 
     return api_ok(
         {
-            "idea": idea.to_dict(user_vote=user.id, include_content=True),
+            "idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id), include_content=True),
             "turn": turn.to_dict(),
         }
     )
@@ -1609,7 +1609,7 @@ def chat_rollback(user, idea_id):
 
     return api_ok(
         {
-            "idea": idea.to_dict(user_vote=user.id, include_content=True),
+            "idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id), include_content=True),
             "turn": turn.to_dict(),
         }
     )
@@ -1719,7 +1719,7 @@ def update_idea_content(user, idea_id):
     idea.updated_at = datetime.now(timezone.utc)
     db.session.commit()
 
-    return api_ok({"idea": idea.to_dict(user_vote=user.id), "edit_history": [e.to_dict() for e in edits]})
+    return api_ok({"idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)), "edit_history": [e.to_dict() for e in edits]})
 
 
 @bp.route("/actions/<uuid:result_id>", methods=["PATCH"])

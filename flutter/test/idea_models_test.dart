@@ -30,6 +30,37 @@ void main() {
       expect(idea.summary, isNull);
       expect(idea.commentCount, 0);
     });
+
+    test('ignores a non-numeric user_vote instead of throwing', () {
+      // Regression: the detail endpoint once sent the viewer's user id here.
+      // Casting a UUID to num? crashed the whole detail page.
+      final idea = IdeaSummary.fromJson({
+        'id': 'a8ea58fa-821b-4c28-ace9-8963d122ba11',
+        'user_vote': 'a8ea58fa-821b-4c28-ace9-8963d122ba11',
+        'comments_count': '3',
+        'net_score': 'oops',
+      });
+      expect(idea.userVote, isNull);
+      expect(idea.commentCount, 0);
+      expect(idea.netScore, 0);
+    });
+  });
+
+  group('IdeaDetail', () {
+    test('tolerates malformed sections', () {
+      final detail = IdeaDetail.fromJson({
+        'idea': {'id': 'x', 'reference_code': 'IDEA-1'},
+        'actions': [
+          1,
+          {'id': 'a', 'action_type': 'REFINE', 'version': 'two'},
+        ],
+        'edit_history': 'not-a-list',
+      });
+      expect(detail.idea.referenceCode, 'IDEA-1');
+      expect(detail.actions, hasLength(1));
+      expect(detail.actions.single.version, 1);
+      expect(detail.editHistory, isEmpty);
+    });
   });
 
   group('freezed value semantics', () {
@@ -47,7 +78,8 @@ void main() {
     });
   });
 
-  group('allowedTransitions (client mirror)', () {    test('matches the server matrix for key moves', () {
+  group('allowedTransitions (client mirror)', () {
+    test('matches the server matrix for key moves', () {
       expect(allowedTransitions['SPARK'], contains('SCOPE'));
       expect(allowedTransitions['SPARK'], isNot(contains('SHIP')));
       expect(allowedTransitions['SHIP'], contains('SCALE'));

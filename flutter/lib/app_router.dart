@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/providers.dart';
-import '../core/widgets/app_shell.dart';
 import '../features/admin/admin_pages.dart';
 import '../features/admin/users_page.dart';
 import '../features/auth/login_page.dart';
-import '../features/auth/register_page.dart';import '../features/ideas/idea_detail_page.dart';
+import '../features/auth/register_page.dart';
+import '../features/ideas/idea_detail_page.dart';
 import '../features/ideas/ideas_page.dart';
 import '../features/prompts/prompt_form_page.dart';
 import '../features/prompts/prompts_page.dart';
@@ -27,9 +27,10 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/ideas':
       final args = settings.arguments;
       page = _AuthGate(
-          child: IdeasPage(
-              initialStatus:
-                  args is Map ? args['status']?.toString() : null));
+        child: IdeasPage(
+          initialStatus: args is Map ? args['status']?.toString() : null,
+        ),
+      );
     case '/ideas/detail':
       final id = settings.arguments?.toString() ?? '';
       page = _AuthGate(child: IdeaDetailPage(ideaId: id));
@@ -37,8 +38,8 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       page = _AuthGate(child: const PromptsPage());
     case '/prompts/form':
       page = _AuthGate(
-          child: PromptFormPage(
-              promptId: settings.arguments?.toString()));
+        child: PromptFormPage(promptId: settings.arguments?.toString()),
+      );
     case '/admin':
       page = const _AdminGate(child: AdminPage());
     case '/admin/users':
@@ -46,12 +47,11 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/admin/activity':
       page = const _AdminGate(child: AdminActivityPage());
     case '/settings':
-      page = const _AuthGate(child: SettingsPage());
+      page = const _AdminGate(child: SettingsPage());
     default:
       page = const LoginPage();
   }
-  return MaterialPageRoute(
-      settings: settings, builder: (context) => page);
+  return MaterialPageRoute(settings: settings, builder: (context) => page);
 }
 
 /// Redirects anonymous users to /login (mirrors authFetch 401 → login).
@@ -64,8 +64,8 @@ class _AuthGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final token = ref.watch(_tokenProvider);
     return token.when(
-      loading: () => const Scaffold(
-          body: Center(child: CircularProgressIndicator())),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (_, err) => const LoginPage(),
       data: (t) => t == null ? const LoginPage() : child,
     );
@@ -83,7 +83,9 @@ class _AdminGate extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     if (user == null) return const LoginPage();
     if ((user['role'] as String?) != 'ADMIN') {
-      return const AppShell(title: 'Ideas', child: IdeasPage());
+      // IdeasPage already renders its own AppShell. Wrapping it again here
+      // stacked two nav rails (the "menu appears twice" bug).
+      return const IdeasPage();
     }
     return child;
   }

@@ -943,6 +943,21 @@ class TestIdeaEndpoints:
         assert resp.status_code == 200
         data = resp.get_json()["data"]
         assert data["idea"]["reference_code"] == "IDEA-0001"
+        # The detail payload must carry the viewer's vote (1/-1/null), never
+        # their user id: the Flutter client parses user_vote as a number and
+        # a UUID string crashes the detail page.
+        assert data["idea"].get("user_vote") in (None, 1, -1)
+
+        voted = client.post(
+            f"/api/v1/ideas/{idea_id}/vote",
+            json={"direction": 1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert voted.status_code == 200
+        detail = client.get(
+            f"/api/v1/ideas/{idea_id}", headers={"Authorization": f"Bearer {token}"}
+        ).get_json()["data"]
+        assert detail["idea"]["user_vote"] == 1
 
     def test_update_idea_status_admin(
         self, admin_client, app, admin_user, admin_prompt

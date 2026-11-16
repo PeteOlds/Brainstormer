@@ -13,6 +13,23 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.93.0 — 2026-11-16
+
+### Features
+- **Multi-select ideas and change state in bulk:** the Ideas list now has a selection mode (admin only). Tick several ideas — or "select all" on the page — then choose a new state once. The server applies legal transitions and reports any skipped ones, so a mixed selection no longer needs one-by-one changes.
+- **Bulk endpoint wired to the UI:** the app now uses `PATCH /api/v1/ideas/bulk-status`, which already existed server-side but had no client.
+
+### Bug fixes
+- **Idea detail no longer fails to load:** the detail endpoint returned the viewer's user id in `user_vote` instead of their vote (1/-1/null). The Flutter client parses `user_vote` as a number, so a UUID crashed the page with `type 'String' is not a subtype of type 'num?'`. All five affected responses (detail, status change, chat, iterate, edit) now send the real vote.
+- **Detail parsing is now defensive:** non-numeric counts, a non-map `output`, or malformed `actions`/`edit_history` sections are ignored instead of blanking the whole page.
+- **Admin no longer shows the navigation twice:** for users without the global admin role, the admin route wrapped `IdeasPage` in a second `AppShell`. It now renders the page's own shell once.
+- **Settings is admin-only:** the Settings screen exposes instance AI provider keys and budgets. It is now hidden from the nav rail and drawer for regular users and gated at the route.
+- **App footer shows the real version:** `kAppVersion` was stuck at `0.47.0`; it now mirrors `VERSION`, and `pubspec.yaml` is bumped in step so the Flutter build number matches the backend.
+
+### Tests
+- Flutter: 30 tests pass (new coverage for the bulk-select flow, nav gating, and lenient payload parsing).
+- Backend: full suite green, coverage 75.32%.
+
 ## v0.92.2 — 2026-11-16
 
 ### Bug fixes

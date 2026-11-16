@@ -7,7 +7,8 @@ import 'idea_models.dart';
 import 'ideas_repository.dart';
 
 final ideasRepositoryProvider = Provider<IdeasRepository>(
-    (ref) => IdeasRepository(api: ref.watch(apiClientProvider)));
+  (ref) => IdeasRepository(api: ref.watch(apiClientProvider)),
+);
 
 class IdeasFilter {
   const IdeasFilter({
@@ -55,16 +56,15 @@ class IdeasState {
     IdeasFilter? filter,
     bool? loading,
     String? error,
-  }) =>
-      IdeasState(
-        items: items ?? this.items,
-        total: total ?? this.total,
-        page: page ?? this.page,
-        pages: pages ?? this.pages,
-        filter: filter ?? this.filter,
-        loading: loading ?? this.loading,
-        error: error,
-      );
+  }) => IdeasState(
+    items: items ?? this.items,
+    total: total ?? this.total,
+    page: page ?? this.page,
+    pages: pages ?? this.pages,
+    filter: filter ?? this.filter,
+    loading: loading ?? this.loading,
+    error: error,
+  );
 }
 
 class IdeasController extends StateNotifier<IdeasState> {
@@ -139,7 +139,8 @@ class IdeasController extends StateNotifier<IdeasState> {
       if (isNetworkFailure(e)) {
         _ref.read(outboxProvider.notifier).enqueue(method, path, body);
         state = state.copyWith(
-            error: 'Offline — change queued and will retry.');
+          error: 'Offline — change queued and will retry.',
+        );
         return false;
       }
       state = state.copyWith(error: e.message);
@@ -147,8 +148,7 @@ class IdeasController extends StateNotifier<IdeasState> {
     }
   }
 
-  Future<bool> postComment(String id, String body,
-      {String? parentId}) async {
+  Future<bool> postComment(String id, String body, {String? parentId}) async {
     final payload = <String, dynamic>{'body': body};
     final parent = parentId;
     if (parent != null) payload['parent_id'] = parent;
@@ -178,8 +178,26 @@ class IdeasController extends StateNotifier<IdeasState> {
       return false;
     }
   }
+
+  /// Move several ideas at once. Returns the server summary (moved/skipped)
+  /// or null on failure.
+  Future<Map<String, dynamic>?> bulkStatus(
+    List<String> ids,
+    String status,
+  ) async {
+    if (ids.isEmpty) return null;
+    try {
+      final result = await _repo.bulkStatus(ids, status);
+      await load();
+      return result;
+    } on ApiException catch (e) {
+      state = state.copyWith(error: e.message);
+      return null;
+    }
+  }
 }
 
 final ideasControllerProvider =
     StateNotifierProvider<IdeasController, IdeasState>(
-        (ref) => IdeasController(ref.watch(ideasRepositoryProvider), ref));
+      (ref) => IdeasController(ref.watch(ideasRepositoryProvider), ref),
+    );
