@@ -24,88 +24,52 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Settings exposes instance AI keys and budgets (server-side admin
-    // only), so it must not appear in a regular user's nav.
-    final isAdmin = currentUserIsAdmin(ref.watch(currentUserProvider));
+    // Settings exposes instance AI keys and budgets, so only admins see it.
+    final user = ref.watch(currentUserProvider);
+    final isAdmin = currentUserIsAdmin(user);
     final destinations = isAdmin
         ? _destinations
         : _destinations.where((d) => d.$3 != '/settings').toList();
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 900;
-        final nav = NavigationRail(
-          selectedIndex: _indexFor(context, destinations),
-          onDestinationSelected: (i) =>
-              Navigator.of(context).pushReplacementNamed(destinations[i].$3),
-          labelType: NavigationRailLabelType.all,
-          destinations: [
-            for (final d in destinations)
-              NavigationRailDestination(icon: Icon(d.$2), label: Text(d.$1)),
-          ],
-        );
-        final body = Column(
+
+    return Scaffold(
+      appBar: SiteHeader(title: 'Brainstormer'),
+      drawer: Drawer(
+        child: ListView(
           children: [
-            Expanded(child: ConnectivityBanner(child: child)),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.xs,
+            const DrawerHeader(child: Text('Menu')),
+            for (var i = 0; i < destinations.length; i++)
+              ListTile(
+                leading: Icon(destinations[i].$2),
+                title: Text(destinations[i].$1),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context)
+                      .pushReplacementNamed(destinations[i].$3);
+                },
               ),
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: Text(
-                'Brainstormer v$kAppVersion',
-                key: const Key('app_version_footer'),
-                style: Theme.of(context).textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-            ),
           ],
-        );
-        if (wide) {
-          return Scaffold(
-            appBar: SiteHeader(title: 'Brainstormer'),
-            body: Row(
-              children: [
-                nav,
-                const VerticalDivider(width: 1),
-                Expanded(child: body),
-              ],
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(child: ConnectivityBanner(child: child)),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xs,
             ),
-          );
-        }
-        return Scaffold(
-          appBar: SiteHeader(title: 'Brainstormer'),
-          drawer: Drawer(
-            child: ListView(
-              children: [
-                const DrawerHeader(child: Text('Brainstormer')),
-                for (var i = 0; i < destinations.length; i++)
-                  ListTile(
-                    leading: Icon(destinations[i].$2),
-                    title: Text(destinations[i].$1),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(
-                        context,
-                      ).pushReplacementNamed(destinations[i].$3);
-                    },
-                  ),
-              ],
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: Text(
+              'Brainstormer v$kAppVersion',
+              key: const Key('app_version_footer'),
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
             ),
           ),
-          body: body,
-        );
-      },
+        ],
+      ),
     );
   }
 
-  int _indexFor(
-    BuildContext context,
-    List<(String, IconData, String)> destinations,
-  ) {
-    final route = ModalRoute.of(context)?.settings.name ?? '/ideas';
-    final i = destinations.indexWhere((d) => route.startsWith(d.$3));
-    return i < 0 ? 0 : i;
-  }
 }

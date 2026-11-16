@@ -21,7 +21,7 @@ class AuthRepository {
     return session;
   }
 
-  Future<Map<String, dynamic>> loginUser(String email, String password,
+  Future<Map<String, dynamic>> loginRaw(String email, String password,
       {bool remember = false, String? instanceId}) async {
     final payload = <String, dynamic>{
       'email': email,
@@ -31,7 +31,7 @@ class AuthRepository {
     if (instanceId != null) payload['instance_id'] = instanceId;
     final data =
         await api.post('/api/v1/login', body: payload) as Map<String, dynamic>;
-    return Map<String, dynamic>.from((data['user'] as Map?) ?? const {});
+    return Map<String, dynamic>.from(data);
   }
 
   Future<AuthSession> login(String email, String password,
@@ -64,6 +64,20 @@ class AuthRepository {
     return list
         .map((e) => InstanceSummary.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<void> switchInstance(String instanceId) async {
+    final data =
+        await api.post('/api/v1/switch-instance', body: {'instance_id': instanceId})
+            as Map<String, dynamic>;
+    final json = data['data'] as Map<String, dynamic>? ?? data;
+    final user = (json['user'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+    await store.saveSession(
+      accessToken: json['access_token']?.toString() ?? '',
+      refreshToken: json['refresh_token']?.toString() ?? '',
+      user: Map<String, dynamic>.from(user),
+      instanceId: instanceId,
+    );
   }
 
   Future<void> logout() async {

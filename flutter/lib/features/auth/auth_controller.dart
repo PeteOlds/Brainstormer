@@ -38,7 +38,8 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final session = await _repo.login(email, password,
           remember: remember, instanceId: instanceId);
-      _ref.read(currentUserProvider.notifier).state = session.user.toJson();
+      final stored = await _ref.read(authStoreProvider).readUser();
+      _ref.read(currentUserProvider.notifier).state = stored ?? session.user.toJson();
       _ref.read(currentInstanceProvider.notifier).state = instanceId;
       state = state.copyWith(loading: false, session: session);
       return true;
@@ -52,7 +53,8 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(loading: true, error: null);
     try {
       final session = await _repo.register(email, password, name: name);
-      _ref.read(currentUserProvider.notifier).state = session.user.toJson();
+      final stored = await _ref.read(authStoreProvider).readUser();
+      _ref.read(currentUserProvider.notifier).state = stored ?? session.user.toJson();
       state = state.copyWith(loading: false, session: session);
       return true;
     } on ApiException catch (e) {

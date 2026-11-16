@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.93.3] - 2026-11-16
+### Fixed
+- Flutter web deep links (e.g. refreshing on `/admin`) now route correctly because `initialRoute` is derived from the web URL/fragment.
+- The top header now uses the same admin check as the Jinja runtime; site/instance admins see Admin/Settings on every page and user/instance chip.
+- Single-membership users auto-switch to their tenant when selecting an instance, matching the Jinja login flow.
+
 ## [0.93.2] - 2026-11-16
 ### Fixed
 - Flutter Ideas multi-select and bulk status-change are visible to site admins

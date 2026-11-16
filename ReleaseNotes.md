@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.93.3 — 2026-11-16
+
+### Bug fixes
+- Flutter web deep links (e.g. refreshing on `/admin`) now route correctly because `initialRoute` is derived from the web URL/fragment.
+- The top header now uses the same admin check as the Jinja runtime; site/instance admins see Admin/Settings on every page and the current user/instance chip.
+- Single-membership users auto-switch to their tenant when selecting an instance, matching the Jinja login flow.
+
 ## v0.93.2 — 2026-11-16
 
 ### Bug fixes

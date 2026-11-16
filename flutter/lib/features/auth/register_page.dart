@@ -164,8 +164,17 @@ class _InstancePickerPageState extends ConsumerState<InstancePickerPage> {
     );
   }
 
-  void _enter(BuildContext context, InstanceSummary inst) {
+  Future<void> _enter(BuildContext context, InstanceSummary inst) async {
+    final store = ref.read(authStoreProvider);
+    await ref.read(authRepositoryProvider).switchInstance(inst.id);
+    final stored = await store.readUser();
+    if (!mounted) return;
+    ref.read(currentUserProvider.notifier).state = stored;
     ref.read(currentInstanceProvider.notifier).state = inst.id;
-    Navigator.of(context).pushReplacementNamed('/ideas');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) {
+        Navigator.of(context).pushReplacementNamed('/ideas');
+      }
+    });
   }
 }
