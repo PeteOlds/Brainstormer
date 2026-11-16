@@ -13,11 +13,23 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.92.2 — 2026-11-16
+
+### Bug fixes
+- **Release readiness recognises the current Test-tab names:** the pre-release gate now matches "Check the main screen loads in a browser" and "App's automated tests pass", not only the retired `UI:`/`Generated test suite passes` wording, so a release with real test results is no longer blocked.
+- **"Run release" accepts a bodyless request:** `POST /releases/<id>/pipeline` tolerates a missing JSON body instead of returning `415 Unsupported Media Type`.
+- **Build-test assertions updated:** integration tests now assert the current user-facing test names instead of the retired `UI:` prefix.
+
+### Test coverage
+- Added unit tests for the build test runner (`app/tasks/test_tasks.py`) and the static-file/API proxy (`app/services/frontend_proxy.py`), lifting total coverage above the 75% gate (75.32%).
+- The full suite is green: no failures, no errors.
+
 ## v0.92.1 — 2026-11-16
 
 ### Bug fixes
 - **Tests no longer inherit deployment TLS:** `TestingConfig` clears `TLS_CERT_FILE`/`TLS_KEY_FILE`, so a `.env` that enables HTTPS for the live app can no longer make the HTTP test client and Playwright servers answer TLS. Fixes `ERR_SSL_PROTOCOL_ERROR` and login-fixture failures across the suite.
 - **UI harness pinned to HTTP:** the Playwright `live_app` fixture now explicitly clears TLS cert/key config, keeping browser tests on plain HTTP regardless of repo `.env` state.
+- **Flaky dashboard filter test:** the status-filter UI test now waits for the filter to apply rather than sleeping a fixed 800 ms.
 
 ## v0.92.0 — 2026-11-16
 

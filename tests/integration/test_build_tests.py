@@ -58,13 +58,13 @@ class TestDeriveBuildTests:
 
         # The UI check comes first and is an e2e check naming the URL.
         assert tests[0]["test_type"] == "e2e"
-        assert tests[0]["name"].startswith("UI:")
+        assert "main screen loads in a browser" in tests[0]["name"].lower()
         assert "http://192.168.1.130:5000" in tests[0]["description"]
 
         names = _names(tests)
         assert any("get / returns the page" in n for n in names)
         assert any("post /describe" in n for n in names)
-        assert any("dependencies install" in n for n in names)
+        assert any("app installs without errors" in n for n in names)
 
     def test_model_tests_are_kept_and_deduped(self):
         runtime = {"app_url": "http://127.0.0.1:8000", "start_command": "flask run"}
@@ -87,7 +87,7 @@ class TestDeriveBuildTests:
         names = _names(tests)
         assert names.count("ui: paste an image and see tags") == 1
         assert "unknown type falls back" in names
-        assert tests[0]["name"].startswith("UI:")
+        assert "main screen loads in a browser" in tests[0]["name"].lower()
 
     def test_api_only_build_still_has_a_browser_check(self):
         files = [

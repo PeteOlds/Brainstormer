@@ -264,7 +264,8 @@ class TestReleases:
         assert res.get_json()["data"]["total"] == 2
 
         res = admin_client.post(
-            f"/api/v1/releases/{rid}/complete", json={"status": "SHIP"}
+            f"/api/v1/releases/{rid}/complete",
+            json={"status": "SHIP", "force": True},
         )
         body = res.get_json()["data"]
         assert body["updated_count"] == 2
@@ -418,7 +419,8 @@ class TestReleaseAIConfig:
         admin_client.patch(f"/api/v1/releases/{rid}/assign", json={"idea_ids": [cid]})
         admin_client.patch(f"/api/v1/ideas/{cid}/status", json={"status": "SHIP"})
         body = admin_client.post(
-            f"/api/v1/releases/{rid}/complete", json={"status": "SHIP"}
+            f"/api/v1/releases/{rid}/complete",
+            json={"status": "SHIP", "force": True},
         ).get_json()["data"]
         assert body["release"]["completed_at"] is not None
         expected = datetime.now(timezone.utc).strftime("%d-%b-%y")
@@ -444,7 +446,10 @@ class TestReleaseAIConfig:
         ).get_json()["data"]["release"]["id"]
         admin_client.patch(f"/api/v1/releases/{rid}/assign", json={"idea_ids": [cid]})
         admin_client.patch(f"/api/v1/ideas/{cid}/status", json={"status": "SHIP"})
-        admin_client.post(f"/api/v1/releases/{rid}/complete", json={"status": "SHIP"})
+        admin_client.post(
+            f"/api/v1/releases/{rid}/complete",
+            json={"status": "SHIP", "force": True},
+        )
         out = tmp_path / "rn" / "idea-rl10-release-1-1.md"
         assert out.exists()
         text = out.read_text()
@@ -482,7 +487,8 @@ class TestReleaseAIConfig:
         for cid in ids:
             admin_client.patch(f"/api/v1/ideas/{cid}/status", json={"status": "SHIP"})
         body = admin_client.post(
-            f"/api/v1/releases/{rid}/complete", json={"status": "SHIP"}
+            f"/api/v1/releases/{rid}/complete",
+            json={"status": "SHIP", "force": True},
         ).get_json()["data"]
         notes = body["release"]["notes"]
         assert "Release 2.0" in notes

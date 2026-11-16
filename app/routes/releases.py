@@ -354,9 +354,14 @@ def complete_release(user, release_id):
         if app_row is None or app_row.started_at is None:
             missing.append(f"{child.reference_code}: app never started")
 
+        # Match both the legacy "UI:" prefix and the readable names the
+        # build-tests seeder now writes for non-technical users.
         required_names = (
             "ui:",
+            "main screen loads in a browser",
+            "app opens in a browser",
             "generated test suite passes",
+            "app's automated tests pass",
             "app installs without errors",
             "install dependencies",
             "dependencies install",
@@ -756,7 +761,9 @@ def start_release_pipeline_route(user, release_id):
         return denied
     from app.services.release_pipeline import start_release_pipeline
 
-    data = request.get_json() or {}
+    # A pipeline start has no required fields; tolerate a bodyless POST
+    # instead of returning 415 when the client omits Content-Type.
+    data = request.get_json(silent=True) or {}
     force = bool(data.get("force"))
     target_phase = data.get("target_phase")
     ok, message = start_release_pipeline(release, user, force=force, target_phase=target_phase)
