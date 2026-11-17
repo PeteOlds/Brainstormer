@@ -167,16 +167,16 @@ class _InstancePickerPageState extends ConsumerState<InstancePickerPage> {
   Future<void> _enter(BuildContext context, InstanceSummary inst) async {
     final store = ref.read(authStoreProvider);
     final label = 'Site ${inst.number} · ${inst.name}';
-    await ref.read(authRepositoryProvider).switchInstance(inst.id);
+    final user = await ref.read(authRepositoryProvider).switchInstance(inst.id);
     await store.saveSession(
       accessToken: (await store.readAccessToken()) ?? '',
       refreshToken: (await store.readRefreshToken()) ?? '',
-      user: await store.readUser(),
+      user: user,
+      instanceId: inst.id,
       instanceLabel: label,
     );
-    final stored = await store.readUser();
     if (!mounted) return;
-    ref.read(currentUserProvider.notifier).state = stored;
+    ref.read(currentUserProvider.notifier).state = user;
     ref.read(currentInstanceProvider.notifier).state = inst.id;
     ref.read(currentInstanceLabelProvider.notifier).state = label;
     WidgetsBinding.instance.addPostFrameCallback((_) {

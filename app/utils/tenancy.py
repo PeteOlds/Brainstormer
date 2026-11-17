@@ -98,6 +98,28 @@ def is_site_admin(user: Any) -> bool:
     return Membership.is_site_admin(user.id)
 
 
+def user_payload(user: Any) -> dict:
+    """Canonical user document returned by every auth endpoint.
+
+    `/login`, `/register`, `/switch-instance` and `/me` must agree: the
+    Flutter client derives "is this user an admin?" from `role`,
+    `is_site_admin` and `admin_instance_ids`, and a response that omits the
+    last two silently hides the Admin menu and bulk actions.
+    """
+    from app.models import ROLE_INSTANCE_ADMIN, Membership
+
+    payload = user.to_dict()
+    payload["is_site_admin"] = Membership.is_site_admin(user.id)
+    payload["admin_instance_ids"] = [
+        str(m.instance_id)
+        for m in Membership.query.filter_by(
+            user_id=user.id, role=ROLE_INSTANCE_ADMIN
+        ).all()
+        if m.instance_id is not None
+    ]
+    return payload
+
+
 def instance_expired(instance_id: Any) -> bool:
     """True when writes must stop: suspended status or outside [start, end].
 

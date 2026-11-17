@@ -66,18 +66,28 @@ class AuthRepository {
         .toList();
   }
 
-  Future<void> switchInstance(String instanceId) async {
+  /// Switch the scoped instance and return the refreshed user document.
+  ///
+  /// The response user is merged over the previously stored one: older
+  /// backends omitted `admin_instance_ids` / `is_site_admin` here, and a
+  /// switch must never silently demote the signed-in user in the UI (that
+  /// hid the Admin menu and the bulk-selection tools).
+  Future<Map<String, dynamic>> switchInstance(String instanceId) async {
     final data =
         await api.post('/api/v1/switch-instance', body: {'instance_id': instanceId})
             as Map<String, dynamic>;
     final json = data['data'] as Map<String, dynamic>? ?? data;
-    final user = (json['user'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+    final incoming =
+        (json['user'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
+    final previous = await store.readUser() ?? const <String, dynamic>{};
+    final user = Map<String, dynamic>.from(previous)..addAll(incoming);
     await store.saveSession(
       accessToken: json['access_token']?.toString() ?? '',
       refreshToken: json['refresh_token']?.toString() ?? '',
-      user: Map<String, dynamic>.from(user),
+      user: user,
       instanceId: instanceId,
     );
+    return user;
   }
 
   Future<void> logout() async {

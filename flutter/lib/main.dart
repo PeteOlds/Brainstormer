@@ -26,50 +26,67 @@ class _BrainstormerAppState extends ConsumerState<BrainstormerApp> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _restoreSession());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await _restoreSession();
+      } catch (e) {
+        debugPrint('Session restore failed: $e');
+      }
+    });
   }
 
   /// Warm the signed-in user from secure storage, then honour web
   /// deep links (?status&prompt&model&idea, ?run_status, ?edit=).
   Future<void> _restoreSession() async {
-    final store = ref.read(authStoreProvider);
-    final user = await store.readUser();
-    final token = await store.readAccessToken();
-    if (token != null && user != null) {
-      // Refresh profile from /me so role/admin ids are always current.
-      Map<String, dynamic>? me;
-      try {
-        final raw = await ref.read(apiClientProvider).get('/api/v1/me');
-        if (raw is Map<String, dynamic>) {
-          final data = raw['data'] as Map<String, dynamic>? ?? raw;
-          me = data['user'] as Map<String, dynamic>?;
+    try {
+      final store = ref.read(authStoreProvider);
+      final user = await store.readUser();
+      final token = await store.readAccessToken();
+
+      if (token != null && user != null) {
+        // Refresh profile from /me so role/admin ids are always current.
+        Map<String, dynamic>? me;
+        try {
+          final raw = await ref.read(apiClientProvider).get('/api/v1/me');
+          if (raw is Map<String, dynamic>) {
+            final data = raw['data'] as Map<String, dynamic>? ?? raw;
+            me = data['user'] as Map<String, dynamic>?;
+          }
+        } catch (_) {
+          // Keep cached user if /me is unavailable.
         }
-      } catch (_) {
-        // Keep cached user if /me is unavailable.
+        final restored = me ?? user;
+        await store.saveSession(
+          accessToken: token,
+          refreshToken: (await store.readRefreshToken()) ?? '',
+          user: restored,
+          instanceId: await store.readInstanceId(),
+          instanceLabel: await store.readInstanceLabel(),
+        );
+        ref.read(currentUserProvider.notifier).state = restored;
+        ref.read(currentInstanceProvider.notifier).state =
+            await store.readInstanceId();
+        ref.read(currentInstanceLabelProvider.notifier).state =
+            await store.readInstanceLabel();
       }
-      final restored = me ?? user;
-      await store.saveSession(
-        accessToken: token,
-        refreshToken: (await store.readRefreshToken()) ?? '',
-        user: restored,
-        instanceId: await store.readInstanceId(),
-        instanceLabel: await store.readInstanceLabel(),
-      );
-      ref.read(currentUserProvider.notifier).state = restored;
-      ref.read(currentInstanceProvider.notifier).state =
-          await store.readInstanceId();
-      ref.read(currentInstanceLabelProvider.notifier).state =
-          await store.readInstanceLabel();
-    }
 
-    // Web deep-link auto-scope: honour ?instance=90 (or instance UUID/name) on entry.
-    await _maybeScopeFromQuery();
+      // Web deep-link auto-scope: honour ?instance=90 (or instance UUID/name) on entry.
+      await _maybeScopeFromQuery();
 
-    if (kIsWeb && !_deepLinkDone) {
-      _deepLinkDone = true;
-      _applyDeepLink(Uri.base);
+      if (kIsWeb && !_deepLinkDone) {
+        _deepLinkDone = true;
+        _applyDeepLink(Uri.base);
+      }
+    } catch (e) {
+      // Never let restore crash the app: fall back to anonymous state.
+      final store = ref.read(authStoreProvider);
+      await store.clear();
+      ref.read(currentUserProvider.notifier).state = null;
+      ref.read(currentInstanceProvider.notifier).state = null;
+      ref.read(currentInstanceLabelProvider.notifier).state = null;
+    } finally {
+      if (mounted) setState(() {});
     }
-    if (mounted) setState(() {});
   }
 
   Future<void> _maybeScopeFromQuery() async {
@@ -77,6 +94,9 @@ class _BrainstormerAppState extends ConsumerState<BrainstormerApp> {
     final raw = Uri.base.queryParameters['instance'];
     if (raw == null || raw.trim().isEmpty) return;
     final q = raw.trim().toLowerCase();
+    // Only scope when we are actually authenticated; otherwise leave anonymous.
+    final token = await ref.read(authStoreProvider).readAccessToken();
+    if (token == null || token.isEmpty) return;
     final list = await ref.read(authControllerProvider.notifier).instances();
     InstanceSummary? match;
     for (final inst in list) {
@@ -88,10 +108,17 @@ class _BrainstormerAppState extends ConsumerState<BrainstormerApp> {
     }
     if (match == null) return;
     final label = 'Site ${match.number} · ${match.name}';
-    await ref.read(authRepositoryProvider).switchInstance(match.id);
-    final stored = await ref.read(authStoreProvider).readUser();
+    final user = await ref.read(authRepositoryProvider).switchInstance(match.id);
+    final store = ref.read(authStoreProvider);
+    await store.saveSession(
+      accessToken: (await store.readAccessToken()) ?? '',
+      refreshToken: (await store.readRefreshToken()) ?? '',
+      user: user,
+      instanceId: match.id,
+      instanceLabel: label,
+    );
     if (!mounted) return;
-    ref.read(currentUserProvider.notifier).state = stored;
+    ref.read(currentUserProvider.notifier).state = user;
     ref.read(currentInstanceProvider.notifier).state = match.id;
     ref.read(currentInstanceLabelProvider.notifier).state = label;
   }
@@ -132,6 +159,13 @@ class _BrainstormerAppState extends ConsumerState<BrainstormerApp> {
       darkTheme: buildTheme(dark: true),
       navigatorKey: _navigatorKey,
       initialRoute: _initialRoute(),
+      // One route, not Flutter's default "/", "/login" stack. The split
+      // initial route put a duplicate login page underneath every screen,
+      // which made `Navigator.canPop` true everywhere and put a back arrow
+      // on the sign-in and ideas pages.
+      onGenerateInitialRoutes: (initial) => [
+        generateRoute(RouteSettings(name: initial))!,
+      ],
       onGenerateRoute: generateRoute,
     );
   }

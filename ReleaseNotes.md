@@ -13,6 +13,29 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.94.0 — 2026-11-17
+
+### Features
+- Idea detail now has an Actions section listing the secondary actions available at the idea's stage (Brief at Scope, Design at Map, Build at Ship, plus the analyses), with a confirm dialog and a refresh control.
+- Added semantics-driven Playwright smoke tests for the Flutter shell: header identity/admin nav, multi-select bulk status change, and detail actions with list refresh on return.
+- `scripts/build_web.sh` now wipes `build/web` and verifies the release artefacts (including same-origin CanvasKit) so a failed build cannot be served.
+
+### Bug fixes
+- The top header shows Admin, Settings, the username, and the site chip (`Site 90 · …`) again: login/register/switch-instance/`/me` now return `is_site_admin` and `admin_instance_ids` from one canonical serializer, and the Flutter client keeps them when switching site.
+- Returning from idea detail now refetches the list, so a phase change in the detail screen is visible immediately instead of a cached row.
+- Selecting an idea no longer opens the detail screen by accident; select mode has labelled Select/Cancel controls and a bulk status-change bar.
+- A back arrow is shown only on pushed screens, and the app starts with a single route stack (no duplicate login page and spurious back arrow).
+- Flutter web calls the API on the page origin; `API_BASE_URL` is now only used for native builds, so a bundle is no longer tied to one host.
+- The custom bootstrap no longer registers a service worker, and `index.html`/`flutter_bootstrap.js` are served `no-cache`, so a rebuild is picked up without clearing site data.
+- Missing Flutter assets now return 404 instead of `index.html`; a stale bundle previously surfaced as a blank page with MIME-type errors.
+- CSP allows `'wasm-unsafe-eval'` for the CanvasKit engine.
+
+## v0.93.5 — 2026-11-16
+
+### Bug fixes
+- Bundled Roboto font into the Flutter web build; previously Flutter could not find the configured font family, so text rendered nothing.
+- Flutter startup restore errors are now swallowed and the app falls back to anonymous state instead of crashing.
+
 ## v0.93.4 — 2026-11-16
 
 ### Bug fixes

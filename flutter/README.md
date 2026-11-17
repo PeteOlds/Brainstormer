@@ -8,7 +8,8 @@ pages; the Flask backend is API-only. Requires the V2 backend
 # Install deps
 flutter pub get
 
-# Run against local backend
+# Run against local backend (dev only: the API host must be explicit because
+# `flutter run` serves the app from its own dev-server origin)
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 
 # Static analysis + tests (gates: zero errors/warnings)
@@ -18,9 +19,15 @@ flutter test
 # Regenerate goldens (locked-OS Linux CI only, to avoid font drift)
 flutter test --update-goldens test/golden_test.dart
 
-# Release web build
-flutter build web --release
+# Release web build (served by Flask at /; same-origin API, no BASE_URL)
+./scripts/build_web.sh
 ```
+
+In production the bundle is same-origin with the API: requests use relative
+URLs, so one build works on any host. `API_BASE_URL` is only for `flutter run`
+and native builds. The build script wipes `build/web`, builds with
+`--no-web-resources-cdn`, and verifies `main.dart.js` plus same-origin
+CanvasKit before shipping.
 
 ## Conventions (enforced in review)
 

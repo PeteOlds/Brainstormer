@@ -38,7 +38,7 @@ def init_extensions(app):
     # no nonce and is refused by the browser even if escaping ever fails.
     csp = {
         "default-src": "'self'",
-        "script-src": "'self' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com",
+        "script-src": "'self' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://cdn.tailwindcss.com",
         "style-src": "'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.tailwindcss.com https://fonts.googleapis.com",
         "font-src": "'self' data: https://fonts.gstatic.com",
         "img-src": "'self' data: https:",

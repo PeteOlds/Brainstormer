@@ -67,12 +67,12 @@ class _IdeasPageState extends ConsumerState<IdeasPage> {
                   ),
                 ),
                 if (isAdmin)
-                  IconButton(
+                  TextButton.icon(
                     key: const Key('ideas_select_toggle'),
                     icon: Icon(
                       _selecting ? Icons.close : Icons.checklist_outlined,
                     ),
-                    tooltip: _selecting ? 'Cancel selection' : 'Select ideas',
+                    label: Text(_selecting ? 'Cancel' : 'Select'),
                     onPressed: () => setState(() {
                       _selecting = !_selecting;
                       _selected.clear();
@@ -370,12 +370,18 @@ class _IdeaCard extends ConsumerWidget {
                     ),
                 ],
               ),
-        onTap: () {
+        onTap: () async {
           if (selecting) {
             onToggle?.call();
             return;
           }
-          Navigator.of(context).pushNamed('/ideas/detail', arguments: idea.id);
+          await Navigator.of(context)
+              .pushNamed('/ideas/detail', arguments: idea.id);
+          // A status/phase change or a secondary action in the detail page
+          // must be visible the moment the user comes back.
+          if (context.mounted) {
+            await ref.read(ideasControllerProvider.notifier).load(fresh: true);
+          }
         },
       ),
     );

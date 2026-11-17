@@ -37,6 +37,16 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
 
     return AppBar(
       automaticallyImplyLeading: false,
+      // The app previously had no way back from pushed screens (idea detail,
+      // prompt form) because the implicit arrow was disabled globally.
+      leading: Navigator.of(context).canPop()
+          ? IconButton(
+              key: const Key('site_header_back'),
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Back',
+              onPressed: () => Navigator.of(context).maybePop(),
+            )
+          : null,
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

@@ -16,6 +16,7 @@ class IdeasRepository {
     String? search,
     String? promptConfigId,
     String? model,
+    bool fresh = false,
   }) async {
     final trimmedSearch = (search ?? '').trim();
     final query = <String, String>{
@@ -32,7 +33,7 @@ class IdeasRepository {
     final data = await api.get(
       '/api/v1/ideas',
       query: query,
-      cacheFor: const Duration(seconds: 60),
+      cacheFor: fresh ? null : const Duration(seconds: 60),
     );
     final map = data as Map<String, dynamic>;
     return {
@@ -48,6 +49,13 @@ class IdeasRepository {
   Future<IdeaDetail> detail(String id) async {
     final data = await api.get('/api/v1/ideas/$id');
     return IdeaDetail.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Secondary actions available for this idea at its current stage, plus
+  /// the results already produced for it.
+  Future<Map<String, dynamic>> availableActions(String id) async {
+    final data = await api.get('/api/v1/ideas/$id/actions');
+    return data as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> vote(String id, int direction) async {
@@ -151,6 +159,8 @@ class IdeasRepository {
     final data = await api.post(
       '/api/v1/ideas/$id/actions',
       body: {'action_type': actionType, 'confirm': confirm},
+      // A queued action changes the idea's run history; drop cached lists.
+      invalidatePrefix: '/api/v1/ideas',
     );
     return data as Map<String, dynamic>;
   }

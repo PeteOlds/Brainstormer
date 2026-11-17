@@ -51,13 +51,13 @@ abstract final class AppSpacing {
 }
 
 abstract final class AppText {
-  static const String fontFamily = 'Inter';
+  static const String fontFamily = 'Roboto';
 }
 
 /// Build version. Mirrors the backend VERSION file — bump together
 /// (golden rule: the build number is always available, shown in the
 /// footer of every screen).
-const String kAppVersion = '0.93.3';
+const String kAppVersion = '0.94.0';
 
 ThemeData buildTheme({required bool dark}) {
   final scheme = ColorScheme.fromSeed(

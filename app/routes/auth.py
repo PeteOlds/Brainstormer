@@ -6,6 +6,7 @@ from app.models import User
 from app.utils import auth
 from app.utils.decorators import token_required
 from app.utils.responses import api_error, api_ok
+from app.utils.tenancy import user_payload
 
 bp = Blueprint("auth", __name__)
 
@@ -80,7 +81,7 @@ def register():
     tokens = auth.create_tokens(user.id, user.role.value, user.email, remember)
     resp, code = api_ok(
         {
-            "user": user.to_dict(),
+            "user": user_payload(user),
             "access_token": tokens["access_token"],
             "refresh_token": tokens["refresh_token"],
         },
@@ -119,17 +120,9 @@ def login():
     # Admin visibility for the navbar: global ADMIN, a site-wide grant, or
     # any instance-admin membership (instance admins otherwise never see
     # the Admin menu, although they can use the admin pages when scoped).
-    from app.models import ROLE_INSTANCE_ADMIN, Membership
+    from app.models import Membership
 
-    user_payload = user.to_dict()
-    user_payload["is_site_admin"] = Membership.is_site_admin(user.id)
-    user_payload["admin_instance_ids"] = [
-        str(m.instance_id)
-        for m in Membership.query.filter_by(
-            user_id=user.id, role=ROLE_INSTANCE_ADMIN
-        ).all()
-        if m.instance_id is not None
-    ]
+    user_payload_data = user_payload(user)
     # Include the user's instances so the UI can show a picker when there
     # is more than one, without an extra round-trip.
     from app.models import Membership as _Membership
@@ -150,7 +143,7 @@ def login():
 
     resp, code = api_ok(
         {
-            "user": user_payload,
+            "user": user_payload_data,
             "access_token": tokens["access_token"],
             "refresh_token": tokens["refresh_token"],
             "instances": instances,
@@ -357,7 +350,7 @@ def switch_instance(current_user):
     )
     resp, code = api_ok(
         {
-            "user": current_user.to_dict(),
+            "user": user_payload(current_user),
             "access_token": tokens["access_token"],
             "refresh_token": tokens["refresh_token"],
         }
@@ -371,19 +364,11 @@ def switch_instance(current_user):
 def me(current_user):
     from flask import g
 
-    from app.models import ROLE_INSTANCE_ADMIN, Membership
-
-    user_payload = current_user.to_dict()
-    user_payload["is_site_admin"] = Membership.is_site_admin(current_user.id)
-    user_payload["admin_instance_ids"] = [
-        str(m.instance_id)
-        for m in Membership.query.filter_by(
-            user_id=current_user.id, role=ROLE_INSTANCE_ADMIN
-        ).all()
-        if m.instance_id is not None
-    ]
     return api_ok(
-        {"user": user_payload, "instance_id": getattr(g, "instance_id", None)}
+        {
+            "user": user_payload(current_user),
+            "instance_id": getattr(g, "instance_id", None),
+        }
     )
 
 
@@ -404,7 +389,7 @@ def update_user_settings(current_user):
             status_code=403,
         )
 
-    return api_ok({"user": current_user.to_dict()})
+    return api_ok({"user": user_payload(current_user)})
 
 
 @bp.route("/logout", methods=["POST"])

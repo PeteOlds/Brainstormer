@@ -73,7 +73,11 @@ class IdeasController extends StateNotifier<IdeasState> {
   final IdeasRepository _repo;
   final Ref _ref;
 
-  Future<void> load({int? page}) async {
+  /// [fresh] bypasses the 60s GET cache. Use it when the list is re-shown
+  /// after a screen that could have changed an idea (detail phase change,
+  /// secondary action) — otherwise the cached page wins and the phase looks
+  /// like it did not persist.
+  Future<void> load({int? page, bool fresh = false}) async {
     final previousTotal = state.total;
     final firstLoad = state.items.isEmpty && previousTotal == 0;
     state = state.copyWith(loading: true, error: null);
@@ -83,6 +87,7 @@ class IdeasController extends StateNotifier<IdeasState> {
         status: state.filter.status,
         sortBy: state.filter.sortBy,
         search: state.filter.search,
+        fresh: fresh,
       );
       final total = result['total'] as int;
       state = state.copyWith(

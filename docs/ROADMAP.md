@@ -1,7 +1,7 @@
 # Brainstormer — Roadmap
 
 **Single source of truth for outstanding work.** Update on every build: add new items, refine scope, and remove items only when released (record them in `ReleaseNotes.md`).
-**Version:** 0.90.0 · **Date:** 2026-11-16 · **Branch:** `main`
+**Version:** 0.94.0 · **Date:** 2026-11-17 · **Branch:** `main`
 
 Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decisions: see **Decisions** below.
 

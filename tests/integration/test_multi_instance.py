@@ -72,6 +72,31 @@ def test_switch_instance_issues_scoped_token(app, client):
     assert res.status_code == 403
 
 
+def test_switch_instance_keeps_admin_flags(app, client):
+    """Switching sites must not strip the admin capability flags.
+
+    The Flutter client hides the Admin menu and the bulk-selection tools when
+    `admin_instance_ids` is missing, so a scoped token's user document has to
+    carry the same fields as /me.
+    """
+    _, i1, i2 = _two_instances(app)
+    with app.app_context():
+        u = User.query.filter_by(email="multi@example.com").first()
+        membership = Membership.query.filter_by(user_id=u.id, instance_id=i2).first()
+        membership.role = "INSTANCE_ADMIN"
+        db.session.commit()
+
+    _, headers = _login(client, instance_id=i1)
+    res = client.post("/api/v1/switch-instance", json={"instance_id": i2}, headers=headers)
+    assert res.status_code == 200, res.get_json()
+    user = res.get_json()["data"]["user"]
+    assert user["is_site_admin"] is False
+    assert i2 in user["admin_instance_ids"]
+
+    me = client.get("/api/v1/me", headers=headers).get_json()["data"]["user"]
+    assert me["admin_instance_ids"] == user["admin_instance_ids"]
+
+
 def test_login_returns_instances_when_multiple(app, client):
     _two_instances(app)
     res = client.post("/api/v1/login", json={"email": "multi@example.com", "password": "password123"})

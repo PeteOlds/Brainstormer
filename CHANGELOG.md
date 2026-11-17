@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.94.0] - 2026-11-17
+### Added
+- Idea detail Actions section for stage-appropriate secondary actions (Brief/Design/Build/analyses) with confirm + refresh.
+- Semantics-driven Playwright smoke tests for the Flutter web shell.
+- `scripts/build_web.sh` wipes `build/web` before building and verifies the release artefacts.
+
+### Fixed
+- Header shows Admin/Settings/username/site chip for site and instance admins; auth and `/me` payloads share one serializer.
+- Ideas list refetches after returning from detail, so phase changes persist visibly.
+- Multi-select no longer opens detail rows; bulk status change works for site admins.
+- Back arrow only on pushed screens; single initial route stack.
+- Flutter web uses same-origin relative API URLs; `API_BASE_URL` is native-only.
+- No service-worker caching of the Flutter shell; shell files sent `no-cache`.
+- Missing Flutter assets return 404, not `index.html`.
+- CSP permits `'wasm-unsafe-eval'` for CanvasKit.
+
+## [0.93.5] - 2026-11-16
+### Fixed
+- Bundled Roboto font into the Flutter web build; previously Flutter could not find the configured font family, so text did not render.
+- Startup session-restore errors are now caught and fall back to anonymous state instead of crashing the app.
+
 ## [0.93.4] - 2026-11-16
 ### Fixed
 - Site chip now shows the selected site number and name; header shows a username/avatar chip on wider screens.

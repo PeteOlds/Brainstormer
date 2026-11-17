@@ -100,30 +100,68 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     if flutter_root:
         flutter_path = os.path.abspath(flutter_root)
         if os.path.isdir(flutter_path):
-            from flask import send_from_directory
+            from flask import make_response, send_from_directory
 
-            from flask import make_response
+            # The Flutter shell must always be revalidated: a cached
+            # index.html or flutter_bootstrap.js pins an old engine/build and
+            # shows a blank page until the user clears site data.
+            no_cache_files = {
+                "index.html",
+                "flutter_bootstrap.js",
+                "flutter_service_worker.js",
+                "version.json",
+                "manifest.json",
+            }
+            asset_dirs = ("assets/", "canvaskit/", "icons/")
+
+            def _no_cache(resp):
+                resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                resp.headers["Pragma"] = "no-cache"
+                resp.headers["Expires"] = "0"
+                return resp
+
+            def _index_response():
+                return _no_cache(send_from_directory(flutter_path, "index.html"))
+
+            def _is_asset_path(candidate):
+                if candidate.startswith(asset_dirs):
+                    return True
+                return "." in os.path.basename(candidate)
 
             def _flutter_response(path):
                 # Serve real files (assets, canvaskit, flutter.js, etc.)
-                file_path = os.path.join(flutter_path, path)
-                if os.path.exists(file_path) and os.path.isfile(file_path):
+                candidate = os.path.abspath(os.path.join(flutter_path, path))
+                inside_root = candidate == flutter_path or candidate.startswith(
+                    flutter_path + os.sep
+                )
+                if inside_root and os.path.isfile(candidate):
                     resp = make_response(send_from_directory(flutter_path, path))
-                    # Safari/Chromium service-worker caching must not pin stale Flutter shells.
-                    if path == "flutter_service_worker.js":
-                        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-                        resp.headers["Pragma"] = "no-cache"
-                        resp.headers["Expires"] = "0"
+                    if path in no_cache_files:
+                        _no_cache(resp)
                     return resp
-                # SPA fallback for client-side routes
-                return send_from_directory(flutter_path, "index.html")
+                # A missing asset must never be answered with index.html: a
+                # 200 text/html for main.dart.js surfaces as "Refused to
+                # execute script ... MIME type ('text/html')", i.e. a blank
+                # page with a misleading error. Fail loudly instead.
+                if _is_asset_path(path):
+                    return (
+                        jsonify(
+                            {
+                                "error": "Not Found",
+                                "message": f"Flutter asset not found: {path}",
+                            }
+                        ),
+                        404,
+                    )
+                # SPA fallback for client-side routes (e.g. /ideas).
+                return _index_response()
 
             @app.route("/", defaults={"path": ""})
             @app.route("/<path:path>")
             def serve_flutter(path):
                 # Root of SPA: index.html lives at build/web/index.html
                 if path == "" or path == "index.html":
-                    return send_from_directory(flutter_path, "index.html")
+                    return _index_response()
                 return _flutter_response(path)
 
     # API error handlers

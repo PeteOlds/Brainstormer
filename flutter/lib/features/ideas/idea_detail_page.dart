@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/network/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/theme/tokens.dart';
 import '../chat/chat_repository.dart';
@@ -21,6 +22,14 @@ final _commentsProvider = FutureProvider.family
   return ref
       .watch(ideasRepositoryProvider)
       .comments(args.id, phase: args.phase);
+});
+
+/// Secondary actions available for this idea at its current stage, plus the
+/// results already generated for it.
+final _actionsProvider =
+    FutureProvider.family.autoDispose<Map<String, dynamic>, String>(
+        (ref, id) async {
+  return ref.watch(ideasRepositoryProvider).availableActions(id);
 });
 
 /// Idea detail: overview, action result tabs, threaded comments with
@@ -163,6 +172,20 @@ class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage>
         const Divider(),
         Row(
           children: [
+            Text('Actions', style: Theme.of(context).textTheme.titleSmall),
+            const Spacer(),
+            IconButton(
+              key: const Key('idea_actions_refresh'),
+              icon: const Icon(Icons.refresh, size: 18),
+              tooltip: 'Refresh actions',
+              onPressed: () => ref.invalidate(_actionsProvider(widget.ideaId)),
+            ),
+          ],
+        ),
+        _actionsSection(context),
+        const Divider(),
+        Row(
+          children: [
             const Text('Comments'),
             const Spacer(),
             DropdownButton<String?>(
@@ -197,6 +220,91 @@ class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage>
         ),
       ],
     );
+  }
+
+  /// Buttons for the secondary actions the API reports as available at this
+  /// idea's current stage (Brief at Scope, Design at Map, Build at Ship, plus
+  /// the always-on analyses). Stage gates are enforced server-side too.
+  Widget _actionsSection(BuildContext context) {
+    final available = ref.watch(_actionsProvider(widget.ideaId));
+    return available.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: LinearProgressIndicator(),
+      ),
+      error: (e, _) => Align(
+        alignment: Alignment.centerLeft,
+        child: Text('Actions unavailable: $e'),
+      ),
+      data: (payload) {
+        final actions = (payload['actions'] as List? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+        if (actions.isEmpty) {
+          return const Align(
+            alignment: Alignment.centerLeft,
+            child: Text('No actions available at this stage.'),
+          );
+        }
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final action in actions)
+              OutlinedButton(
+                key: Key('idea_action_${action['key']}'),
+                onPressed: () => _runAction(
+                  (action['key'] ?? '').toString(),
+                  (action['label'] ?? action['key'] ?? '').toString(),
+                ),
+                child: Text(
+                  (action['label'] ?? action['key'] ?? '').toString(),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _runAction(String key, String label) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Run $label?'),
+        content: Text(
+          'This queues a background AI run. Results show in the Analysis tab '
+          'when it finishes.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('idea_action_confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Run'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await ref.read(ideasRepositoryProvider).runAction(widget.ideaId, key);
+      ref.invalidate(_actionsProvider(widget.ideaId));
+      ref.invalidate(_detailProvider(widget.ideaId));
+      ref.read(ideasControllerProvider.notifier).load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$label started.')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    }
   }
 
   Widget _commentsList() {
