@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.95.0] - 2026-11-18
+### Added
+- Per-prompt dashboard: ideas by state, run outcomes, per-model timings, 14-day trend, recent runs, all with drill-down.
+- Activity jobs view: workers/queues, summary tiles, live runs, recent runs with status/model/duration/error, filters, pagination and tap-through.
+- Editable instance AI provider configs (all five providers) and per-phase AI defaults (provider, model, params, skills, guidelines).
+- Prompt editor prefills saved values; OpenCode provider support.
+- Ideas deep links accept prompt/model filters with a visible filter chip; exact prompt filter in Activity.
+- `GET /api/v1/admin/prompts/<id>/stats` for dashboard data.
+
+### Fixed
+- Removed the duplicate Settings navigation entry; instance settings lives under Admin.
+- Instance admins can edit provider settings after the first save.
+
 ## [0.94.0] - 2026-11-17
 ### Added
 - Idea detail Actions section for stage-appropriate secondary actions (Brief/Design/Build/analyses) with confirm + refresh.

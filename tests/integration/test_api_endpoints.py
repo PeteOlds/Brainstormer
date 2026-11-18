@@ -1907,6 +1907,103 @@ class TestAdminEndpoints:
         data = resp.get_json()["data"]
         assert len(data["recent_runs"]) == 1
 
+    def test_prompt_stats_dashboard(self, admin_client, app, admin_user, admin_prompt):
+        """Per-prompt dashboard aggregates direct runs and follow-ups."""
+        with app.app_context():
+            from datetime import datetime, timezone
+
+            from app.extensions import db
+            from app.models import Idea, PromptConfig, PromptRun, User
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+            now = datetime.now(timezone.utc)
+
+            idea = Idea(
+                reference_code="IDEA-9001",
+                prompt_title="Dashboard idea",
+                raw_content="Test content",
+                status="SCOPE",
+                prompt_config_id=prompt.id,
+            )
+            db.session.add(idea)
+            db.session.commit()
+            db.session.add_all(
+                [
+                    PromptRun(
+                        prompt_config_id=prompt.id,
+                        status="SUCCESS",
+                        provider="openai",
+                        model="gpt-4o",
+                        duration_seconds=12.5,
+                        created_at=now,
+                    ),
+                    # Follow-up action: linked through the idea, not the prompt.
+                    PromptRun(
+                        action_type="REFINE",
+                        idea_id=idea.id,
+                        status="FAILED",
+                        provider="openai",
+                        model="gpt-4o",
+                        error="request timed out",
+                        created_at=now,
+                    ),
+                ]
+            )
+            db.session.commit()
+            prompt_id = str(prompt.id)
+
+        resp = admin_client.get(f"/api/v1/admin/prompts/{prompt_id}/stats?days=30")
+        assert resp.status_code == 200, resp.get_json()
+        data = resp.get_json()["data"]
+
+        assert data["prompt"]["id"] == prompt_id
+        assert data["ideas"]["by_status"]["SCOPE"] == 1
+        assert data["runs"]["total"] == 2
+        assert data["runs"]["in_window"] == 2
+        assert data["runs"]["by_status"]["SUCCESS"] == 1
+        assert data["runs"]["by_status"]["FAILED"] == 1
+        assert data["runs"]["success_rate"] == 0.5
+        assert data["runs"]["avg_seconds"] == 12.5
+        assert data["runs"]["last_error"]["error_category"] == "timeout"
+        assert data["by_model"][0]["model"] == "gpt-4o"
+        assert data["by_model"][0]["avg_seconds"] == 12.5
+        assert len(data["daily"]) == 14
+        assert {r["status"] for r in data["recent_runs"]} == {"SUCCESS", "FAILED"}
+
+    def test_prompt_stats_unknown_prompt_404(self, admin_client):
+        resp = admin_client.get(
+            "/api/v1/admin/prompts/00000000-0000-0000-0000-000000000000/stats"
+        )
+        assert resp.status_code == 404
+
+    def test_activity_stats_prompt_id_filter(
+        self, admin_client, app, admin_user, admin_prompt
+    ):
+        """Exact prompt filter powers the dashboard's 'all runs' link."""
+        with app.app_context():
+            from app.extensions import db
+            from app.models import PromptConfig, PromptRun, User
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+            db.session.add_all(
+                [
+                    PromptRun(prompt_config_id=prompt.id, triggered_by="manual"),
+                    PromptRun(triggered_by="manual"),
+                ]
+            )
+            db.session.commit()
+            prompt_id = str(prompt.id)
+
+        resp = admin_client.get(
+            f"/api/v1/admin/activity/stats?prompt_id={prompt_id}"
+        )
+        assert resp.status_code == 200
+        runs = resp.get_json()["data"]["recent_runs"]
+        assert len(runs) == 1
+        assert runs[0]["prompt_config_id"] == prompt_id
+
 
 class TestHealthEndpoints:
     def test_health_ok(self, client):

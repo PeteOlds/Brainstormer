@@ -23,7 +23,8 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
     final isAdmin = currentUserIsAdmin(user);
 
     Widget navLink(String label, String route) {
-      final active = ModalRoute.of(context)?.settings.name?.startsWith(route) == true;
+      final active =
+          ModalRoute.of(context)?.settings.name?.startsWith(route) == true;
       return TextButton(
         onPressed: () => Navigator.of(context).pushReplacementNamed(route),
         child: Text(
@@ -50,7 +51,10 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.lightbulb_outline, color: Theme.of(context).colorScheme.primary),
+          Icon(
+            Icons.lightbulb_outline,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Text(
             'Brainstormer',
@@ -67,7 +71,6 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
           navLink('Ideas', '/ideas'),
           navLink('Prompts', '/prompts'),
           if (isAdmin) navLink('Admin', '/admin'),
-          if (isAdmin) navLink('Settings', '/settings'),
         ],
         if (current != null || label != null)
           Padding(
@@ -81,8 +84,12 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
           Builder(
             builder: (context) {
               final name = (user['name'] as String?)?.trim();
-              final labelText = (name?.isNotEmpty == true) ? name! : (user['email'] as String? ?? 'User');
-              final initial = (labelText.isNotEmpty) ? labelText[0].toUpperCase() : 'U';
+              final labelText = (name?.isNotEmpty == true)
+                  ? name!
+                  : (user['email'] as String? ?? 'User');
+              final initial = (labelText.isNotEmpty)
+                  ? labelText[0].toUpperCase()
+                  : 'U';
               return Tooltip(
                 message: labelText,
                 child: Row(
@@ -90,8 +97,13 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
                   children: [
                     CircleAvatar(
                       radius: 16,
-                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                      child: Text(initial, style: const TextStyle(fontSize: 14)),
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer,
+                      child: Text(
+                        initial,
+                        style: const TextStyle(fontSize: 14),
+                      ),
                     ),
                     if (MediaQuery.of(context).size.width >= 900) ...[
                       const SizedBox(width: AppSpacing.xs),
@@ -120,10 +132,9 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
                 ref.read(currentInstanceProvider.notifier).state = null;
                 ref.read(currentInstanceLabelProvider.notifier).state = null;
                 if (context.mounted) {
-                  await Navigator.of(context).pushNamedAndRemoveUntil(
-                    '/login',
-                    (_) => false,
-                  );
+                  await Navigator.of(
+                    context,
+                  ).pushNamedAndRemoveUntil('/login', (_) => false);
                 }
               } else {
                 await Navigator.of(context).pushReplacementNamed(value);
@@ -142,7 +153,11 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
               const PopupMenuDivider(),
               const PopupMenuItem(value: '/ideas', child: Text('Ideas')),
               const PopupMenuItem(value: '/prompts', child: Text('Prompts')),
-              if (isAdmin) const PopupMenuItem(value: '/admin', child: Text('Admin Panel')),
+              if (isAdmin)
+                const PopupMenuItem(
+                  value: '/admin',
+                  child: Text('Admin Panel'),
+                ),
               const PopupMenuItem(value: '__logout', child: Text('Logout')),
             ],
           ),

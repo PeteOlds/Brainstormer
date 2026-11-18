@@ -10,9 +10,16 @@ import 'package:brainstormer/core/auth_helpers.dart';
 
 /// Ideas dashboard: server-side filters, list, votes, admin status menu.
 class IdeasPage extends ConsumerStatefulWidget {
-  const IdeasPage({super.key, this.initialStatus});
+  const IdeasPage({
+    super.key,
+    this.initialStatus,
+    this.initialPrompt,
+    this.initialModel,
+  });
 
   final String? initialStatus;
+  final String? initialPrompt;
+  final String? initialModel;
 
   @override
   ConsumerState<IdeasPage> createState() => _IdeasPageState();
@@ -26,11 +33,21 @@ class _IdeasPageState extends ConsumerState<IdeasPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialStatus != null) {
+    final hasFilter =
+        widget.initialStatus != null ||
+        widget.initialPrompt != null ||
+        widget.initialModel != null;
+    if (hasFilter) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref
             .read(ideasControllerProvider.notifier)
-            .setFilter(IdeasFilter(status: widget.initialStatus!));
+            .setFilter(
+              IdeasFilter(
+                status: widget.initialStatus ?? 'ACTIVE_ONLY',
+                promptConfigId: widget.initialPrompt,
+                model: widget.initialModel,
+              ),
+            );
       });
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -147,6 +164,51 @@ class _IdeasPageState extends ConsumerState<IdeasPage> {
               ],
             ),
           ),
+          if (state.filter.promptConfigId != null || state.filter.model != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                0,
+              ),
+              child: Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    'Filtered by',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  if (state.filter.promptConfigId != null)
+                    Chip(
+                      key: const Key('ideas_prompt_chip'),
+                      label: Text(
+                        'Prompt ${state.filter.promptConfigId!.split('-').first}',
+                      ),
+                    ),
+                  if (state.filter.model != null)
+                    Chip(
+                      key: const Key('ideas_model_chip'),
+                      label: Text('Model ${state.filter.model}'),
+                    ),
+                  ActionChip(
+                    key: const Key('ideas_clear_deep_filter'),
+                    avatar: const Icon(Icons.close, size: 16),
+                    label: const Text('Clear'),
+                    onPressed: () => ref
+                        .read(ideasControllerProvider.notifier)
+                        .setFilter(
+                          state.filter.copyWith(
+                            clearPrompt: true,
+                            clearModel: true,
+                          ),
+                        ),
+                  ),
+                ],
+              ),
+            ),
           if (state.error != null)
             Padding(
               padding: const EdgeInsets.all(AppSpacing.sm),
@@ -375,8 +437,9 @@ class _IdeaCard extends ConsumerWidget {
             onToggle?.call();
             return;
           }
-          await Navigator.of(context)
-              .pushNamed('/ideas/detail', arguments: idea.id);
+          await Navigator.of(
+            context,
+          ).pushNamed('/ideas/detail', arguments: idea.id);
           // A status/phase change or a secondary action in the detail page
           // must be visible the moment the user comes back.
           if (context.mounted) {

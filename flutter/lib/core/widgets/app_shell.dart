@@ -19,17 +19,15 @@ class AppShell extends ConsumerWidget {
     ('Ideas', Icons.lightbulb_outline, '/ideas'),
     ('Prompts', Icons.psychology_outlined, '/prompts'),
     ('Admin', Icons.admin_panel_settings_outlined, '/admin'),
-    ('Settings', Icons.settings_outlined, '/settings'),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Settings exposes instance AI keys and budgets, so only admins see it.
     final user = ref.watch(currentUserProvider);
     final isAdmin = currentUserIsAdmin(user);
     final destinations = isAdmin
         ? _destinations
-        : _destinations.where((d) => d.$3 != '/settings').toList();
+        : _destinations.where((d) => d.$3 != '/admin').toList();
 
     return Scaffold(
       appBar: SiteHeader(title: 'Brainstormer'),
@@ -43,8 +41,9 @@ class AppShell extends ConsumerWidget {
                 title: Text(destinations[i].$1),
                 onTap: () {
                   Navigator.of(context).pop();
-                  Navigator.of(context)
-                      .pushReplacementNamed(destinations[i].$3);
+                  Navigator.of(
+                    context,
+                  ).pushReplacementNamed(destinations[i].$3);
                 },
               ),
           ],
@@ -71,5 +70,4 @@ class AppShell extends ConsumerWidget {
       ),
     );
   }
-
 }

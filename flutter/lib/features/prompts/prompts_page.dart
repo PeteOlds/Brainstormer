@@ -73,6 +73,7 @@ class _PromptTile extends ConsumerWidget {
             ? PopupMenuButton<String>(
                 onSelected: (v) => _act(context, ref, v),
                 itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'dashboard', child: Text('Dashboard')),
                   PopupMenuItem(value: 'run', child: Text('Run Now')),
                   PopupMenuItem(value: 'edit', child: Text('Edit')),
                   PopupMenuItem(value: 'delete', child: Text('Delete')),
@@ -88,6 +89,13 @@ class _PromptTile extends ConsumerWidget {
     final repo = ref.read(promptsRepositoryProvider);
     try {
       switch (action) {
+        case 'dashboard':
+          if (context.mounted) {
+            Navigator.of(context).pushNamed(
+              '/admin/prompts/detail',
+              arguments: prompt.id,
+            );
+          }
         case 'run':
           await repo.runNow(prompt.id);
           if (context.mounted) {

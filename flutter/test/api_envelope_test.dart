@@ -13,12 +13,16 @@ class FakeAuthStore extends AuthStore {
   FakeAuthStore() : super(storage: _FakeStorage());
 
   final _data = <String, String>{};
+  Map<String, dynamic>? _user;
 
   @override
   Future<String?> readAccessToken() async => _data['a'];
 
   @override
   Future<String?> readRefreshToken() async => _data['r'];
+
+  @override
+  Future<Map<String, dynamic>?> readUser() async => _user;
 
   @override
   Future<void> saveSession({
@@ -30,6 +34,7 @@ class FakeAuthStore extends AuthStore {
   }) async {
     _data['a'] = accessToken;
     _data['r'] = refreshToken;
+    if (user != null) _user = user;
   }
 
   @override
@@ -48,10 +53,10 @@ class _FakeStorage implements FlutterSecureStorage {
 }
 
 http.Response _ok(Map<String, dynamic> data) => http.Response(
-      jsonEncode({'success': true, 'data': data}),
-      200,
-      headers: {'content-type': 'application/json'},
-    );
+  jsonEncode({'success': true, 'data': data}),
+  200,
+  headers: {'content-type': 'application/json'},
+);
 
 http.Response _fail(String message, int status, {String? code}) {
   final body = <String, dynamic>{
@@ -88,7 +93,8 @@ void main() {
         baseUrl: 'http://x',
         store: store,
         httpClient: MockClient(
-            (_) async => _fail('Illegal transition', 400, code: 'X')),
+          (_) async => _fail('Illegal transition', 400, code: 'X'),
+        ),
       );
       try {
         await client.get('/api/v1/ideas');
@@ -109,8 +115,7 @@ void main() {
         httpClient: MockClient((request) async {
           calls++;
           if (request.url.path.endsWith('/refresh')) {
-            return _ok(
-                {'access_token': 'new-a', 'refresh_token': 'new-r'});
+            return _ok({'access_token': 'new-a', 'refresh_token': 'new-r'});
           }
           if (calls == 1) return _fail('expired', 401);
           return _ok({'me': true});

@@ -11,30 +11,34 @@ class PromptsRepository {
 
   Future<List<PromptSummary>> list() async {
     final data = await api.get('/api/v1/prompts', query: {'limit': '100'});
-    final list =
-        ((data as Map<String, dynamic>)['prompts'] as List? ?? []);
+    final list = ((data as Map<String, dynamic>)['prompts'] as List? ?? []);
     return [
-      for (final e in list)
-        PromptSummary.fromJson(e as Map<String, dynamic>)
+      for (final e in list) PromptSummary.fromJson(e as Map<String, dynamic>),
     ];
   }
 
   Future<List<String>> ollamaModels() async {
     final data = await api.get('/api/v1/ollama/models');
-    final list =
-        ((data as Map<String, dynamic>)['models'] as List? ?? []);
+    final list = ((data as Map<String, dynamic>)['models'] as List? ?? []);
     return [
       for (final e in list)
-        (e is Map ? (e['name'] ?? e['model'] ?? e).toString() : e.toString())
+        (e is Map ? (e['name'] ?? e['model'] ?? e).toString() : e.toString()),
     ];
   }
 
   Future<List<String>> providerModels(String provider) async {
-    final data = await api
-        .get('/api/v1/ollama/models', query: {'provider': provider});
-    final list =
-        ((data as Map<String, dynamic>)['models'] as List? ?? []);
+    final data = await api.get(
+      '/api/v1/ollama/models',
+      query: {'provider': provider},
+    );
+    final list = ((data as Map<String, dynamic>)['models'] as List? ?? []);
     return [for (final e in list) e.toString()];
+  }
+
+  /// One prompt with its body and generation settings (admin fields only).
+  Future<Map<String, dynamic>> get(String id) async {
+    final data = await api.get('/api/v1/prompts/$id');
+    return data as Map<String, dynamic>;
   }
 
   Future<void> save({
@@ -71,9 +75,11 @@ class PromptsRepository {
 }
 
 final promptsRepositoryProvider = Provider<PromptsRepository>(
-    (ref) => PromptsRepository(api: ref.watch(apiClientProvider)));
+  (ref) => PromptsRepository(api: ref.watch(apiClientProvider)),
+);
 
-final promptsListProvider =
-    FutureProvider.autoDispose<List<PromptSummary>>((ref) async {
+final promptsListProvider = FutureProvider.autoDispose<List<PromptSummary>>((
+  ref,
+) async {
   return ref.watch(promptsRepositoryProvider).list();
 });

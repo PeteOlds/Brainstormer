@@ -15,18 +15,35 @@ class IdeasFilter {
     this.status = 'ACTIVE_ONLY',
     this.sortBy = 'created_at',
     this.search = '',
+    this.promptConfigId,
+    this.model,
   });
 
   final String status;
   final String sortBy;
   final String search;
 
-  IdeasFilter copyWith({String? status, String? sortBy, String? search}) =>
-      IdeasFilter(
-        status: status ?? this.status,
-        sortBy: sortBy ?? this.sortBy,
-        search: search ?? this.search,
-      );
+  /// Deep-link filters used by Activity and the prompt dashboard.
+  final String? promptConfigId;
+  final String? model;
+
+  IdeasFilter copyWith({
+    String? status,
+    String? sortBy,
+    String? search,
+    String? promptConfigId,
+    String? model,
+    bool clearPrompt = false,
+    bool clearModel = false,
+  }) => IdeasFilter(
+    status: status ?? this.status,
+    sortBy: sortBy ?? this.sortBy,
+    search: search ?? this.search,
+    promptConfigId: clearPrompt
+        ? null
+        : (promptConfigId ?? this.promptConfigId),
+    model: clearModel ? null : (model ?? this.model),
+  );
 }
 
 class IdeasState {
@@ -87,6 +104,8 @@ class IdeasController extends StateNotifier<IdeasState> {
         status: state.filter.status,
         sortBy: state.filter.sortBy,
         search: state.filter.search,
+        promptConfigId: state.filter.promptConfigId,
+        model: state.filter.model,
         fresh: fresh,
       );
       final total = result['total'] as int;

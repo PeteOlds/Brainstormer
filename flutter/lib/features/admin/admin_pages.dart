@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_shell.dart';
 import 'admin_repository.dart';
-import 'package:brainstormer/core/widgets/site_header.dart';
 
 /// Admin dashboard: stat cards, breakdowns linking into filtered Ideas.
 class AdminPage extends ConsumerWidget {
@@ -86,51 +85,6 @@ class _StatCard extends StatelessWidget {
             Text(label),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Live ops view: runs, queues, prompt health with edit/idea deep links.
-class AdminActivityPage extends ConsumerWidget {
-  const AdminActivityPage({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final activity = ref.watch(adminActivityProvider);
-    return Scaffold(
-      appBar: SiteHeader(title: 'Brainstormer'),
-      body: activity.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Failed to load: $e')),
-        data: (a) {
-          final perf = a['performance'] as Map? ?? {};
-          final health = (a['prompt_health'] as List? ?? [])
-              .map((e) => (e as Map)
-                  .map((k, v) => MapEntry(k.toString(), v)))
-              .toList();
-          return ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            children: [
-              Text(
-                  'Runs: ${perf['total_runs'] ?? 0} · '
-                  'Success: ${perf['success_rate'] ?? '–'} · '
-                  'Pending: ${perf['pending_count'] ?? 0}'),
-              const SizedBox(height: AppSpacing.md),
-              const Text('Prompt health',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              for (final p in health)
-                Card(
-                  child: ListTile(
-                    title: Text((p['title'] ?? '').toString()),
-                    subtitle: Text(
-                        '${p['ideas_7d'] ?? 0} ideas / 7d · '
-                        '${(p['flags'] as List? ?? []).length} flags'),
-                  ),
-                ),
-            ],
-          );
-        },
       ),
     );
   }

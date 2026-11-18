@@ -13,6 +13,21 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.95.0 — 2026-11-18
+
+### Features
+- New per-prompt dashboard (Activity → Prompt health, or Dashboard on a Prompts row): ideas by lifecycle state, run outcomes, per-model average time, a 14-day trend and recent runs. Every count drills into the matching filtered ideas or runs; recent runs open the idea or the prompt editor.
+- Activity is a full jobs view again: worker/queue status, run totals, success rate, live queued/running jobs, and recent runs showing status, trigger, provider/model, duration, timestamp and error category/message. Status, job-type and model filters plus pagination and tap-through.
+- Prompt health cards link to the new dashboard and offer Edit prompt / View ideas; flags are visible.
+- Instance settings tabs for AI providers, phase defaults and spend. Instance admins can edit every provider (including OpenCode) after saving: key (write-only), endpoint, model allowlist, embedding model, budget, cutoff behaviour, fallback model, chat, proxy and OpenCode workspace.
+- Per-phase AI defaults editor with full parity to the Jinja page: provider, model, temperature, top_p, num_predict, skills and guidelines, with a Reset to inherit action.
+- Editing a prompt now loads its saved title, body, provider, model, interval and active state; OpenCode is available as a provider.
+- Ideas deep links accept prompt and model filters, shown as removable chips; Activity supports an exact prompt filter.
+
+### Bug fixes
+- Removed the duplicate Settings menu entry; instance settings is reached through Admin only.
+- Prompt runs and follow-up actions are visible with their model and duration instead of only aggregate counts.
+
 ## v0.94.0 — 2026-11-17
 
 ### Features

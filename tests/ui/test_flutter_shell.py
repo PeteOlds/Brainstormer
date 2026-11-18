@@ -47,6 +47,7 @@ NODES_JS = """
   return {
     role: n.getAttribute('role'),
     label: n.getAttribute('aria-label') || '',
+    text: n.innerText || '',
     x: Math.round(r.x), y: Math.round(r.y),
     w: Math.round(r.width), h: Math.round(r.height),
   };
@@ -94,7 +95,19 @@ def flutter_app():
 
 
 def _seed():
-    from app.models import Idea, Instance, Membership, User, UserRole
+    from datetime import datetime, timezone
+
+    from app.models import (
+        Idea,
+        Instance,
+        InstanceAIConfig,
+        Membership,
+        PromptConfig,
+        PromptRun,
+        StageAIConfig,
+        User,
+        UserRole,
+    )
 
     instance = Instance(number=INSTANCE_NUMBER, name=INSTANCE_NAME)
     db.session.add(instance)
@@ -110,6 +123,63 @@ def _seed():
         Membership(user_id=admin.id, instance_id=instance.id, role="INSTANCE_ADMIN")
     )
 
+    prompt = PromptConfig(
+        title="Seeded prompt",
+        prompt_body="Invent a sustainable idea about {{topic}}.",
+        interval_minutes=1440,
+        model_name="llama3",
+        provider="ollama",
+        is_active=True,
+        instance_id=instance.id,
+        created_by_id=admin.id,
+    )
+    db.session.add(prompt)
+    db.session.flush()
+
+    # One provider saved (Editable), one phase configured; the other
+    # providers/phases show "Configure".
+    db.session.add(
+        InstanceAIConfig(
+            instance_id=instance.id,
+            provider="openai",
+            model_allowlist=["gpt-4o-mini"],
+            budget_cents=5000,
+        )
+    )
+    db.session.add(
+        StageAIConfig(
+            instance_id=instance.id,
+            stage="SCOPE",
+            provider="ollama",
+            model_name="llama3",
+            temperature=0.4,
+        )
+    )
+    db.session.add_all(
+        [
+            PromptRun(
+                instance_id=instance.id,
+                prompt_config_id=prompt.id,
+                triggered_by="manual",
+                status="SUCCESS",
+                provider="ollama",
+                model="llama3",
+                duration_seconds=8.5,
+                created_at=datetime.now(timezone.utc),
+            ),
+            PromptRun(
+                instance_id=instance.id,
+                prompt_config_id=prompt.id,
+                triggered_by="manual",
+                status="FAILED",
+                provider="ollama",
+                model="llama3",
+                error="connection refused",
+                created_at=datetime.now(timezone.utc),
+            ),
+        ]
+    )
+
     for ref, title, status in (
         ("IDEA-9101", "Kelp reforestation marketplace", "SPARK"),
         ("IDEA-9102", "Tidal energy monitoring kit", "SPARK"),
@@ -122,6 +192,7 @@ def _seed():
                 raw_content=f"## {title}\n\nSeed idea for {ref}.",
                 status=status,
                 instance_id=instance.id,
+                prompt_config_id=prompt.id,
                 created_by_id=admin.id,
             )
         )
@@ -201,6 +272,72 @@ def _nodes(page):
     return page.evaluate(NODES_JS)
 
 
+def _labels(page):
+    return [n["label"] for n in _nodes(page)]
+
+
+def _wait_label(page, needle, timeout=25):
+    page.wait_for_function(
+        "needle => Array.from(document.querySelectorAll('flt-semantics')).some("
+        "n => (n.getAttribute('aria-label') || '').includes(needle))",
+        arg=needle,
+        timeout=timeout * 1000,
+    )
+
+
+def _wait_any(page, needle, timeout=25):
+    """Wait until either the semantics text or an aria-label contains it."""
+    page.wait_for_function(
+        """needle => {
+          const host = document.querySelector('flt-semantics-host');
+          if (host && host.innerText.includes(needle)) return true;
+          return Array.from(document.querySelectorAll('flt-semantics')).some(
+            (n) => (n.getAttribute('aria-label') || '').includes(needle));
+        }""",
+        arg=needle,
+        timeout=timeout * 1000,
+    )
+
+
+def _contains(page, needle):
+    return needle in _text(page) or any(needle in label for label in _labels(page))
+
+
+def _scroll_until(page, needle, tries=14, delta=400):
+    """Scroll the routed list until the needle is in view.
+
+    Flutter only builds semantics for visible list rows, so content below
+    the fold is invisible to the accessibilty tree.
+    """
+    for _ in range(tries):
+        if _contains(page, needle):
+            return
+        page.mouse.move(700, 500)
+        page.mouse.wheel(0, delta)
+        page.wait_for_timeout(400)
+    raise AssertionError(f"{needle!r} never scrolled into view")
+
+
+def _scroll_top(page):
+    page.mouse.move(700, 400)
+    page.mouse.wheel(0, -6000)
+    page.wait_for_timeout(500)
+
+
+def _smallest_node(page, needle):
+    """Smallest visible semantics node whose text/label contains needle."""
+    candidates = [
+        n
+        for n in _nodes(page)
+        if n["w"] > 0
+        and n["h"] > 0
+        and needle in f"{n['label']} {n['text']}"
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda n: n["w"] * n["h"])
+
+
 def _click_node(page, node, settle=500):
     page.mouse.click(node["x"] + node["w"] / 2, node["y"] + node["h"] / 2)
     page.wait_for_timeout(settle)
@@ -266,11 +403,124 @@ def test_header_shows_admin_nav_identity_and_site(flutter_page, flutter_server):
 
     text = _text(page)
     assert "Admin" in text, text
-    assert "Settings" in text, text
+    # Instance settings is reached through Admin; a second top-level
+    # "Settings" entry was the duplicate the user reported.
+    assert "Settings" not in text, text
     assert "Flutter Admin" in text, text
 
     labels = [n["label"] for n in _nodes(page)]
     assert any(label.startswith(f"Site {INSTANCE_NUMBER}") for label in labels), labels
+
+
+def _open_admin(page, tile):
+    _click_text(page, "Admin")
+    _wait_text(page, "Go to")
+    _click_text(page, tile)
+
+
+def test_activity_shows_runs_and_prompt_dashboard_drilldown(
+    flutter_page, flutter_server
+):
+    """Requirement: see what ran/failed, timings, models; drill into a prompt."""
+    page = flutter_page
+    _login(page, flutter_server)
+    _open_admin(page, "Activity")
+
+    _scroll_until(page, "Recent runs")
+    text = _text(page)
+    labels = " | ".join(_labels(page))
+    assert "Seeded prompt" in text or "Seeded prompt" in labels, labels
+    assert "connection refused" in text or "connection refused" in labels, labels
+    assert "8.5s" in text or "8.5s" in labels, labels
+    assert "ollama/llama3" in text or "ollama/llama3" in labels, labels
+
+    _scroll_until(page, "Prompt health Seeded prompt")
+    health = [
+        n
+        for n in _nodes(page)
+        if "Prompt health Seeded prompt" in f"{n['label']} {n['text']}"
+    ]
+    assert health, [n["text"] for n in _nodes(page)][:20]
+    _click_node(
+        page,
+        min(health, key=lambda n: n["w"] * n["h"]),
+    )
+
+    _scroll_until(page, "Ideas by state")
+    dashboard = _text(page) + " | " + " | ".join(_labels(page))
+    assert "Run outcomes" in dashboard, dashboard
+    assert "Time by model" in dashboard, dashboard
+    assert "SPARK" in dashboard, dashboard
+
+    spark = [
+        n
+        for n in _nodes(page)
+        if n["label"].startswith("SPARK") or n["text"].startswith("SPARK")
+    ]
+    assert spark, [n["text"] for n in _nodes(page)][:30]
+    _click_node(page, min(spark, key=lambda n: n["w"] * n["h"]))
+    _wait_text(page, "matching ideas", timeout=25)
+    assert "Filtered by" in _text(page)
+
+
+def test_instance_settings_edits_provider_and_phase_defaults(
+    flutter_page, flutter_server, flutter_app
+):
+    """Requirement: instance admins can edit providers and per-phase AI."""
+    page = flutter_page
+    _login(page, flutter_server)
+    _open_admin(page, "Instance settings")
+
+    _wait_text(page, "AI providers")
+    _scroll_until(page, "openai configured")
+    labels = " | ".join(_labels(page))
+    assert "opencode" in labels or "opencode" in _text(page), labels
+    assert "openai" in labels or "openai" in _text(page), labels
+
+    openai_card = [
+        n
+        for n in _nodes(page)
+        if n["role"] == "button" and "openai configured" in n["label"]
+    ]
+    assert openai_card, [n["label"] for n in _nodes(page)][:30]
+    _click_node(page, openai_card[0])
+    _wait_any(page, "openai settings")
+
+    inputs = page.locator("input")
+    # Dialog fields, in order: key, endpoint, model allowlist, ...
+    _fill_input(page, inputs.nth(2), "gpt-4o-mini, gpt-4o")
+    _click_text(page, "Save")
+    page.wait_for_timeout(800)
+
+    from app.models import InstanceAIConfig
+
+    with flutter_app.app_context():
+        config = InstanceAIConfig.query.filter_by(provider="openai").first()
+        assert config.model_allowlist == ["gpt-4o-mini", "gpt-4o"]
+
+    _scroll_top(page)
+    _click_text(page, "Phase defaults")
+    _scroll_until(page, "SPARK inherits")
+    spark_card = [
+        n
+        for n in _nodes(page)
+        if n["role"] == "button" and "SPARK inherits" in n["label"]
+    ]
+    assert spark_card, [n["label"] for n in _nodes(page)][:30]
+    _click_node(page, spark_card[0])
+    _wait_any(page, "SPARK defaults")
+
+    # Provider dropdown is not an input; the model field is the first one.
+    _fill_input(page, page.locator("input").nth(0), "llama3.2")
+    _click_text(page, "Save")
+    page.wait_for_timeout(800)
+
+    from app.models import StageAIConfig
+
+    with flutter_app.app_context():
+        row = StageAIConfig.query.filter_by(stage="SPARK").first()
+        assert row is not None
+        assert row.model_name == "llama3.2"
 
 
 def test_admin_can_multi_select_and_bulk_change_status(
