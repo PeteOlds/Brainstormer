@@ -1020,11 +1020,51 @@ def activity_stats(user):
     )
 
 
+@admin_api_bp.route("/admin/runs/<uuid:run_id>/rerun", methods=["POST"])
+@admin_required
+def rerun_run(user, run_id):
+    """Re-enqueue a failed/finished run (secondary actions only)."""
+    from app.models import PromptRun, PromptRunStatus
+    from app.utils.tenancy import check_access
+
+    run = PromptRun.query.get_or_404(run_id)
+    denied = check_access(run)
+    if denied is not None:
+        return denied
+    if not run.action_type:
+        return api_error(
+            "Rerun is only supported for secondary actions.", status_code=400
+        )
+    if run.idea_id is None:
+        return api_error("Run has no idea to rerun on.", status_code=400)
+    from app.routes.ideas import _enqueue_action
+
+    idea = run.idea if hasattr(run, "idea") else None
+    if idea is None:
+        from app.models import Idea
+
+        idea = Idea.query.get(run.idea_id)
+    if idea is None:
+        return api_error("Idea not found.", status_code=404)
+    task_id, new_run_id, error = _enqueue_action(
+        idea, run.action_type, {"model_override": run.model}
+    )
+    if error:
+        return api_error(error, status_code=400)
+    return api_ok({"task_id": task_id, "run_id": new_run_id})
+
+
 @admin_api_bp.route("/admin/stats", methods=["GET"])
 @admin_required
 def get_stats(user):
     """Get system statistics (Admin only)."""
-    total_users = User.query.count()  # Users are global, never per-instance.
+    iid = current_instance_id()
+    if iid is None:
+        total_users = User.query.count()
+    else:
+        from app.models import Membership
+
+        total_users = Membership.query.filter_by(instance_id=iid).count()
     total_ideas = apply_scope(Idea.query, Idea).count()
     total_prompts = apply_scope(PromptConfig.query, PromptConfig).count()
     active_prompts = apply_scope(

@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -75,6 +76,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       label: Text('Spend'),
                       icon: Icon(Icons.payments_outlined),
                     ),
+                    ButtonSegment(
+                      value: 3,
+                      label: Text('Guides'),
+                      icon: Icon(Icons.description_outlined),
+                    ),
                   ],
                   selected: {_tab},
                   onSelectionChanged: (v) => setState(() => _tab = v.first),
@@ -89,6 +95,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     onSaved: () => _refresh(iid),
                   ),
                   2 => _SpendTab(spend: spend),
+                  3 => _GuidesTab(instanceId: iid),
                   _ => _ProvidersTab(
                     instanceId: iid,
                     configs: configs,
@@ -251,13 +258,47 @@ class _ProviderDialog extends ConsumerStatefulWidget {
 }
 
 class _ProviderDialogState extends ConsumerState<_ProviderDialog> {
+  @override
+  void initState() {
+    super.initState();
+    _selectedAllowlist = {
+      for (final m in (widget.config?['model_allowlist'] as List? ?? []))
+        m.toString(),
+    };
+    _loadModels();
+  }
+
+  Future<void> _loadModels() async {
+    setState(() => _loadingModels = true);
+    try {
+      // Use include_catalogue so the picker shows all catalogue models
+      // plus the currently selected allowlist entries.
+      final data = await ref
+          .read(apiClientProvider)
+          .get('/api/v1/ollama/models',
+              query: {
+                'provider': widget.provider,
+                'include_catalogue': '1',
+              });
+      final list = ((data as Map<String, dynamic>)['models'] as List? ?? []);
+      if (mounted) {
+        setState(() {
+          _models = [for (final e in list) e.toString()];
+          _loadingModels = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingModels = false);
+    }
+  }
+
   late final _key = TextEditingController();
   late final _endpoint = TextEditingController(
     text: (widget.config?['endpoint'] ?? '').toString(),
   );
-  late final _allowlist = TextEditingController(
-    text: (widget.config?['model_allowlist'] as List? ?? []).join(', '),
-  );
+  late Set<String> _selectedAllowlist;
+  List<String> _models = const [];
+  bool _loadingModels = false;
   late final _embeddingModel = TextEditingController(
     text: (widget.config?['embedding_model'] ?? '').toString(),
   );
@@ -276,17 +317,52 @@ class _ProviderDialogState extends ConsumerState<_ProviderDialog> {
   late String _workspace = (widget.config?['opencode_workspace'] ?? 'sandbox')
       .toString();
   bool _saving = false;
+  bool _testing = false;
   String? _error;
+  String? _testResult;
 
   @override
   void dispose() {
     _key.dispose();
     _endpoint.dispose();
-    _allowlist.dispose();
     _embeddingModel.dispose();
     _budget.dispose();
     _degradeModel.dispose();
     super.dispose();
+  }
+
+  Future<void> _test() async {
+    setState(() {
+      _testing = true;
+      _testResult = null;
+    });
+    try {
+      final key = _key.text.trim();
+      final endpoint = _endpoint.text.trim();
+      final model = _selectedAllowlist.isNotEmpty
+          ? _selectedAllowlist.first
+          : null;
+      final body = <String, dynamic>{
+        'provider': widget.provider,
+        if (key.isNotEmpty) 'key': key,
+        if (endpoint.isNotEmpty) 'endpoint': endpoint,
+        'model': ?model,
+      };
+      final res = await ref
+          .read(apiClientProvider)
+          .post('/api/v1/instances/${widget.instanceId}/ai-configs/test',
+              body: body);
+      final map = res as Map<String, dynamic>;
+      setState(() {
+        _testResult = (map['ok'] == true)
+            ? 'OK: ${(map['reply'] ?? map['models'] ?? '').toString()}'
+            : 'Failed: ${(map['error'] ?? 'unknown').toString()}';
+      });
+    } catch (e) {
+      setState(() => _testResult = 'Failed: $e');
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
   }
 
   Future<void> _save() async {
@@ -295,11 +371,7 @@ class _ProviderDialogState extends ConsumerState<_ProviderDialog> {
       _error = null;
     });
     try {
-      final allowlist = _allowlist.text
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
+      final allowlist = _selectedAllowlist.toList();
       final budgetText = _budget.text.trim();
       final budgetCents = budgetText.isEmpty
           ? null
@@ -377,13 +449,27 @@ class _ProviderDialogState extends ConsumerState<_ProviderDialog> {
                   labelText: 'Endpoint (optional)',
                 ),
               ),
-              TextField(
-                key: const Key('provider_allowlist_field'),
-                controller: _allowlist,
-                decoration: const InputDecoration(
-                  labelText: 'Model allowlist (comma separated)',
+              if (_loadingModels)
+                const Center(child: CircularProgressIndicator())
+              else
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  children: [
+                    for (final m in <String>{..._models, ..._selectedAllowlist})
+                      FilterChip(
+                        key: Key('provider_allowlist_$m'),
+                        label: Text(m),
+                        selected: _selectedAllowlist.contains(m),
+                        onSelected: (v) => setState(() {
+                          if (v) {
+                            _selectedAllowlist.add(m);
+                          } else {
+                            _selectedAllowlist.remove(m);
+                          }
+                        }),
+                      ),
+                  ],
                 ),
-              ),
               TextField(
                 key: const Key('provider_embedding_field'),
                 controller: _embeddingModel,
@@ -418,6 +504,11 @@ class _ProviderDialogState extends ConsumerState<_ProviderDialog> {
                   labelText: 'Fallback model when degrading (optional)',
                 ),
               ),
+              if (_testResult != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Text(_testResult!),
+                ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: _chatEnabled,
@@ -459,6 +550,10 @@ class _ProviderDialogState extends ConsumerState<_ProviderDialog> {
         TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _testing ? null : _test,
+          child: Text(_testing ? 'Testing…' : 'Test'),
         ),
         FilledButton(
           key: const Key('provider_save'),
@@ -982,6 +1077,83 @@ class _SpendTab extends StatelessWidget {
   static String _money(dynamic cents) {
     if (cents is num) return '\$${(cents / 100).toStringAsFixed(2)}';
     return '–';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Guides upload (paid instances)
+// ---------------------------------------------------------------------------
+
+class _GuidesTab extends ConsumerStatefulWidget {
+  const _GuidesTab({required this.instanceId});
+  final String instanceId;
+
+  @override
+  ConsumerState<_GuidesTab> createState() => _GuidesTabState();
+}
+
+class _GuidesTabState extends ConsumerState<_GuidesTab> {
+  bool _uploading = false;
+
+  Future<void> _upload() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['md'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes == null) return;
+    if (file.size > 10 * 1024 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File too large (max 10 MB)')),
+        );
+      }
+      return;
+    }
+    setState(() => _uploading = true);
+    try {
+      await ref.read(apiClientProvider).postMultipart(
+            '/api/v1/instances/${widget.instanceId}/guides',
+            bytes: file.bytes!,
+            filename: file.name,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Guide uploaded')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton.icon(
+            onPressed: _uploading ? null : _upload,
+            icon: const Icon(Icons.upload_file),
+            label: Text(_uploading ? 'Uploading…' : 'Upload guide (.md)'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Guide uploads are only available for paid instances.',
+            style: TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    );
   }
 }
 

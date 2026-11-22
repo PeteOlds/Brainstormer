@@ -6,7 +6,7 @@ from flask import Blueprint, current_app, request
 
 from app.extensions import db
 from app.models import Instance, Membership
-from app.utils.decorators import site_admin_required, token_required
+from app.utils.decorators import admin_required, site_admin_required, token_required
 from app.utils.responses import api_error, api_ok
 from app.utils.tenancy import current_instance_id, is_site_admin
 
@@ -331,6 +331,153 @@ def upsert_ai_config(user, instance_id):
         config.use_proxy = data["use_proxy"]
     db.session.commit()
     return api_ok({"config": config.to_dict()})
+
+
+@bp.route("/instances/<uuid:instance_id>/ai-configs/test", methods=["POST"])
+@admin_required
+def test_ai_config(user, instance_id):
+    """Run a tiny prompt against a provider config to verify connectivity."""
+    from app.models import InstanceAIConfig
+    from app.utils.tenancy import current_instance_id
+    from app.services.llm_backends import _litellm_generate, get_provider_config
+    from app.services.ollama_client import OllamaClient
+
+    data = request.get_json() or {}
+    provider = (data.get("provider") or "").strip().lower()
+    if not provider:
+        return api_error("provider is required.", status_code=400)
+
+    # Allow testing unsaved values by overriding from the request body.
+    override_key = data.get("key")
+    override_endpoint = data.get("endpoint")
+    override_model = data.get("model")
+
+    if provider == "ollama":
+        base_url = override_endpoint or current_app.config.get("OLLAMA_BASE_URL")
+        model = override_model or "llama3:8b"
+        client = OllamaClient(base_url, timeout=15.0)
+        try:
+            resp = client.generate_sync(
+                model=model, prompt="Reply with OK.", system=None,
+                format=None, options={"num_predict": 8}, keep_alive=None,
+            )
+            text = (resp.get("response") or "").strip()
+            return api_ok({"ok": True, "reply": text[:200]})
+        except Exception as exc:  # noqa: BLE001
+            return api_ok({"ok": False, "error": str(exc)})
+        finally:
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    if provider == "opencode":
+        from app.services.opencode_backend import list_server_models
+
+        cfg = get_provider_config(instance_id, provider)
+        server_url = override_endpoint or (
+            (cfg.endpoint if cfg else None)
+            or current_app.config.get("OPENCODE_SERVER_URL")
+            or ""
+        )
+        try:
+            models = list_server_models(server_url, provider=provider)
+            return api_ok({"ok": True, "models": models[:5]})
+        except Exception as exc:  # noqa: BLE001
+            return api_ok({"ok": False, "error": str(exc)})
+
+    # Hosted providers
+    config = get_provider_config(instance_id, provider)
+    api_key = override_key or (config.api_key if config else None)
+    endpoint = override_endpoint or (config.endpoint if config else None)
+    model = override_model or (
+        (config.model_allowlist[0] if (config and config.model_allowlist) else None)
+        or ("gpt-4o-mini" if provider == "openai" else
+            "claude-3-5-haiku-latest" if provider == "anthropic" else
+            "gemini-1.5-flash")
+    )
+    if not api_key:
+        return api_ok({"ok": False, "error": "No API key configured."})
+    try:
+        result = _litellm_generate(
+            model=model, prompt="Reply with OK.", system=None,
+            options={"num_predict": 8}, api_key=api_key,
+            endpoint=endpoint, timeout=20.0, json_mode=False,
+        )
+        return api_ok({"ok": True, "reply": (result.text or "").strip()[:200]})
+    except Exception as exc:  # noqa: BLE001
+        return api_ok({"ok": False, "error": str(exc)})
+
+
+@bp.route("/instances/<uuid:instance_id>/guides", methods=["POST"])
+@token_required
+def upload_guide(user, instance_id):
+    """Upload a markdown guide (paid instances only)."""
+    import os
+
+    from app.models import Instance
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    if instance.is_free:
+        return api_error(
+            "Guide uploads are only available for paid instances.", status_code=403
+        )
+    if "file" not in request.files:
+        return api_error("file field required", 400)
+    f = request.files["file"]
+    if not f or not f.filename:
+        return api_error("empty file", 400)
+    if not f.filename.lower().endswith(".md"):
+        return api_error("only markdown (.md) files allowed", 400)
+    # 10 MB limit
+    f.seek(0, 2)
+    size = f.tell()
+    f.seek(0)
+    if size > 10 * 1024 * 1024:
+        return api_error("file too large (max 10 MB)", 400)
+
+    from app.services.discovery import instance_guidelines_dir
+
+    upload_dir = instance_guidelines_dir(instance.id)
+    os.makedirs(upload_dir, exist_ok=True)
+    from werkzeug.utils import secure_filename
+
+    name = secure_filename(f.filename)
+    if not name:
+        return api_error("invalid filename", 400)
+    path = upload_dir / name
+    f.save(str(path))
+    return api_ok({"name": path.stem, "file": path.name, "size": size})
+
+
+@bp.route(
+    "/instances/<uuid:instance_id>/guides/<name>", methods=["DELETE"]
+)
+@token_required
+def delete_guide(user, instance_id, name):
+    """Delete an uploaded guide."""
+    import os
+
+    from app.models import Instance
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    if instance.is_free:
+        return api_error(
+            "Guide uploads are only available for paid instances.", status_code=403
+        )
+    from app.services.discovery import instance_guidelines_dir
+
+    upload_dir = instance_guidelines_dir(instance.id)
+    path = (upload_dir / f"{name}.md").resolve()
+    if upload_dir.resolve() not in path.parents:
+        return api_error("invalid name", 400)
+    if path.exists():
+        path.unlink()
+    return api_ok({"deleted": name})
 
 
 @bp.route("/instances/<uuid:instance_id>/spend", methods=["GET"])
@@ -1185,6 +1332,7 @@ def update_member(user, instance_id, member_id):
         ROLE_INSTANCE_ADMIN,
         ROLE_USER,
         Membership as MembershipModel,
+        User as UserModel,
     )
 
     instance, err = _require_instance_admin(user, instance_id)
@@ -1202,11 +1350,32 @@ def update_member(user, instance_id, member_id):
         return api_error("Member not found.", 404)
     if str(member_id) == str(user.id) and not is_site_admin(user):
         return api_error("You cannot change your own membership.", 403)
-    if membership.role == ROLE_INSTANCE_ADMIN and data["role"] == ROLE_USER:
-        blocked = _last_admin_guard(instance.id, member_id)
-        if blocked:
-            return blocked
-    membership.role = data["role"]
+    target = UserModel.query.get(member_id)
+    if target is None:
+        return api_error("User not found.", 404)
+    if "name" in data and data["name"] is not None:
+        target.name = str(data["name"]).strip()
+    if "email" in data and data["email"]:
+        new_email = str(data["email"]).strip().lower()
+        existing = UserModel.query.filter(
+            UserModel.email == new_email, UserModel.id != target.id
+        ).first()
+        if existing is not None:
+            return api_error("Email already in use.", 400)
+        target.email = new_email
+    if "avatar_url" in data:
+        target.avatar_url = data["avatar_url"]
+    if "role" in data:
+        if data["role"] not in ASSIGNABLE_ROLES:
+            return api_error(
+                f"role must be one of {', '.join(ASSIGNABLE_ROLES)}.",
+                status_code=400,
+            )
+        if membership.role == ROLE_INSTANCE_ADMIN and data["role"] == ROLE_USER:
+            blocked = _last_admin_guard(instance.id, member_id)
+            if blocked:
+                return blocked
+        membership.role = data["role"]
     db.session.commit()
     return api_ok({"member": _member_entry(membership)})
 
@@ -1235,6 +1404,38 @@ def remove_member(user, instance_id, member_id):
     db.session.commit()
     return api_ok({"removed": str(member_id)})
 
+
+@bp.route(
+    "/instances/<uuid:instance_id>/members/<uuid:member_id>/reset-password",
+    methods=["POST"],
+)
+@token_required
+def reset_member_password(user, instance_id, member_id):
+    """Reset a member's password (admin only). Returns the temp password once."""
+    from app.models import User as UserModel
+
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    membership = None
+    from app.models import Membership as MembershipModel
+
+    membership = MembershipModel.query.filter_by(
+        user_id=member_id, instance_id=instance.id
+    ).first()
+    if membership is None:
+        return api_error("Member not found.", 404)
+    target = UserModel.query.get(member_id)
+    if target is None:
+        return api_error("User not found.", 404)
+    import secrets
+    import string
+
+    alphabet = string.ascii_letters + string.digits
+    temp = "".join(secrets.choice(alphabet) for _ in range(12))
+    target.set_password(temp)
+    db.session.commit()
+    return api_ok({"user_id": str(member_id), "temp_password": temp})
 
 @bp.route("/instances/<uuid:instance_id>/export", methods=["GET"])
 @token_required

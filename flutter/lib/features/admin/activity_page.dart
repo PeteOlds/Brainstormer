@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/providers.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_shell.dart';
 import 'admin_repository.dart';
@@ -115,7 +116,7 @@ class _AdminActivityPageState extends ConsumerState<AdminActivityPage> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Activity & performance',
+                        'Activity',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                     ),
@@ -129,10 +130,10 @@ class _AdminActivityPageState extends ConsumerState<AdminActivityPage> {
                       selected: {_days},
                       onSelectionChanged: (v) => _update(() => _days = v.first),
                     ),
-                    IconButton(
+                    TextButton.icon(
                       key: const Key('activity_refresh'),
                       icon: const Icon(Icons.refresh),
-                      tooltip: 'Refresh now',
+                      label: const Text('Refresh'),
                       onPressed: () => ref.invalidate(activityProvider),
                     ),
                   ],
@@ -510,14 +511,14 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _RunTile extends StatelessWidget {
+class _RunTile extends ConsumerWidget {
   const _RunTile({super.key, required this.run, required this.onTap});
 
   final Map<String, dynamic> run;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final status = (run['status'] ?? '').toString();
     final failed = status == 'FAILED';
     final title = (run['prompt_title'] ?? run['action_type'] ?? 'Generation')
@@ -567,7 +568,82 @@ class _RunTile extends StatelessWidget {
             ),
         ],
       ),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.replay, size: 18),
+            tooltip: 'Rerun',
+            onPressed: () async {
+              try {
+                await ref
+                    .read(apiClientProvider)
+                    .post('/api/v1/admin/runs/${run['id']}/rerun');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Rerun queued')),
+                  );
+                }
+                ref.invalidate(adminActivityProvider);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Rerun failed: $e')),
+                  );
+                }
+              }
+            },
+          ),
+          if (failed)
+            IconButton(
+              icon: const Icon(Icons.bug_report, size: 18),
+              tooltip: 'Diagnose failure',
+              onPressed: () async {
+                try {
+                  final ideaId = run['idea_id'];
+                  if (ideaId == null) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('No idea to diagnose')),
+                      );
+                    }
+                    return;
+                  }
+                  final res = await ref
+                      .read(apiClientProvider)
+                      .post('/api/v1/ideas/$ideaId/tests/diagnose');
+                  if (context.mounted) {
+                    final data = res as Map<String, dynamic>;
+                    final diagnosis = data['diagnosis'] ?? 'No diagnosis';
+                    showDialog<void>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('AI Diagnosis'),
+                        content: SingleChildScrollView(
+                          child: SelectableText(diagnosis.toString()),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Diagnosis failed: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+          const Icon(Icons.chevron_right),
+        ],
+      ),
       onTap: onTap,
     );
   }

@@ -114,9 +114,19 @@ def list_ideas(user):
     pagination = query.paginate(page=page, per_page=limit, error_out=False)
 
     ideas_data = []
+    from app.models import PromptRun, PromptRunStatus
+
     for idea in pagination.items:
         user_vote = _get_user_vote(user.id, idea.id)
-        ideas_data.append(idea.to_dict(user_vote=user_vote))
+        d = idea.to_dict(user_vote=user_vote)
+        pending = PromptRun.query.filter(
+            PromptRun.idea_id == idea.id,
+            PromptRun.status.in_(
+                [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
+            ),
+        ).count()
+        d["pending_runs"] = pending
+        ideas_data.append(d)
 
     return api_ok(
         {
@@ -124,6 +134,125 @@ def list_ideas(user):
             "total": pagination.total,
             "page": pagination.page,
             "pages": pagination.pages,
+        }
+    )
+
+
+@bp.route("/dashboard", methods=["GET"])
+@token_required
+def dashboard(user):
+    """Summary data for the role-based dashboard."""
+    from app.models import Idea, PromptRun
+    from sqlalchemy import func
+
+    iid_scope = None
+    from app.utils.tenancy import current_instance_id
+
+    iid = current_instance_id()
+    idea_q = Idea.query
+    if iid is not None:
+        idea_q = idea_q.filter(Idea.instance_id == iid)
+
+    # Ideas by status
+    by_status = {}
+    q = db.session.query(Idea.status, func.count(Idea.id))
+    if iid is not None:
+        q = q.filter(Idea.instance_id == iid)
+    for status, count in q.group_by(Idea.status).all():
+        key = status.value if hasattr(status, "value") else str(status)
+        by_status[key] = count
+
+    # Most voted (top 5)
+    most_voted = (
+        idea_q.order_by(Idea.net_score.desc(), Idea.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    most_voted_data = [
+        {
+            "id": str(i.id),
+            "reference_code": i.reference_code,
+            "prompt_title": i.prompt_title,
+            "net_score": i.net_score,
+            "upvotes_count": i.upvotes_count,
+            "downvotes_count": i.downvotes_count,
+            "status": i.status.value if hasattr(i.status, "value") else str(i.status),
+        }
+        for i in most_voted
+    ]
+
+    most_commented = (
+        idea_q.order_by(Idea.comments_count.desc(), Idea.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    from app.models import Comment as _Comment
+
+    most_commented_data = []
+    for i in most_commented:
+        latest = (
+            _Comment.query.filter_by(idea_id=i.id)
+            .order_by(_Comment.created_at.desc())
+            .first()
+        )
+        most_commented_data.append(
+            {
+                "id": str(i.id),
+                "reference_code": i.reference_code,
+                "prompt_title": i.prompt_title,
+                "comment_count": i.comments_count,
+                "latest_comment": (
+                    {
+                        "body": latest.body,
+                        "created_at": latest.created_at.isoformat()
+                        if latest.created_at
+                        else None,
+                        "author": latest.user.name
+                        or latest.user.email
+                        if latest.user
+                        else None,
+                    }
+                    if latest
+                    else None
+                ),
+                "status": i.status.value if hasattr(i.status, "value") else str(i.status),
+            }
+        )
+
+    # Recent runs (last 10)
+    run_q = PromptRun.query
+    if iid is not None:
+        run_q = run_q.filter(PromptRun.instance_id == iid)
+    recent_runs = (
+        run_q.order_by(PromptRun.created_at.desc()).limit(10).all()
+    )
+    recent_runs_data = []
+    for r in recent_runs:
+        idea = r.idea
+        prompt = r.prompt_config
+        recent_runs_data.append(
+            {
+                "id": str(r.id),
+                "status": r.status.value if hasattr(r.status, "value") else str(r.status),
+                "action_type": r.action_type,
+                "provider": r.provider,
+                "model": r.model,
+                "duration_seconds": r.duration_seconds,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "idea_id": str(r.idea_id) if r.idea_id else None,
+                "idea_reference": idea.reference_code if idea else None,
+                "idea_title": idea.prompt_title if idea else None,
+                "prompt_title": prompt.title if prompt else None,
+            }
+        )
+
+    return api_ok(
+        {
+            "by_status": by_status,
+            "most_voted": most_voted_data,
+            "most_commented": most_commented_data,
+            "recent_runs": recent_runs_data,
+            "total_ideas": idea_q.count(),
         }
     )
 
@@ -444,6 +573,21 @@ def get_idea(user, idea_id):
         for a in idea.actions.order_by(SecondaryActionResult.executed_at.desc()).all()
     ]
 
+    # Running actions (PENDING/RUNNING PromptRuns) so the UI can show
+    # "Running..." instead of "No results yet".
+    from app.models import PromptRun, PromptRunStatus
+
+    running = [
+        r.action_type
+        for r in PromptRun.query.filter(
+            PromptRun.idea_id == idea.id,
+            PromptRun.status.in_(
+                [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
+            ),
+        ).all()
+        if r.action_type
+    ]
+
     # Child count for parent ideas (used by the detail view).
     child_count = Idea.query.filter_by(parent_id=idea.id).count()
 
@@ -459,6 +603,7 @@ def get_idea(user, idea_id):
     payload = {
         "idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id), include_content=True),
         "actions": actions,
+        "running_actions": running,
         "parent": parent_context_data,
         "child_count": child_count,
         "edit_history": edit_history,
@@ -776,11 +921,15 @@ def vote_idea(user, idea_id):
         if existing.value == direction:
             # Toggling off same direction = remove vote
             db.session.delete(existing)
+            db.session.flush()
+            idea.update_vote_counts()
             db.session.commit()
             return api_ok({"message": "Vote removed.", "user_vote": 0, "current_user_vote": 0, "net_votes": idea.net_score, "upvotes_count": idea.upvotes_count, "downvotes_count": idea.downvotes_count})
         else:
             # Switching direction
             existing.value = direction
+            db.session.flush()
+            idea.update_vote_counts()
             db.session.commit()
             return api_ok(
                 {
@@ -795,6 +944,8 @@ def vote_idea(user, idea_id):
     else:
         vote = Vote(user_id=user.id, idea_id=idea_id, value=direction)
         db.session.add(vote)
+        db.session.flush()
+        idea.update_vote_counts()
         db.session.commit()
         return api_ok(
             {
@@ -980,6 +1131,32 @@ def _enqueue_action(idea, action_type, extra=None):
         provider,
     )
     return result.id, str(run.id), None
+
+
+@bp.route("/ideas/<uuid:idea_id>/run-full", methods=["POST"])
+@token_required
+def run_full_pipeline_endpoint(user, idea_id):
+    from app.models import Idea, IdeaStatus
+    from app.utils.decorators import _membership_allows_admin
+
+    idea = Idea.query.get_or_404(idea_id)
+    denied = check_access(idea)
+    if denied is not None:
+        return denied
+    if not _membership_allows_admin(user):
+        return api_error("Admin access required.", status_code=403)
+    from app.models import IdeaStatus as _IS
+
+    if idea.status in (_IS.DROP, _IS.ARCHIVE, _IS.FREEZE):
+        return api_error(
+            "Full run is not available for dropped, archived, or frozen ideas.",
+            status_code=400,
+        )
+
+    from app.tasks.ollama_tasks import run_full_pipeline
+
+    task = run_full_pipeline.delay(str(idea.id))
+    return api_accepted({"task_id": task.id})
 
 
 @bp.route("/ideas/<uuid:idea_id>/actions", methods=["POST"])

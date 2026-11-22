@@ -5,10 +5,12 @@ import '../core/auth_helpers.dart';
 import '../core/providers.dart';
 import '../features/admin/activity_page.dart';
 import '../features/admin/admin_pages.dart';
+import '../features/dashboard/dashboard_page.dart';
 import '../features/admin/prompt_dashboard_page.dart';
 import '../features/admin/users_page.dart';
 import '../features/auth/login_page.dart';
 import '../features/auth/register_page.dart';
+import '../features/ideas/create_idea_page.dart';
 import '../features/ideas/idea_detail_page.dart';
 import '../features/ideas/ideas_page.dart';
 import '../features/prompts/prompt_form_page.dart';
@@ -37,6 +39,8 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
           initialModel: ideaMap['model']?.toString(),
         ),
       );
+    case '/ideas/create':
+      page = _AuthGate(child: const CreateIdeaPage());
     case '/ideas/detail':
       final id = settings.arguments?.toString() ?? '';
       page = _AuthGate(child: IdeaDetailPage(ideaId: id));
@@ -46,6 +50,9 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       page = _AuthGate(
         child: PromptFormPage(promptId: settings.arguments?.toString()),
       );
+    case '/dashboard':
+      page = _AuthGate(child: const DashboardPage());
+      break;
     case '/admin':
       page = const _AdminGate(child: AdminPage());
     case '/admin/users':

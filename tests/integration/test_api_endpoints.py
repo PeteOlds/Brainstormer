@@ -1178,6 +1178,100 @@ class TestIdeaEndpoints:
         assert data["downvotes_count"] == 1
         assert data["net_votes"] == 0
 
+    def test_vote_persists_and_toggles(self, client, auth_user, app, admin_user, admin_prompt):
+        """TEST.019: Vote buttons must persist color and count across multiple
+        votes. Upvote/downvote/toggle-off must all update net_votes and
+        current_user_vote correctly, without the count resetting on the
+        second vote."""
+        _email, token = auth_user
+        with app.app_context():
+            from app.models import Idea, PromptConfig, User
+            from app.extensions import db
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+
+            idea = Idea(
+                reference_code="IDEA-VOTE1",
+                prompt_title="Test",
+                raw_content="Test",
+                status="SPARK",
+                prompt_config_id=prompt.id,
+            )
+            db.session.add(idea)
+            db.session.commit()
+            idea_id = idea.id
+
+        # 1. Upvote: count goes to 1, user_vote = 1
+        resp = client.post(
+            f"/api/v1/ideas/{idea_id}/vote",
+            json={"direction": 1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        data = resp.get_json()["data"]
+        assert data["net_votes"] == 1, f"Expected net_votes=1, got {data}"
+        assert data["current_user_vote"] == 1, f"Expected current_user_vote=1, got {data}"
+        assert data["upvotes_count"] == 1
+        assert data["downvotes_count"] == 0
+
+        # 2. Flip to downvote: count goes to -1, user_vote = -1
+        resp = client.post(
+            f"/api/v1/ideas/{idea_id}/vote",
+            json={"direction": -1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        data = resp.get_json()["data"]
+        assert data["net_votes"] == -1, f"Expected net_votes=-1, got {data}"
+        assert data["current_user_vote"] == -1, f"Expected current_user_vote=-1, got {data}"
+        assert data["upvotes_count"] == 0
+        assert data["downvotes_count"] == 1
+
+        # 3. Toggle off (same direction downvote): count goes to 0, user_vote = 0
+        resp = client.post(
+            f"/api/v1/ideas/{idea_id}/vote",
+            json={"direction": -1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        data = resp.get_json()["data"]
+        assert data["net_votes"] == 0, f"Expected net_votes=0, got {data}"
+        assert data["current_user_vote"] == 0, f"Expected current_user_vote=0, got {data}"
+        assert data["upvotes_count"] == 0
+        assert data["downvotes_count"] == 0
+
+        # 4. Upvote again after toggle-off: count goes to 1
+        resp = client.post(
+            f"/api/v1/ideas/{idea_id}/vote",
+            json={"direction": 1},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        data = resp.get_json()["data"]
+        assert data["net_votes"] == 1, f"Expected net_votes=1 on second upvote, got {data}"
+        assert data["current_user_vote"] == 1, f"Expected current_user_vote=1 on second upvote, got {data}"
+        assert data["upvotes_count"] == 1
+        assert data["downvotes_count"] == 0
+
+        # 5. Downvote from another user
+        reg = client.post(
+            "/api/v1/register",
+            json={"email": "voter2@test.com", "password": "password123"},
+        )
+        token2 = reg.get_json()["data"]["access_token"]
+        resp = client.post(
+            f"/api/v1/ideas/{idea_id}/vote",
+            json={"direction": -1},
+            headers={"Authorization": f"Bearer {token2}"},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        data = resp.get_json()["data"]
+        # User1 upvote (+1) + User2 downvote (-1) = net 0
+        assert data["net_votes"] == 0, f"Expected net_votes=0 with two voters, got {data}"
+        assert data["upvotes_count"] == 1
+        assert data["downvotes_count"] == 1
+
     def test_vote_invalid_direction(
         self, client, auth_user, app, admin_user, admin_prompt
     ):

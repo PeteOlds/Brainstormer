@@ -30,6 +30,8 @@ class IdeaSummary with _$IdeaSummary {
     required String status,
     String? promptConfigId,
     String? createdById,
+    String? instanceId,
+    String? parentId,
     @Default(0) int commentCount,
     @Default(0) int upvotes,
     @Default(0) int downvotes,
@@ -37,6 +39,7 @@ class IdeaSummary with _$IdeaSummary {
     int? userVote,
     String? createdAt,
     @Default([]) List<String> actionsRun,
+    @Default(0) int pendingRuns,
   }) = _IdeaSummary;
 
   factory IdeaSummary.fromJson(Map<String, dynamic> json) => IdeaSummary(
@@ -50,13 +53,16 @@ class IdeaSummary with _$IdeaSummary {
     status: (json['status'] ?? 'SPARK').toString(),
     promptConfigId: json['prompt_config_id']?.toString(),
     createdById: json['created_by_id']?.toString(),
+    instanceId: json['instance_id']?.toString(),
+    parentId: json['parent_id']?.toString(),
     commentCount: _asIntOr(json['comments_count'], 0),
     upvotes: _asIntOr(json['upvotes_count'], 0),
     downvotes: _asIntOr(json['downvotes_count'], 0),
-    netScore: _asIntOr(json['net_score'], 0),
+    netScore: _asIntOr(json['net_votes'] ?? json['net_score'], 0),
     userVote: _asInt(json['user_vote']),
     createdAt: json['created_at']?.toString(),
     actionsRun: [for (final a in _asList(json['actions_run'])) a.toString()],
+    pendingRuns: _asIntOr(json['pending_runs'], 0),
   );
 
   static String? _pickSummary(dynamic structured) {
@@ -75,6 +81,7 @@ class IdeaDetail with _$IdeaDetail {
   const factory IdeaDetail({
     required IdeaSummary idea,
     @Default([]) List<ActionResult> actions,
+    @Default([]) List<String> runningActions,
     @Default([]) List<Map<String, dynamic>> editHistory,
   }) = _IdeaDetail;
 
@@ -92,6 +99,7 @@ class IdeaDetail with _$IdeaDetail {
     return IdeaDetail(
       idea: IdeaSummary.fromJson(_asMap(json['idea']) ?? json),
       actions: actions,
+      runningActions: [for (final a in _asList(json['running_actions'])) a.toString()],
       editHistory: edits,
     );
   }
@@ -104,6 +112,7 @@ class ActionResult with _$ActionResult {
     required String actionType,
     @Default(1) int version,
     @Default(true) bool isCurrent,
+    String? targetId,
     Map<String, dynamic>? output,
   }) = _ActionResult;
 
@@ -112,6 +121,7 @@ class ActionResult with _$ActionResult {
     actionType: (json['action_type'] ?? '').toString(),
     version: _asIntOr(json['version'], 1),
     isCurrent: _asBool(json['is_current']) ?? true,
+    targetId: json['target_id']?.toString(),
     output: _asMap(json['output']),
   );
 }
@@ -169,3 +179,26 @@ const List<String> ideaStatuses = [
   'FREEZE',
   'ARCHIVE',
 ];
+
+/// Authoritative vote result returned by the server (Jinja applies
+/// `payload.net_votes` / `payload.current_user_vote` directly).
+class VoteResult {
+  const VoteResult({
+    required this.netVotes,
+    this.userVote,
+    this.upvotes = 0,
+    this.downvotes = 0,
+  });
+
+  final int netVotes;
+  final int? userVote;
+  final int upvotes;
+  final int downvotes;
+
+  factory VoteResult.fromJson(Map<String, dynamic> json) => VoteResult(
+        netVotes: _asIntOr(json['net_votes'] ?? json['net_score'], 0),
+        userVote: _asInt(json['current_user_vote'] ?? json['user_vote']),
+        upvotes: _asIntOr(json['upvotes_count'], 0),
+        downvotes: _asIntOr(json['downvotes_count'], 0),
+      );
+}

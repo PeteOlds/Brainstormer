@@ -19,6 +19,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(128), nullable=False)
     name = db.Column(db.String(100))
+    avatar_url = db.Column(db.String(500))
     role = db.Column(db.Enum(UserRole), default=UserRole.USER, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     last_login_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -44,6 +45,7 @@ class User(db.Model):
             "id": str(self.id),
             "email": self.email,
             "name": self.name,
+            "avatar_url": self.avatar_url,
             "role": self.role.value,
             "is_active": self.is_active,
             "can_create_ideas": self.can_create_ideas,

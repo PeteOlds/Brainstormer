@@ -49,7 +49,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
-    command: gunicorn -w 2 -b 0.0.0.0:8000 --timeout 300 wsgi:app
+    command: gunicorn -w 2 -b 0.0.0.0:8000 --timeout 600 wsgi:app
     ports:
       - "8000:8000"
     volumes:

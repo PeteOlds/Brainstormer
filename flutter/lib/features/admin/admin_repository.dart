@@ -14,6 +14,11 @@ class AdminRepository {
     return (data as Map<String, dynamic>);
   }
 
+  Future<Map<String, dynamic>> health() async {
+    final data = await api.get('/api/ready');
+    return (data as Map<String, dynamic>);
+  }
+
   Future<Map<String, dynamic>> activity({
     int page = 1,
     String runStatus = '',
@@ -151,6 +156,9 @@ final adminRepositoryProvider = Provider<AdminRepository>(
 
 final adminStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
     (ref) async => ref.watch(adminRepositoryProvider).stats());
+
+final adminHealthProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+    (ref) async => ref.watch(adminRepositoryProvider).health());
 
 final adminActivityProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
     (ref) async => ref.watch(adminRepositoryProvider).activity());

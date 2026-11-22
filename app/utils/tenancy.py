@@ -117,6 +117,13 @@ def user_payload(user: Any) -> dict:
         ).all()
         if m.instance_id is not None
     ]
+    payload["product_manager_instance_ids"] = [
+        str(m.instance_id)
+        for m in Membership.query.filter_by(
+            user_id=user.id, role="PRODUCT_MANAGER"
+        ).all()
+        if m.instance_id is not None
+    ]
     return payload
 
 

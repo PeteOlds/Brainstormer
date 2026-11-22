@@ -565,11 +565,6 @@ class _TrendChart extends StatelessWidget {
                             maxValue,
                             const Color(0xFFEF4444),
                           ),
-                          _trendBar(
-                            day['ideas'],
-                            maxValue,
-                            AppColors.primary500,
-                          ),
                         ],
                       ),
                     ),
@@ -584,7 +579,6 @@ class _TrendChart extends StatelessWidget {
           children: const [
             _LegendDot(colour: Color(0xFF10B981), label: 'Success'),
             _LegendDot(colour: Color(0xFFEF4444), label: 'Failed'),
-            _LegendDot(colour: AppColors.primary500, label: 'Ideas'),
           ],
         ),
       ],

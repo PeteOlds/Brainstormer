@@ -12,7 +12,7 @@ void main() {
         'comments_count': 2,
         'upvotes_count': 3,
         'downvotes_count': 1,
-        'net_score': 2,
+        'net_votes': 2,
         'user_vote': 1,
         'structured_content': {'elevator_pitch': 'Pitch!'},
         'actions_run': ['REFINE'],
@@ -38,7 +38,7 @@ void main() {
         'id': 'a8ea58fa-821b-4c28-ace9-8963d122ba11',
         'user_vote': 'a8ea58fa-821b-4c28-ace9-8963d122ba11',
         'comments_count': '3',
-        'net_score': 'oops',
+        'net_votes': 'oops',
       });
       expect(idea.userVote, isNull);
       expect(idea.commentCount, 0);

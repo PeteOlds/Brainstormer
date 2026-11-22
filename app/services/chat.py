@@ -161,7 +161,9 @@ def chat_turn(idea: Any, user: Any, message: str, model_override: Any = None) ->
     system = get_base_prompt() + (
         "\nYou are brainstorming conversationally about the idea below. "
         "Reply in plain prose (never JSON). Ground every claim in the "
-        "provided context; ignored comments are already excluded."
+        "provided context; ignored comments are already excluded. "
+        "Do not start with conversational filler like 'OK, let me...' "
+        "or 'Sure, here is...' — go straight to the answer."
     )
     supporting = build_idea_context(idea)
     history = _history_text(session)

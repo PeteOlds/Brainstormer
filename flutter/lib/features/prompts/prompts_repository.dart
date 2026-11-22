@@ -49,8 +49,16 @@ class PromptsRepository {
     required String modelName,
     required String provider,
     required bool isActive,
+    double? temperature,
+    double? topP,
+    double? repeatPenalty,
+    int? numPredict,
+    int? seed,
+    String? keepAlive,
+    String? cronExpression,
+    String? slackChannel,
   }) async {
-    final payload = {
+    final payload = <String, dynamic>{
       'title': title,
       'prompt_body': body,
       'interval_minutes': intervalMinutes,
@@ -58,6 +66,20 @@ class PromptsRepository {
       'provider': provider,
       'is_active': isActive,
     };
+    if (temperature != null) payload['temperature'] = temperature;
+    if (topP != null) payload['top_p'] = topP;
+    if (repeatPenalty != null) payload['repeat_penalty'] = repeatPenalty;
+    if (numPredict != null) payload['num_predict'] = numPredict;
+    if (seed != null) payload['seed'] = seed;
+    if (keepAlive != null && keepAlive.isNotEmpty) {
+      payload['keep_alive'] = keepAlive;
+    }
+    if (cronExpression != null && cronExpression.isNotEmpty) {
+      payload['cron_expression'] = cronExpression;
+    }
+    if (slackChannel != null && slackChannel.isNotEmpty) {
+      payload['slack_channel'] = slackChannel;
+    }
     if (id == null) {
       await api.post('/api/v1/prompts', body: payload);
     } else {

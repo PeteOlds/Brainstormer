@@ -58,6 +58,10 @@ class PromptRun(db.Model):
         "PromptConfig",
         backref=db.backref("runs", lazy="dynamic", cascade="all, delete-orphan"),
     )
+    idea = db.relationship(
+        "Idea",
+        backref=db.backref("runs", lazy="dynamic"),
+    )
 
     def mark_running(self):
         self.status = PromptRunStatus.RUNNING

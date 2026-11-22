@@ -388,6 +388,41 @@ def update_user_settings(current_user):
             "can_create_ideas is an admin setting; ask an administrator.",
             status_code=403,
         )
+    if "avatar_url" in data:
+        url = data["avatar_url"]
+        if url and not str(url).startswith(("http://", "https://", "/static/")):
+            return api_error("avatar_url must be an http(s) URL.", 400)
+        current_user.avatar_url = url
+        db.session.commit()
+
+
+@bp.route("/me/avatar", methods=["POST"])
+@token_required
+def upload_avatar(current_user):
+    """Upload an avatar image (multipart). Stores under static/avatars."""
+    import os
+    import uuid as _uuid
+    from werkzeug.utils import secure_filename
+
+    if "file" not in request.files:
+        return api_error("file field required", 400)
+    f = request.files["file"]
+    if not f or not f.filename:
+        return api_error("empty file", 400)
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+        return api_error("unsupported image type", 400)
+    upload_dir = os.path.join(
+        current_app.root_path, "static", "avatars"
+    )
+    os.makedirs(upload_dir, exist_ok=True)
+    name = f"{_uuid.uuid4().hex}{ext}"
+    path = os.path.join(upload_dir, name)
+    f.save(path)
+    url = f"/static/avatars/{name}"
+    current_user.avatar_url = url
+    db.session.commit()
+    return api_ok({"user": user_payload(current_user), "avatar_url": url})
 
     return api_ok({"user": user_payload(current_user)})
 

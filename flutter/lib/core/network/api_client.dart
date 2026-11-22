@@ -177,6 +177,25 @@ class ApiClient {
   Future<dynamic> post(String path,
           {Map<String, dynamic>? body, String? invalidatePrefix}) =>
       request('POST', path, body: body, invalidatePrefix: invalidatePrefix);
+
+  /// Multipart upload. Returns the unwrapped data envelope.
+  Future<dynamic> postMultipart(
+    String path, {
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    final token = await store.readAccessToken();
+    final uri = Uri.parse('$baseUrl$path');
+    final req = http.MultipartRequest('POST', uri);
+    if (token != null && token.isNotEmpty) {
+      req.headers['Authorization'] = 'Bearer $token';
+    }
+    req.files.add(http.MultipartFile.fromBytes('file', bytes,
+        filename: filename));
+    final streamed = await req.send();
+    final response = await http.Response.fromStream(streamed);
+    return _unwrap(response);
+  }
   Future<dynamic> patch(String path,
           {Map<String, dynamic>? body, String? invalidatePrefix}) =>
       request('PATCH', path, body: body, invalidatePrefix: invalidatePrefix);

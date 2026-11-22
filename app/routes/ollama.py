@@ -62,10 +62,27 @@ def list_models(user):
             ).first()
             allowlist = list((config.model_allowlist if config else None) or [])
             endpoint = (config.endpoint if config else None) or None
-        if allowlist:
+        include_catalogue = (
+            request.args.get("include_catalogue", "0").lower() in ("1", "true", "yes")
+        )
+        if allowlist and not include_catalogue:
             return api_ok(
                 {"models": allowlist, "provider": provider, "unrestricted": False}
             )
+        # Catalogue mode (or no allowlist): merge catalogue with any saved
+        # allowlist so the picker can show + toggle all options.
+        models: list = []
+        if provider == "opencode":
+            from app.services.opencode_backend import list_server_models
+
+            server_url = endpoint or current_app.config.get("OPENCODE_SERVER_URL") or ""
+            models = list_server_models(server_url, provider=provider)
+        elif provider in _HOSTED_MODEL_CATALOGUE:
+            models = list(_HOSTED_MODEL_CATALOGUE[provider])
+        for m in allowlist:
+            if m not in models:
+                models.append(m)
+        return api_ok({"models": models, "provider": provider, "unrestricted": len(allowlist) == 0})
         # No allowlist: anything goes (validation enforces nothing), but
         # the dropdown still needs options so non-technical users can pick
         # instead of typing a model id.

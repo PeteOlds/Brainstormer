@@ -6,6 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_shell.dart';
 import 'idea_models.dart';
 import 'ideas_controller.dart';
+import 'widgets/vote_control.dart';
 import 'package:brainstormer/core/auth_helpers.dart';
 
 /// Ideas dashboard: server-side filters, list, votes, admin status menu.
@@ -118,6 +119,13 @@ class _IdeasPageState extends ConsumerState<IdeasPage> {
                   onPressed: () =>
                       ref.read(ideasControllerProvider.notifier).load(),
                 ),
+                IconButton(
+                  key: const Key('ideas_create'),
+                  icon: const Icon(Icons.add),
+                  tooltip: 'Create new idea',
+                  onPressed: () =>
+                      Navigator.of(context).pushNamed('/ideas/create'),
+                ),
               ],
             ),
           ),
@@ -152,9 +160,21 @@ class _IdeasPageState extends ConsumerState<IdeasPage> {
                 Expanded(
                   child: TextField(
                     controller: _search,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Search',
                       prefixIcon: Icon(Icons.search),
+                      suffixIcon: _search.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _search.clear();
+                                ref
+                                    .read(ideasControllerProvider.notifier)
+                                    .setFilter(state.filter.copyWith(
+                                        search: ''));
+                              },
+                            )
+                          : null,
                     ),
                     onSubmitted: (v) => ref
                         .read(ideasControllerProvider.notifier)
@@ -379,8 +399,8 @@ class _IdeaCard extends ConsumerWidget {
             : null,
         selected: selecting && selected,
         title: Text(
-          idea.summary ?? idea.referenceCode,
-          maxLines: 2,
+          '${idea.referenceCode}: ${idea.promptTitle}',
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Wrap(
@@ -388,38 +408,45 @@ class _IdeaCard extends ConsumerWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
-              idea.referenceCode,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+              (idea.summary ?? '').split('\n').take(2).join(' '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
             StatusPill(status: idea.status),
             Text('💬 ${idea.commentCount}'),
+            if (idea.actionsRun.isNotEmpty)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: Icon(Icons.analytics, size: 14),
+              ),
+            if (idea.actionsRun.isNotEmpty)
+              Text('Analysis (${idea.actionsRun.length})',
+                  style: Theme.of(context).textTheme.bodySmall),
+            if (idea.pendingRuns > 0)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            if (idea.pendingRuns > 0)
+              Text('analyzing…',
+                  style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
         trailing: selecting
             ? null
-            : Row(
-                mainAxisSize: MainAxisSize.min,
+            : Wrap(
+                spacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_upward, size: 20),
-                    color: idea.userVote == 1
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                    onPressed: () => ref
+                  VoteControl(
+                    idea: idea,
+                    busy: false,
+                    onVote: (d) => ref
                         .read(ideasControllerProvider.notifier)
-                        .vote(idea.id, 1),
-                  ),
-                  Text('${idea.netScore}'),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_downward, size: 20),
-                    color: idea.userVote == -1
-                        ? Theme.of(context).colorScheme.error
-                        : null,
-                    onPressed: () => ref
-                        .read(ideasControllerProvider.notifier)
-                        .vote(idea.id, -1),
+                        .vote(idea.id, d),
                   ),
                   if (isAdmin)
                     PopupMenuButton<String>(

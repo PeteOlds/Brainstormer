@@ -139,12 +139,28 @@ class IdeasController extends StateNotifier<IdeasState> {
   }
 
   Future<void> vote(String id, int direction) async {
-    await _mutate(
-      method: 'POST',
-      path: '/api/v1/ideas/$id/vote',
-      body: {'direction': direction},
-      apply: () => _repo.vote(id, direction),
-    );
+    try {
+      final result = await _repo.vote(id, direction);
+      // Apply the server's authoritative payload immediately (Jinja pattern).
+      final items = state.items.map((i) {
+        if (i.id != id) return i;
+        return i.copyWith(
+          netScore: result.netVotes,
+          userVote: result.userVote,
+          upvotes: result.upvotes,
+          downvotes: result.downvotes,
+        );
+      }).toList();
+      state = state.copyWith(items: items);
+      await load(fresh: true);
+    } on ApiException catch (e) {
+      if (isNetworkFailure(e)) {
+        _ref.read(outboxProvider.notifier).enqueue('POST', '/api/v1/ideas/$id/vote', {'direction': direction});
+        state = state.copyWith(error: 'Offline — change queued and will retry.');
+        return;
+      }
+      state = state.copyWith(error: e.message);
+    }
   }
 
   /// Runs a mutation, queueing it offline on transport failure.
@@ -157,7 +173,7 @@ class IdeasController extends StateNotifier<IdeasState> {
   }) async {
     try {
       await apply();
-      await load();
+      await load(fresh: true);
       return true;
     } on ApiException catch (e) {
       if (isNetworkFailure(e)) {

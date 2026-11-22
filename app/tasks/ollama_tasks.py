@@ -799,6 +799,72 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
 @celery.task(
     bind=True,
     base=BaseTask,
+    name="app.tasks.ollama_tasks.run_full_pipeline",
+    autoretry_for=(Exception,),
+    dont_autoretry_for=(SoftTimeLimitExceeded,),
+    retry_backoff=True,
+    max_retries=1,
+    soft_time_limit=SECONDARY_SOFT_TIME_LIMIT,
+    time_limit=SECONDARY_TIME_LIMIT,
+)
+def run_full_pipeline(self, idea_id: str, model_override: str = None):
+    """Run an idea from Spark all the way to a Build preview (admin only)."""
+    from app.models import Idea, IdeaStatus
+    from app.models.lifecycle import can_transition
+
+    from app.models import SecondaryActionResult, ActionType
+
+    idea = Idea.query.get(idea_id)
+    if not idea:
+        return
+
+    def _has_current(atype):
+        return (
+            SecondaryActionResult.query.filter_by(
+                idea_id=idea.id, action_type=atype, is_current=True
+            ).first()
+            is not None
+        )
+
+    # Advance to SCOPE and run Brief (skip if a current Brief exists).
+    if not _has_current(ActionType.PRD_DOC):
+        if idea.status != IdeaStatus.SCOPE and can_transition(idea.status, IdeaStatus.SCOPE):
+            idea.status = IdeaStatus.SCOPE
+            db.session.commit()
+        run_secondary_action(
+            idea_id, "PRD_DOC", model_override=model_override, run_id=None,
+            extra_context={}, provider_override=None,
+        )
+    # Advance to MAP and run Design (skip if a current Design exists).
+    if not _has_current(ActionType.DESIGN_DOC):
+        if can_transition(idea.status, IdeaStatus.MAP):
+            idea.status = IdeaStatus.MAP
+            db.session.commit()
+        if not _has_current(ActionType.PRD_DOC):
+            # Design needs a Brief; if none, skip.
+            pass
+        else:
+            run_secondary_action(
+                idea_id, "DESIGN_DOC", model_override=model_override, run_id=None,
+                extra_context={}, provider_override=None,
+            )
+    # Advance to SHIP and run Build preview (skip if a current Build exists).
+    if not _has_current(ActionType.BUILD_CODE):
+        has_design = _has_current(ActionType.DESIGN_DOC)
+        if has_design and can_transition(idea.status, IdeaStatus.SHIP):
+            idea.status = IdeaStatus.SHIP
+            db.session.commit()
+        if has_design:
+            run_secondary_action(
+                idea_id, "BUILD_CODE", model_override=model_override, run_id=None,
+                extra_context={}, provider_override=None,
+            )
+    db.session.commit()
+
+
+@celery.task(
+    bind=True,
+    base=BaseTask,
     name="app.tasks.ollama_tasks.run_secondary_action",
     autoretry_for=(Exception,),
     dont_autoretry_for=(SoftTimeLimitExceeded, _AbortAction),
@@ -1245,15 +1311,12 @@ def run_secondary_action(
             from app.services.build_service import server_path
 
             validated.target_host_path = server_path(str(build_root))
-        if action_type in ("PRD_DOC", "DESIGN_DOC", "BUILD_CODE"):
-            current = SecondaryActionResult.query.filter_by(
-                idea_id=idea.id, action_type=action_type, is_current=True
-            ).all()
-            next_version = max([r.version for r in current], default=0) + 1
-            for r in current:
-                r.is_current = False
-        else:
-            next_version = 1
+        current = SecondaryActionResult.query.filter_by(
+            idea_id=idea.id, action_type=action_type, is_current=True
+        ).all()
+        next_version = max([r.version for r in current], default=0) + 1
+        for r in current:
+            r.is_current = False
         result = SecondaryActionResult(
             idea_id=idea.id,
             action_type=action_type,

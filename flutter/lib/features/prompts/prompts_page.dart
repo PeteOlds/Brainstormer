@@ -69,6 +69,11 @@ class _PromptTile extends ConsumerWidget {
         title: Text(prompt.title),
         subtitle: Text(
             '${prompt.provider} · ${prompt.modelName} · ${prompt.isActive ? 'active' : 'paused'}'),
+        onTap: isAdmin
+            ? () => Navigator.of(context)
+                .pushNamed('/prompts/form', arguments: prompt.id)
+                .then((_) => ref.invalidate(promptsListProvider))
+            : null,
         trailing: isAdmin
             ? PopupMenuButton<String>(
                 onSelected: (v) => _act(context, ref, v),

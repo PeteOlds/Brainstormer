@@ -21,6 +21,9 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
     final current = ref.watch(currentInstanceProvider);
     final label = ref.watch(currentInstanceLabelProvider);
     final isAdmin = currentUserIsAdmin(user);
+    final isProductManager = user != null &&
+        user['product_manager_instance_ids'] is List &&
+        (user['product_manager_instance_ids'] as List).isNotEmpty;
 
     Widget navLink(String label, String route) {
       final active =
@@ -67,9 +70,11 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
       ),
       centerTitle: false,
       actions: [
-        if (MediaQuery.of(context).size.width >= 700) ...[
+        if (MediaQuery.of(context).size.width >= 900) ...[
+          navLink('Dashboard', '/dashboard'),
           navLink('Ideas', '/ideas'),
-          navLink('Prompts', '/prompts'),
+          if (isAdmin || isProductManager)
+            navLink('Prompts', '/prompts'),
           if (isAdmin) navLink('Admin', '/admin'),
         ],
         if (current != null || label != null)

@@ -95,10 +95,10 @@ class DesignDocOutput(BaseModel):
 
 class VrioOutput(BaseModel):
     """VRIO Framework — 4 criteria + 5-tier classification + recommendations."""
-    value: str = Field(..., min_length=20)
-    rarity: str = Field(..., min_length=20)
-    imitability: str = Field(..., min_length=20)
-    organization: str = Field(..., min_length=20)
+    value: str = Field(..., min_length=3)
+    rarity: str = Field(..., min_length=2)
+    imitability: str = Field(..., min_length=2)
+    organization: str = Field(..., min_length=2)
     competitive_implication: str = Field(..., min_length=10)
     recommendations: List[str]
 

@@ -28,6 +28,8 @@ mixin _$IdeaSummary {
   String get status => throw _privateConstructorUsedError;
   String? get promptConfigId => throw _privateConstructorUsedError;
   String? get createdById => throw _privateConstructorUsedError;
+  String? get instanceId => throw _privateConstructorUsedError;
+  String? get parentId => throw _privateConstructorUsedError;
   int get commentCount => throw _privateConstructorUsedError;
   int get upvotes => throw _privateConstructorUsedError;
   int get downvotes => throw _privateConstructorUsedError;
@@ -35,6 +37,7 @@ mixin _$IdeaSummary {
   int? get userVote => throw _privateConstructorUsedError;
   String? get createdAt => throw _privateConstructorUsedError;
   List<String> get actionsRun => throw _privateConstructorUsedError;
+  int get pendingRuns => throw _privateConstructorUsedError;
 
   /// Serializes this IdeaSummary to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -61,6 +64,8 @@ abstract class $IdeaSummaryCopyWith<$Res> {
     String status,
     String? promptConfigId,
     String? createdById,
+    String? instanceId,
+    String? parentId,
     int commentCount,
     int upvotes,
     int downvotes,
@@ -68,6 +73,7 @@ abstract class $IdeaSummaryCopyWith<$Res> {
     int? userVote,
     String? createdAt,
     List<String> actionsRun,
+    int pendingRuns,
   });
 }
 
@@ -93,6 +99,8 @@ class _$IdeaSummaryCopyWithImpl<$Res, $Val extends IdeaSummary>
     Object? status = null,
     Object? promptConfigId = freezed,
     Object? createdById = freezed,
+    Object? instanceId = freezed,
+    Object? parentId = freezed,
     Object? commentCount = null,
     Object? upvotes = null,
     Object? downvotes = null,
@@ -100,6 +108,7 @@ class _$IdeaSummaryCopyWithImpl<$Res, $Val extends IdeaSummary>
     Object? userVote = freezed,
     Object? createdAt = freezed,
     Object? actionsRun = null,
+    Object? pendingRuns = null,
   }) {
     return _then(
       _value.copyWith(
@@ -131,6 +140,14 @@ class _$IdeaSummaryCopyWithImpl<$Res, $Val extends IdeaSummary>
                 ? _value.createdById
                 : createdById // ignore: cast_nullable_to_non_nullable
                       as String?,
+            instanceId: freezed == instanceId
+                ? _value.instanceId
+                : instanceId // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            parentId: freezed == parentId
+                ? _value.parentId
+                : parentId // ignore: cast_nullable_to_non_nullable
+                      as String?,
             commentCount: null == commentCount
                 ? _value.commentCount
                 : commentCount // ignore: cast_nullable_to_non_nullable
@@ -159,6 +176,10 @@ class _$IdeaSummaryCopyWithImpl<$Res, $Val extends IdeaSummary>
                 ? _value.actionsRun
                 : actionsRun // ignore: cast_nullable_to_non_nullable
                       as List<String>,
+            pendingRuns: null == pendingRuns
+                ? _value.pendingRuns
+                : pendingRuns // ignore: cast_nullable_to_non_nullable
+                      as int,
           )
           as $Val,
     );
@@ -182,6 +203,8 @@ abstract class _$$IdeaSummaryImplCopyWith<$Res>
     String status,
     String? promptConfigId,
     String? createdById,
+    String? instanceId,
+    String? parentId,
     int commentCount,
     int upvotes,
     int downvotes,
@@ -189,6 +212,7 @@ abstract class _$$IdeaSummaryImplCopyWith<$Res>
     int? userVote,
     String? createdAt,
     List<String> actionsRun,
+    int pendingRuns,
   });
 }
 
@@ -213,6 +237,8 @@ class __$$IdeaSummaryImplCopyWithImpl<$Res>
     Object? status = null,
     Object? promptConfigId = freezed,
     Object? createdById = freezed,
+    Object? instanceId = freezed,
+    Object? parentId = freezed,
     Object? commentCount = null,
     Object? upvotes = null,
     Object? downvotes = null,
@@ -220,6 +246,7 @@ class __$$IdeaSummaryImplCopyWithImpl<$Res>
     Object? userVote = freezed,
     Object? createdAt = freezed,
     Object? actionsRun = null,
+    Object? pendingRuns = null,
   }) {
     return _then(
       _$IdeaSummaryImpl(
@@ -251,6 +278,14 @@ class __$$IdeaSummaryImplCopyWithImpl<$Res>
             ? _value.createdById
             : createdById // ignore: cast_nullable_to_non_nullable
                   as String?,
+        instanceId: freezed == instanceId
+            ? _value.instanceId
+            : instanceId // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        parentId: freezed == parentId
+            ? _value.parentId
+            : parentId // ignore: cast_nullable_to_non_nullable
+                  as String?,
         commentCount: null == commentCount
             ? _value.commentCount
             : commentCount // ignore: cast_nullable_to_non_nullable
@@ -279,6 +314,10 @@ class __$$IdeaSummaryImplCopyWithImpl<$Res>
             ? _value._actionsRun
             : actionsRun // ignore: cast_nullable_to_non_nullable
                   as List<String>,
+        pendingRuns: null == pendingRuns
+            ? _value.pendingRuns
+            : pendingRuns // ignore: cast_nullable_to_non_nullable
+                  as int,
       ),
     );
   }
@@ -295,6 +334,8 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
     required this.status,
     this.promptConfigId,
     this.createdById,
+    this.instanceId,
+    this.parentId,
     this.commentCount = 0,
     this.upvotes = 0,
     this.downvotes = 0,
@@ -302,6 +343,7 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
     this.userVote,
     this.createdAt,
     final List<String> actionsRun = const [],
+    this.pendingRuns = 0,
   }) : _actionsRun = actionsRun;
 
   factory _$IdeaSummaryImpl.fromJson(Map<String, dynamic> json) =>
@@ -321,6 +363,10 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
   final String? promptConfigId;
   @override
   final String? createdById;
+  @override
+  final String? instanceId;
+  @override
+  final String? parentId;
   @override
   @JsonKey()
   final int commentCount;
@@ -347,8 +393,12 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
   }
 
   @override
+  @JsonKey()
+  final int pendingRuns;
+
+  @override
   String toString() {
-    return 'IdeaSummary(id: $id, referenceCode: $referenceCode, promptTitle: $promptTitle, summary: $summary, status: $status, promptConfigId: $promptConfigId, createdById: $createdById, commentCount: $commentCount, upvotes: $upvotes, downvotes: $downvotes, netScore: $netScore, userVote: $userVote, createdAt: $createdAt, actionsRun: $actionsRun)';
+    return 'IdeaSummary(id: $id, referenceCode: $referenceCode, promptTitle: $promptTitle, summary: $summary, status: $status, promptConfigId: $promptConfigId, createdById: $createdById, instanceId: $instanceId, parentId: $parentId, commentCount: $commentCount, upvotes: $upvotes, downvotes: $downvotes, netScore: $netScore, userVote: $userVote, createdAt: $createdAt, actionsRun: $actionsRun, pendingRuns: $pendingRuns)';
   }
 
   @override
@@ -367,6 +417,10 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
                 other.promptConfigId == promptConfigId) &&
             (identical(other.createdById, createdById) ||
                 other.createdById == createdById) &&
+            (identical(other.instanceId, instanceId) ||
+                other.instanceId == instanceId) &&
+            (identical(other.parentId, parentId) ||
+                other.parentId == parentId) &&
             (identical(other.commentCount, commentCount) ||
                 other.commentCount == commentCount) &&
             (identical(other.upvotes, upvotes) || other.upvotes == upvotes) &&
@@ -381,7 +435,9 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
             const DeepCollectionEquality().equals(
               other._actionsRun,
               _actionsRun,
-            ));
+            ) &&
+            (identical(other.pendingRuns, pendingRuns) ||
+                other.pendingRuns == pendingRuns));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -395,6 +451,8 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
     status,
     promptConfigId,
     createdById,
+    instanceId,
+    parentId,
     commentCount,
     upvotes,
     downvotes,
@@ -402,6 +460,7 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
     userVote,
     createdAt,
     const DeepCollectionEquality().hash(_actionsRun),
+    pendingRuns,
   );
 
   /// Create a copy of IdeaSummary
@@ -427,6 +486,8 @@ abstract class _IdeaSummary implements IdeaSummary {
     required final String status,
     final String? promptConfigId,
     final String? createdById,
+    final String? instanceId,
+    final String? parentId,
     final int commentCount,
     final int upvotes,
     final int downvotes,
@@ -434,6 +495,7 @@ abstract class _IdeaSummary implements IdeaSummary {
     final int? userVote,
     final String? createdAt,
     final List<String> actionsRun,
+    final int pendingRuns,
   }) = _$IdeaSummaryImpl;
 
   factory _IdeaSummary.fromJson(Map<String, dynamic> json) =
@@ -454,6 +516,10 @@ abstract class _IdeaSummary implements IdeaSummary {
   @override
   String? get createdById;
   @override
+  String? get instanceId;
+  @override
+  String? get parentId;
+  @override
   int get commentCount;
   @override
   int get upvotes;
@@ -467,6 +533,8 @@ abstract class _IdeaSummary implements IdeaSummary {
   String? get createdAt;
   @override
   List<String> get actionsRun;
+  @override
+  int get pendingRuns;
 
   /// Create a copy of IdeaSummary
   /// with the given fields replaced by the non-null parameter values.
@@ -480,6 +548,7 @@ abstract class _IdeaSummary implements IdeaSummary {
 mixin _$IdeaDetail {
   IdeaSummary get idea => throw _privateConstructorUsedError;
   List<ActionResult> get actions => throw _privateConstructorUsedError;
+  List<String> get runningActions => throw _privateConstructorUsedError;
   List<Map<String, dynamic>> get editHistory =>
       throw _privateConstructorUsedError;
 
@@ -500,6 +569,7 @@ abstract class $IdeaDetailCopyWith<$Res> {
   $Res call({
     IdeaSummary idea,
     List<ActionResult> actions,
+    List<String> runningActions,
     List<Map<String, dynamic>> editHistory,
   });
 
@@ -523,6 +593,7 @@ class _$IdeaDetailCopyWithImpl<$Res, $Val extends IdeaDetail>
   $Res call({
     Object? idea = null,
     Object? actions = null,
+    Object? runningActions = null,
     Object? editHistory = null,
   }) {
     return _then(
@@ -535,6 +606,10 @@ class _$IdeaDetailCopyWithImpl<$Res, $Val extends IdeaDetail>
                 ? _value.actions
                 : actions // ignore: cast_nullable_to_non_nullable
                       as List<ActionResult>,
+            runningActions: null == runningActions
+                ? _value.runningActions
+                : runningActions // ignore: cast_nullable_to_non_nullable
+                      as List<String>,
             editHistory: null == editHistory
                 ? _value.editHistory
                 : editHistory // ignore: cast_nullable_to_non_nullable
@@ -567,6 +642,7 @@ abstract class _$$IdeaDetailImplCopyWith<$Res>
   $Res call({
     IdeaSummary idea,
     List<ActionResult> actions,
+    List<String> runningActions,
     List<Map<String, dynamic>> editHistory,
   });
 
@@ -590,6 +666,7 @@ class __$$IdeaDetailImplCopyWithImpl<$Res>
   $Res call({
     Object? idea = null,
     Object? actions = null,
+    Object? runningActions = null,
     Object? editHistory = null,
   }) {
     return _then(
@@ -602,6 +679,10 @@ class __$$IdeaDetailImplCopyWithImpl<$Res>
             ? _value._actions
             : actions // ignore: cast_nullable_to_non_nullable
                   as List<ActionResult>,
+        runningActions: null == runningActions
+            ? _value._runningActions
+            : runningActions // ignore: cast_nullable_to_non_nullable
+                  as List<String>,
         editHistory: null == editHistory
             ? _value._editHistory
             : editHistory // ignore: cast_nullable_to_non_nullable
@@ -617,8 +698,10 @@ class _$IdeaDetailImpl implements _IdeaDetail {
   const _$IdeaDetailImpl({
     required this.idea,
     final List<ActionResult> actions = const [],
+    final List<String> runningActions = const [],
     final List<Map<String, dynamic>> editHistory = const [],
   }) : _actions = actions,
+       _runningActions = runningActions,
        _editHistory = editHistory;
 
   @override
@@ -632,6 +715,15 @@ class _$IdeaDetailImpl implements _IdeaDetail {
     return EqualUnmodifiableListView(_actions);
   }
 
+  final List<String> _runningActions;
+  @override
+  @JsonKey()
+  List<String> get runningActions {
+    if (_runningActions is EqualUnmodifiableListView) return _runningActions;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_runningActions);
+  }
+
   final List<Map<String, dynamic>> _editHistory;
   @override
   @JsonKey()
@@ -643,7 +735,7 @@ class _$IdeaDetailImpl implements _IdeaDetail {
 
   @override
   String toString() {
-    return 'IdeaDetail(idea: $idea, actions: $actions, editHistory: $editHistory)';
+    return 'IdeaDetail(idea: $idea, actions: $actions, runningActions: $runningActions, editHistory: $editHistory)';
   }
 
   @override
@@ -653,6 +745,10 @@ class _$IdeaDetailImpl implements _IdeaDetail {
             other is _$IdeaDetailImpl &&
             (identical(other.idea, idea) || other.idea == idea) &&
             const DeepCollectionEquality().equals(other._actions, _actions) &&
+            const DeepCollectionEquality().equals(
+              other._runningActions,
+              _runningActions,
+            ) &&
             const DeepCollectionEquality().equals(
               other._editHistory,
               _editHistory,
@@ -664,6 +760,7 @@ class _$IdeaDetailImpl implements _IdeaDetail {
     runtimeType,
     idea,
     const DeepCollectionEquality().hash(_actions),
+    const DeepCollectionEquality().hash(_runningActions),
     const DeepCollectionEquality().hash(_editHistory),
   );
 
@@ -680,6 +777,7 @@ abstract class _IdeaDetail implements IdeaDetail {
   const factory _IdeaDetail({
     required final IdeaSummary idea,
     final List<ActionResult> actions,
+    final List<String> runningActions,
     final List<Map<String, dynamic>> editHistory,
   }) = _$IdeaDetailImpl;
 
@@ -687,6 +785,8 @@ abstract class _IdeaDetail implements IdeaDetail {
   IdeaSummary get idea;
   @override
   List<ActionResult> get actions;
+  @override
+  List<String> get runningActions;
   @override
   List<Map<String, dynamic>> get editHistory;
 
@@ -708,6 +808,7 @@ mixin _$ActionResult {
   String get actionType => throw _privateConstructorUsedError;
   int get version => throw _privateConstructorUsedError;
   bool get isCurrent => throw _privateConstructorUsedError;
+  String? get targetId => throw _privateConstructorUsedError;
   Map<String, dynamic>? get output => throw _privateConstructorUsedError;
 
   /// Serializes this ActionResult to a JSON map.
@@ -732,6 +833,7 @@ abstract class $ActionResultCopyWith<$Res> {
     String actionType,
     int version,
     bool isCurrent,
+    String? targetId,
     Map<String, dynamic>? output,
   });
 }
@@ -755,6 +857,7 @@ class _$ActionResultCopyWithImpl<$Res, $Val extends ActionResult>
     Object? actionType = null,
     Object? version = null,
     Object? isCurrent = null,
+    Object? targetId = freezed,
     Object? output = freezed,
   }) {
     return _then(
@@ -775,6 +878,10 @@ class _$ActionResultCopyWithImpl<$Res, $Val extends ActionResult>
                 ? _value.isCurrent
                 : isCurrent // ignore: cast_nullable_to_non_nullable
                       as bool,
+            targetId: freezed == targetId
+                ? _value.targetId
+                : targetId // ignore: cast_nullable_to_non_nullable
+                      as String?,
             output: freezed == output
                 ? _value.output
                 : output // ignore: cast_nullable_to_non_nullable
@@ -799,6 +906,7 @@ abstract class _$$ActionResultImplCopyWith<$Res>
     String actionType,
     int version,
     bool isCurrent,
+    String? targetId,
     Map<String, dynamic>? output,
   });
 }
@@ -821,6 +929,7 @@ class __$$ActionResultImplCopyWithImpl<$Res>
     Object? actionType = null,
     Object? version = null,
     Object? isCurrent = null,
+    Object? targetId = freezed,
     Object? output = freezed,
   }) {
     return _then(
@@ -841,6 +950,10 @@ class __$$ActionResultImplCopyWithImpl<$Res>
             ? _value.isCurrent
             : isCurrent // ignore: cast_nullable_to_non_nullable
                   as bool,
+        targetId: freezed == targetId
+            ? _value.targetId
+            : targetId // ignore: cast_nullable_to_non_nullable
+                  as String?,
         output: freezed == output
             ? _value._output
             : output // ignore: cast_nullable_to_non_nullable
@@ -858,6 +971,7 @@ class _$ActionResultImpl implements _ActionResult {
     required this.actionType,
     this.version = 1,
     this.isCurrent = true,
+    this.targetId,
     final Map<String, dynamic>? output,
   }) : _output = output;
 
@@ -874,6 +988,8 @@ class _$ActionResultImpl implements _ActionResult {
   @override
   @JsonKey()
   final bool isCurrent;
+  @override
+  final String? targetId;
   final Map<String, dynamic>? _output;
   @override
   Map<String, dynamic>? get output {
@@ -886,7 +1002,7 @@ class _$ActionResultImpl implements _ActionResult {
 
   @override
   String toString() {
-    return 'ActionResult(id: $id, actionType: $actionType, version: $version, isCurrent: $isCurrent, output: $output)';
+    return 'ActionResult(id: $id, actionType: $actionType, version: $version, isCurrent: $isCurrent, targetId: $targetId, output: $output)';
   }
 
   @override
@@ -900,6 +1016,8 @@ class _$ActionResultImpl implements _ActionResult {
             (identical(other.version, version) || other.version == version) &&
             (identical(other.isCurrent, isCurrent) ||
                 other.isCurrent == isCurrent) &&
+            (identical(other.targetId, targetId) ||
+                other.targetId == targetId) &&
             const DeepCollectionEquality().equals(other._output, _output));
   }
 
@@ -911,6 +1029,7 @@ class _$ActionResultImpl implements _ActionResult {
     actionType,
     version,
     isCurrent,
+    targetId,
     const DeepCollectionEquality().hash(_output),
   );
 
@@ -934,6 +1053,7 @@ abstract class _ActionResult implements ActionResult {
     required final String actionType,
     final int version,
     final bool isCurrent,
+    final String? targetId,
     final Map<String, dynamic>? output,
   }) = _$ActionResultImpl;
 
@@ -948,6 +1068,8 @@ abstract class _ActionResult implements ActionResult {
   int get version;
   @override
   bool get isCurrent;
+  @override
+  String? get targetId;
   @override
   Map<String, dynamic>? get output;
 

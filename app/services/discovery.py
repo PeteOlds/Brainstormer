@@ -42,6 +42,11 @@ def guidelines_dir() -> Path:
     return Path(os.getenv("GUIDELINES_DIR", str(_repo_root() / "guidelines")))
 
 
+def instance_guidelines_dir(instance_id) -> Path:
+    base = guidelines_dir()
+    return base / "instances" / str(instance_id)
+
+
 def _parse_frontmatter(text: str) -> dict:
     """Parse the leading YAML frontmatter block (simple key: value lines)."""
     if not text.startswith("---"):
@@ -81,22 +86,35 @@ def list_skills() -> list:
     return found
 
 
-def list_guidelines() -> list:
-    """Guideline docs: file-based title, size for budgeting."""
-    base = guidelines_dir()
-    if not base.is_dir():
-        return []
+def list_guidelines(instance_id=None) -> list:
+    """Guideline docs: file-based title, size for budgeting.
+
+    Includes global guidelines plus instance-specific ones (paid users).
+    """
     out = []
-    for path in sorted(base.glob("*.md")):
-        try:
-            size = path.stat().st_size
-        except OSError:
+    seen = set()
+    bases = [guidelines_dir()]
+    if instance_id is not None:
+        bases.append(instance_guidelines_dir(instance_id))
+    for base in bases:
+        if not base.is_dir():
             continue
-        out.append({
-            "name": path.stem,
-            "file": path.name,
-            "size": size,
-        })
+        for path in sorted(base.glob("*.md")):
+            if path.stem in seen:
+                continue
+            seen.add(path.stem)
+            try:
+                size = path.stat().st_size
+            except OSError:
+                continue
+            entry: dict = {
+                "name": path.stem,
+                "file": path.name,
+                "size": size,
+            }
+            if instance_id is not None:
+                entry["instance_specific"] = str(base).endswith(str(instance_id))
+            out.append(entry)
     return out
 
 
@@ -118,31 +136,39 @@ def read_skill_body(name: str) -> str | None:
     return None
 
 
-def read_guideline(name: str) -> str | None:
+def read_guideline(name: str, instance_id=None) -> str | None:
     """Guideline body by file stem (no traversal: stem only, fixed dir)."""
-    base = guidelines_dir()
-    if not base.is_dir() or "/" in name or name.startswith("."):
+    if "/" in name or name.startswith("."):
         return None
-    path = (base / f"{name}.md").resolve()
-    try:
-        base_resolved = base.resolve()
-    except OSError:
-        return None
-    if base_resolved not in path.parents:
-        return None
-    try:
-        return path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return None
+    bases = [guidelines_dir()]
+    if instance_id is not None:
+        bases.append(instance_guidelines_dir(instance_id))
+    for base in bases:
+        if not base.is_dir():
+            continue
+        path = (base / f"{name}.md").resolve()
+        try:
+            base_resolved = base.resolve()
+        except OSError:
+            continue
+        if base_resolved not in path.parents:
+            continue
+        try:
+            return path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+    return None
 
 
 def discover(user) -> dict:
     """Discovery endpoint data: skills, guidelines, and available actions."""
+    from app.utils.tenancy import current_instance_id
     from app.services.secondary_actions import list_actions
 
+    iid = current_instance_id()
     return {
         "skills": list_skills(),
-        "guidelines": list_guidelines(),
+        "guidelines": list_guidelines(instance_id=iid),
         "actions": list_actions(),
     }
 
@@ -154,15 +180,17 @@ def discover_actions(user, idea=None) -> list:
     registered actions. When called with an idea, filters by stage using
     _check_action_allowed().
     """
+    from app.models.roles import role_permissions
     from app.services.secondary_actions import list_actions
     from app.routes.ideas import _check_action_allowed
+    from app.utils.decorators import _membership_allows_admin
+
+    if not _membership_allows_admin(user):
+        perms = role_permissions(getattr(user, "instance_role", None) or "")
+        if "run_actions" not in perms:
+            return []
 
     actions = list_actions()
     if idea is not None:
-        st = idea.status
-        st_str = st.value if hasattr(st, 'value') else str(st)
-        print(f"DEBUG discover_actions: instance_id={idea.instance_id}, status={st_str}, type={type(st).__name__}")
-        print(f"DEBUG discover_actions: all actions={[a['key'] for a in actions]}")
         actions = [a for a in actions if _check_action_allowed(idea, a["key"])]
-        print(f"DEBUG discover_actions: filtered actions={[a['key'] for a in actions]}")
     return actions

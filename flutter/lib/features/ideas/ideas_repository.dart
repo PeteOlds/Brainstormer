@@ -58,13 +58,13 @@ class IdeasRepository {
     return data as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> vote(String id, int direction) async {
+  Future<VoteResult> vote(String id, int direction) async {
     final data = await api.post(
       '/api/v1/ideas/$id/vote',
       body: {'direction': direction},
       invalidatePrefix: '/api/v1/ideas',
     );
-    return (data as Map<String, dynamic>);
+    return VoteResult.fromJson(data as Map<String, dynamic>);
   }
 
   Future<IdeaSummary> create(String title, String content) async {

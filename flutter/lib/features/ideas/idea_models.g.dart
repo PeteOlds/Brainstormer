@@ -15,6 +15,8 @@ _$IdeaSummaryImpl _$$IdeaSummaryImplFromJson(Map<String, dynamic> json) =>
       status: json['status'] as String,
       promptConfigId: json['promptConfigId'] as String?,
       createdById: json['createdById'] as String?,
+      instanceId: json['instanceId'] as String?,
+      parentId: json['parentId'] as String?,
       commentCount: (json['commentCount'] as num?)?.toInt() ?? 0,
       upvotes: (json['upvotes'] as num?)?.toInt() ?? 0,
       downvotes: (json['downvotes'] as num?)?.toInt() ?? 0,
@@ -26,6 +28,7 @@ _$IdeaSummaryImpl _$$IdeaSummaryImplFromJson(Map<String, dynamic> json) =>
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      pendingRuns: (json['pendingRuns'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$$IdeaSummaryImplToJson(_$IdeaSummaryImpl instance) =>
@@ -37,6 +40,8 @@ Map<String, dynamic> _$$IdeaSummaryImplToJson(_$IdeaSummaryImpl instance) =>
       'status': instance.status,
       'promptConfigId': instance.promptConfigId,
       'createdById': instance.createdById,
+      'instanceId': instance.instanceId,
+      'parentId': instance.parentId,
       'commentCount': instance.commentCount,
       'upvotes': instance.upvotes,
       'downvotes': instance.downvotes,
@@ -44,6 +49,7 @@ Map<String, dynamic> _$$IdeaSummaryImplToJson(_$IdeaSummaryImpl instance) =>
       'userVote': instance.userVote,
       'createdAt': instance.createdAt,
       'actionsRun': instance.actionsRun,
+      'pendingRuns': instance.pendingRuns,
     };
 
 _$ActionResultImpl _$$ActionResultImplFromJson(Map<String, dynamic> json) =>
@@ -52,6 +58,7 @@ _$ActionResultImpl _$$ActionResultImplFromJson(Map<String, dynamic> json) =>
       actionType: json['actionType'] as String,
       version: (json['version'] as num?)?.toInt() ?? 1,
       isCurrent: json['isCurrent'] as bool? ?? true,
+      targetId: json['targetId'] as String?,
       output: json['output'] as Map<String, dynamic>?,
     );
 
@@ -61,6 +68,7 @@ Map<String, dynamic> _$$ActionResultImplToJson(_$ActionResultImpl instance) =>
       'actionType': instance.actionType,
       'version': instance.version,
       'isCurrent': instance.isCurrent,
+      'targetId': instance.targetId,
       'output': instance.output,
     };
 

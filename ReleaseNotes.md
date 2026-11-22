@@ -13,6 +13,299 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.97.0 — 2026-11-22
+
+### Bug fixes
+- BUG.043: Brief/Design/Build tabs appear only once a result exists or is running; show "Running…" while in flight.
+- BUG.044: idea detail auto-polls every 5s while a run is active and stops on completion.
+- BUG.045: Activity refresh control is now a labelled button.
+- BUG.046: "Run full pipeline" resumes from the current stage, skips existing Brief/Design, works on any non-terminal idea.
+- BUG.047: Build tab gains confirm-write, runbook, one-click run (start/stop/open/logs), and a Tests tab.
+- BUG.048: Scale tab gains "Suggest an improvement" / "Report a problem" child ideas.
+- BUG.049: Scale tab gains release management (create/rename/target/delete, assign/move, bulk actions, pipeline run/stop, mark done, GitHub push).
+- BUG.050: vote count now updates (was reading `net_score` instead of `net_votes`).
+
+### Features
+- Analysis tab only when a secondary analysis exists.
+- API contract check (`scripts/check_api_contract.py`) guards field-name drift.
+
+---
+
+## v0.96.21 — 2026-11-18
+
+### Bug fixes
+- Tab switching now works correctly (TabController persists across rebuilds).
+- Phase-appropriate tabs (Brief/Design/Build/Scale) now display based on idea lifecycle stage.
+- BUG.039: Change Status dropdown added to idea detail overview.
+- BUG.040: Refresh button added to dashboard.
+- BUG.041: Build and Scale tabs now show content for built ideas.
+- BUG.042: BUILD_CODE results moved to Build tab (not Analysis).
+
+### Features
+- REQ.030: Dashboard comments show user who posted.
+- REQ.031: Idea title format updated (IDEA-number: Prompt title - first 2 lines).
+
+---
+
+
+
+### Bug fixes
+- BUG.039: Change Status dropdown added to idea detail overview.
+- BUG.040: Refresh button added to dashboard.
+- BUG.041: Build and Scale tabs now show content for built ideas.
+- BUG.042: BUILD_CODE results moved to Build tab (not Analysis).
+
+### Features
+- REQ.030: Dashboard comments show user who posted.
+- REQ.031: Idea title format updated (IDEA-number: Prompt title - first 2 lines).
+- REQ.032: Pipeline running indicator on idea detail.
+- REQ.033: Lifecycle actions (Brief/Design/Build) separated from secondary analysis.
+- REQ.034: Run full pipeline available for all phases after spark.
+
+---
+
+## v0.96.20 — 2026-11-18
+
+### Bug fixes
+- Tab switching now works correctly (TabController persists across rebuilds).
+- Phase-appropriate tabs (Brief/Design/Build/Scale) now display based on idea lifecycle stage.
+- BUG.039: Change Status dropdown added to idea detail overview.
+- BUG.040: Refresh button added to dashboard.
+- BUG.041: Build and Scale tabs now show content for built ideas.
+- BUG.042: BUILD_CODE results moved to Build tab (not Analysis).
+
+### Features
+- REQ.030: Dashboard comments show user who posted.
+- REQ.031: Idea title format updated (IDEA-number: Prompt title - first 2 lines).
+
+---
+
+## v0.96.18 — 2026-11-18
+
+### Bug fixes
+- Tab switching now works correctly (TabController persists across rebuilds).
+- Phase-appropriate tabs (Brief/Design/Build) now display based on idea lifecycle stage.
+
+---
+
+## v0.96.17 — 2026-11-18
+
+### Bug fixes
+- TEST.019/BUG.034: Voting rewritten — server-is-truth with loading spinner, no optimistic local state.
+- BUG.027: Secondary Analysis list shows human-readable labels instead of raw JSON keys.
+- BUG.028: Chat error messages are user-friendly (strips ApiException prefix, retry button).
+- BUG.029: Idea List shows "Analysis (N)" indicator for ideas with secondary actions.
+- BUG.030: Dashboard comments prefixed with date; Most Commented shows "<IDEA-Number>: <Idea Title>"; ideas linked to detail.
+- BUG.031: Dashboard Recent Runs shows "<IDEA Number>: <Title> <Prompt name> <Status> <timestamp> <duration>".
+- BUG.032: Dashboard Recent Runs title no longer repeats idea title.
+- BUG.033: Search field has Clear button.
+- BUG.034/BUG.035: Create new idea manually or by file upload (.md/.txt).
+- BUG.037: VRIO validation schema fixed (min_length reduced).
+- BUG.038: AI diagnosis of failures added (Diagnose button on failed runs).
+- Dashboard tabs now show phase-appropriate tabs (Brief/Design/Build).
+
+### Features
+- REQ.024: Analysis list shows first 3 lines of Exec Summary.
+- REQ.025: Chat no longer starts with generic comment.
+- REQ.026: Rerun creates V2 not V1.
+- REQ.027: Shows COMPETITOR_ANALYSIS not COMPETITOR.
+- REQ.028: Copy analysis output to clipboard.
+- REQ.029: Refresh button on Activity/Recent Runs.
+
+---
+
+## v0.96.16 — 2026-11-18
+
+### Bug fixes
+- TEST.019/BUG.034: Voting rewritten — server-is-truth with loading spinner, no optimistic local state.
+- BUG.027: Secondary Analysis list shows human-readable labels instead of raw JSON keys.
+- BUG.028: Chat error messages are user-friendly (strips ApiException prefix, retry button).
+- BUG.029: Idea List shows "Analysis (N)" indicator for ideas with secondary actions.
+- BUG.030: Dashboard comments prefixed with date; Most Commented shows "<IDEA-Number>: <Idea Title>"; ideas linked to detail.
+- BUG.031: Dashboard Recent Runs shows "<IDEA Number>: <Title> <Prompt name> <Status> <timestamp> <duration>".
+- BUG.032: Dashboard Recent Runs title no longer repeats idea title.
+- BUG.033: Search field has Clear button.
+- BUG.034/BUG.035: Create new idea manually or by file upload (.md/.txt).
+- BUG.036: Run full pipeline endpoint fixed (wrong import of _membership_allows_admin).
+- BUG.037: VRIO validation schema fixed (min_length reduced).
+- Dashboard tabs now show phase-appropriate tabs (Brief/Design/Build).
+
+---
+
+## v0.96.15 — 2026-11-18
+
+### Bug fixes
+- TEST.019: vote buttons now persist color and count (optimistic update + authoritative server response).
+- BUG.027: Secondary Analysis list shows human-readable labels instead of raw JSON keys.
+- BUG.028: Chat error messages are user-friendly (strips ApiException prefix, retry button).
+- BUG.029: Idea List shows "Analysis (N)" indicator for ideas with secondary actions.
+- BUG.030: Dashboard comments prefixed with date; Most Commented shows "<IDEA-Number>: <Idea Title>"; ideas linked to detail.
+- BUG.031: Dashboard Recent Runs shows "<IDEA Number>: <Title> <Prompt name> <Status> <timestamp> <duration>".
+
+---
+
+## v0.96.14 — 2026-11-18
+
+### Bug fixes
+- TEST.019: vote buttons now persist color and count (optimistic update + authoritative server response, no refetch overwrite).
+- BUG.027: Secondary Analysis list shows human-readable labels instead of raw JSON keys.
+- BUG.028: Chat error messages are user-friendly (strips ApiException prefix, retry button).
+- BUG.029: Idea List shows "Analysis (N)" indicator for ideas with secondary actions.
+- BUG.030: Dashboard comments prefixed with date; Most Commented shows "<IDEA-Number>: <Idea Title>"; ideas linked to detail.
+- BUG.031: Dashboard Recent Runs shows "<IDEA Number>: <Title> <Prompt name> <Status> <timestamp> <duration>".
+
+---
+
+## v0.96.13 — 2026-11-18
+
+### Bug fixes
+- TEST.019: vote buttons now update color and count (direct fetch bypassing provider cache; no premature reset).
+- TEST.017: chat robustness (retry button, 600s timeout).
+- Dashboard pie chart clickable (navigates to filtered Ideas).
+- BUG.026: recent runs show full job details and link to idea.
+
+---
+
+## v0.96.12 — 2026-11-18
+
+### Bug fixes
+- TEST.019: vote buttons now update color and count (fixed freezed copyWith null issue by constructing IdeaSummary directly, plus ref.refresh to wait for refetch).
+- TEST.017: chat robustness improved (retry button, 600s timeout, friendly error).
+- Dashboard pie chart now clickable (navigates to filtered Ideas).
+- BUG.026: recent runs now show job/provider/model/status/duration/time and link to idea.
+
+---
+
+## v0.96.11 — 2026-11-18
+
+### Features
+- REQ.017: paid instance guide upload (markdown, max 10 MB) via Settings > Guides.
+
+---
+
+## v0.96.10 — 2026-11-18
+
+### Bug fixes
+- TEST.019: vote buttons now update color and count (fixed freezed copyWith null issue by constructing IdeaSummary directly).
+
+---
+
+## v0.96.9 — 2026-11-18
+
+### Features
+- REQ.018: dashboard ideas-by-stage now a pie chart.
+- REQ.019: most-voted shows voting details.
+- REQ.020: most-commented shows latest comment.
+- REQ.021: recent runs show job/provider/model/duration.
+
+---
+
+## v0.96.9 — 2026-11-18
+
+### Bug fixes
+- TEST.019: vote buttons now update color and count (optimistic + refetch, no premature reset).
+
+### Features
+- REQ.016: user avatar upload (file upload to /static/avatars).
+
+---
+
+## v0.96.8 — 2026-11-18
+
+### Bug fixes
+- BUG.024: dashboard 500 fixed (comment_count -> comments_count).
+- BUG.025: editing a paused prompt no longer resets to active (is_active now returned for instance admins).
+- TEST.019: vote buttons now update color and count (optimistic update + cache bypass).
+
+---
+
+## v0.96.7 — 2026-11-18
+
+### Features
+- REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users.
+- REQ.016: dashboard now uses fl_chart bar chart for ideas by stage.
+- RM042: full run from Spark to Build preview (instance admin only).
+
+---
+
+## v0.96.6 — 2026-11-18
+
+### Bug fixes
+- BUG.024: rerun now works (api_accepted -> api_ok).
+- BUG.019: vote button colors and counts update after voting.
+- BUG.020: dashboard Ideas-by-stage chips are clickable (filter Ideas).
+- BUG.021: most-voted and recent-runs rows are clickable.
+- BUG.022: dashboard now shows most-commented ideas.
+- BUG.023: prompt detail trend chart no longer shows redundant Ideas series.
+
+---
+
+## v0.96.5 — 2026-11-18
+
+### Features
+- REQ.010-REQ.014: user/admin/PM dashboard page with ideas-by-stage, most-voted, recent runs; rerun button on activity runs.
+
+---
+
+## v0.96.4 — 2026-11-18
+
+### Features
+- REQ.009: more visible upvote/downvote controls (filled tonal buttons + larger count).
+- REQ.015: admin can edit member name/email.
+
+---
+
+## v0.96.3 — 2026-11-18
+
+### Bug fixes
+- BUG.018: Actions section now loads (fixed missing import).
+- BUG.017: chat timeout handling improved (gunicorn 600s + friendly message).
+- BUG.016: chat send is now a prominent button with wait hint.
+- BUG.015: analysis results render as readable markdown.
+- BUG.003: vote counts refresh after voting.
+
+### Features
+- REQ.003-REQ.008: Product Manager role, password reset, Prompts visibility gating, test user.
+
+---
+
+## v0.96.1 — 2026-11-18
+
+### Bug fixes
+- BUG.001: clicking an analysis now opens a dialog showing its full content.
+- BUG.002: ideas list now shows a spinner and "analyzing…" while a secondary analysis is running.
+- BUG.003: vote counts now actually update (flush before recalculation).
+- BUG.009: provider Test endpoint now returns and displays success/failure.
+
+---
+
+## v0.96.0 — 2026-11-18
+
+### Features
+- Instance-scoped admin dashboard tiles (Ideas/Prompts/Users) now navigate to their sections and show counts for the selected instance.
+- System Health traffic lights (Ollama/DB/Redis/Celery Workers) on the Admin dashboard, fed by `/api/ready`.
+- Prompt editor gains an Advanced section exposing temperature, top_p, repeat_penalty, num_predict, seed, keep_alive, cron_expression and slack_channel.
+- AI provider model allowlists are now a multi-select chip picker instead of comma-separated text.
+- AI provider configuration gains a Test button (validates after save) and spend tab no longer duplicates monthly budgets.
+- Admin page titles (Users, Activity) are now consistent with their shortcut names.
+
+### Bug fixes
+- BUG.001/BUG.004: completed secondary analyses now display in the idea Analysis tab (auto-refreshing cached detail view).
+- BUG.002: chat send button now reliably fires and shows a sending state.
+- BUG.003: vote counts are now recalculated and persisted on every vote.
+- BUG.005: clicking a prompt row opens the editor.
+- BUG.006: prompt parameters editable via Advanced section.
+- BUG.007: removed `{{topic}} for theme` helper text.
+- BUG.008: model allowlists are multi-select.
+- BUG.009: AI provider Test option added.
+- BUG.010: spend/budget duplication removed (budget line dropped from Spend tab).
+- BUG.011: admin tiles navigate to their sections.
+- BUG.012: admin tile counts are instance-scoped.
+- BUG.013: System Health traffic lights restored under Admin.
+- BUG.014: admin titles consistent.
+
+---
+
 ## v0.95.0 — 2026-11-18
 
 ### Features
