@@ -13,6 +13,14 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.99.0 — 2026-11-24
+
+### Bug fixes
+- BUG.052/053/060/061 (reopened): instance scope is restored before the first `/me` request on session reload, and token refresh falls back to the persisted instance id. Expired Test admin sessions on Site 90 keep admin navigation, secondary actions and bulk status changes.
+- Bulk status change now surfaces the server error message when the request fails.
+
+---
+
 ## v0.98.0 — 2026-11-24
 
 ### Bug fixes

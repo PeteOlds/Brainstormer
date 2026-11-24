@@ -16,6 +16,9 @@ import shutil
 import socket
 import tempfile
 import threading
+from contextlib import contextmanager
+from datetime import timedelta
+from unittest.mock import MagicMock, patch
 
 import pytest
 from werkzeug.serving import make_server
@@ -61,8 +64,7 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
-@pytest.fixture()
-def flutter_app():
+def _make_flutter_app(token_seconds=None):
     """App wired to the real Flutter bundle and a throwaway database."""
     tmpdir = tempfile.mkdtemp(prefix="brainstormer-flutter-")
     db_path = os.path.join(tmpdir, "flutter.db")
@@ -83,15 +85,58 @@ def flutter_app():
         OPENCODE_BUILD_ROOTS = builds_dir
         OPENCODE_SERVER_BUILD_ROOTS = builds_dir
 
+    if token_seconds is not None:
+        LiveConfig.JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=token_seconds)
+
     app = create_app(LiveConfig, init_celery_app=False)
     with app.app_context():
         db.create_all()
         _seed()
-    yield app
+    return app, tmpdir
+
+
+def _close_flutter_app(app, tmpdir):
     with app.app_context():
         db.session.remove()
         db.drop_all()
     shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+@contextmanager
+def _no_real_celery():
+    """Keep action POSTs fast: no Redis broker and no LLM calls in UI tests.
+
+    create_app(init_celery_app=False) leaves the module-level Celery singleton
+    unconfigured, so task.delay() blocks trying to reach redis:6379. Patch
+    the single enqueue seam with a fake job result instead.
+    """
+    job = MagicMock()
+    job.id = "ui-test-job"
+    with (
+        patch("app.tasks.enqueue_generation", return_value=job),
+        patch(
+            "app.tasks.ollama_tasks.run_full_pipeline.delay",
+            return_value=job,
+        ),
+    ):
+        yield
+
+
+@pytest.fixture()
+def flutter_app():
+    app, tmpdir = _make_flutter_app()
+    with _no_real_celery():
+        yield app
+    _close_flutter_app(app, tmpdir)
+
+
+@pytest.fixture()
+def short_token_app():
+    """Same site as Test admin: short-lived tokens force a refresh on reload."""
+    app, tmpdir = _make_flutter_app(token_seconds=45)
+    with _no_real_celery():
+        yield app
+    _close_flutter_app(app, tmpdir)
 
 
 def _seed():
@@ -214,6 +259,29 @@ def flutter_server(flutter_app):
 
 @pytest.fixture()
 def flutter_page(browser, flutter_server):
+    context = browser.new_context(viewport={"width": 1400, "height": 900})
+    page = context.new_page()
+    page._page_errors = []
+    page.on("pageerror", lambda exc: page._page_errors.append(str(exc)))
+    yield page
+    context.close()
+
+
+@pytest.fixture()
+def short_token_server(short_token_app):
+    port = _free_port()
+    server = make_server("127.0.0.1", port, short_token_app, threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+
+@pytest.fixture()
+def short_token_page(browser, short_token_server):
     context = browser.new_context(viewport={"width": 1400, "height": 900})
     page = context.new_page()
     page._page_errors = []
@@ -347,6 +415,26 @@ def _click_text(page, text, timeout=25):
     _wait_text(page, text, timeout=timeout)
     page.get_by_text(text, exact=True).last.click()
     page.wait_for_timeout(600)
+
+
+def _click_dialog_run(page):
+    """Click the confirm button in a Flutter AlertDialog.
+
+    The dialog's own text node also contains "Run" (in its title), so a
+    text locator can hit the wrong semantics node. Find the button by its
+    role and exact text, then click its centre through the canvas.
+    """
+    page.wait_for_function(
+        """() => Array.from(document.querySelectorAll('flt-semantics')).some((n) =>
+             n.getAttribute('role') === 'button' &&
+             (n.innerText || '').trim() === 'Run')"""
+    )
+    run = next(
+        n
+        for n in _nodes(page)
+        if n["role"] == "button" and n["text"].strip() == "Run"
+    )
+    _click_node(page, run)
 
 
 def _rows(page):
@@ -635,3 +723,82 @@ def _click_back(page):
     ]
     assert leading, "no back button in header"
     _click_node(page, leading[0])
+
+
+def test_expired_token_restore_keeps_site_admin_actions(
+    short_token_page, short_token_server, short_token_app
+):
+    """BUG.052/053/060/061: refresh must keep the Site 90 instance claim.
+
+    The Test admin shape is deliberate: role USER with an INSTANCE_ADMIN
+    membership. A refresh without `instance_id` produces an unscoped token,
+    and every admin/action endpoint then rejects that user.
+    """
+    page = short_token_page
+    _login(page, short_token_server)
+
+    # Let the access token expire, then restore the session from storage.
+    # The first /me call must trigger a refresh before the app paints.
+    page.wait_for_timeout(47_000)
+    page.reload(wait_until="domcontentloaded")
+    _enable_semantics(page)
+    _wait_text(page, "matching ideas", timeout=30)
+    assert "Failed to load" not in _text(page)
+
+    # Admin menu was the reported 403.
+    _click_text(page, "Admin")
+    _wait_text(page, "Go to", timeout=30)
+    assert "Failed to load" not in _text(page)
+
+    # Bulk status change also depended on the scoped claim.
+    _click_text(page, "Ideas")
+    _wait_text(page, "matching ideas", timeout=30)
+    _click_text(page, "Select")
+    _wait_text(page, "0 selected")
+    rows = [n for n in _rows(page) if "SPARK" in n["label"]]
+    assert len(rows) == 2, [n["label"][:60] for n in rows]
+    for node in rows:
+        _click_node(page, node)
+    _click_text(page, "Change status")
+    _click_text(page, "SCOPE")
+    _click_text(page, "Confirm")
+    _wait_text(page, "Moved 2 ideas to SCOPE", timeout=30)
+
+    # Secondary actions must still be visible and runnable.
+    page.wait_for_function(
+        """ref => Array.from(document.querySelectorAll('flt-semantics')).some((n) =>
+             (n.getAttribute('aria-label') || '').includes(ref))""",
+        arg="IDEA-9103",
+        timeout=25000,
+    )
+    target = next(n for n in _rows(page) if "IDEA-9103" in n["label"])
+    _click_node(page, target)
+    _wait_text(page, "Refine Idea", timeout=25)
+    detail_text = _text(page)
+    assert "Brief" in detail_text, detail_text
+    assert "Actions unavailable" not in detail_text, detail_text
+
+    _click_text(page, "Refine Idea")
+    _wait_any(page, "Run Refine Idea?")
+    _click_dialog_run(page)
+    _wait_text(page, "Refine Idea started.", timeout=25)
+
+    # run-full is admin-only and used the same instance-scoped check.
+    _click_text(page, "Run full pipeline")
+    _wait_any(page, "Run full pipeline?")
+    _click_dialog_run(page)
+    _wait_text(page, "Full pipeline queued.", timeout=25)
+
+    text = _text(page)
+    assert "Admin access required" not in text, text
+
+    from app.models import Idea
+
+    with short_token_app.app_context():
+        statuses = {
+            idea.reference_code: idea.status.value
+            for idea in Idea.query.filter(
+                Idea.reference_code.in_(["IDEA-9101", "IDEA-9102"])
+            ).all()
+        }
+    assert set(statuses.values()) == {"SCOPE"}, statuses

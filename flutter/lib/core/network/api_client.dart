@@ -154,14 +154,19 @@ class ApiClient {
   Future<bool> _refresh() async {
     final refresh = await store.readRefreshToken();
     if (refresh == null || refresh.isEmpty) return false;
+    // Providers may not be wired yet during session restore. Always fall
+    // back to the persisted instance so a rotated access token keeps its
+    // instance_id claim (required by instance admins on Site 90).
+    final scopeId = (instanceId != null && instanceId!.isNotEmpty)
+        ? instanceId
+        : await store.readInstanceId();
     try {
       final response = await _http.post(
         Uri.parse('$baseUrl/api/v1/refresh'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'refresh_token': refresh,
-          if (instanceId != null && instanceId!.isNotEmpty)
-            'instance_id': instanceId,
+          if (scopeId != null && scopeId.isNotEmpty) 'instance_id': scopeId,
         }),
       );
       final decoded = jsonDecode(response.body);

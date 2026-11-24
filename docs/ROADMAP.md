@@ -1,7 +1,7 @@
 # Brainstormer — Roadmap
 
 **Single source of truth for outstanding work.** Update on every build: add new items, refine scope, and remove items only when released (record them in `ReleaseNotes.md`).
-**Version:** 0.98.0 · **Date:** 2026-11-24 · **Branch:** `main`
+**Version:** 0.99.0 · **Date:** 2026-11-24 · **Branch:** `main`
 
 Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decisions: see **Decisions** below.
 
@@ -43,13 +43,13 @@ _No outstanding items._
 
 ## Release Unassigned — 
 
-| ID       | Item               | Notes / acceptance                                                                                                                                                                                                                                                                                         |
-| -------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| RM-040.1 | **Default Guides** | HOLD<br>Site Administrator should be able to configure default Guides for each phase, and this will apply across all instances.  On first configuration, this should be copied to all instances.  Instance administrator should be able to Guides should be                                                |
-| RM050    | Updated README     | HOLD                                                                                                                                                                                                                                                                                                       |
-| BUG.010  |                    | HOLD<br>If AI Provider Spend tab is different from AI Providers / Configure / Monthly budgets, then remove the duplication                                                                                                                                                                                 |
-| REQ.022  |                    | HOLD<br>Allow voting on comments                                                                                                                                                                                                                                                                           |
-| REQ.023  |                    | HOLD<br>Include voting on comments on the Dashboard shown for all roles                                                                                                                                                                                                                                    |
+| ID       | Item               | Notes / acceptance                                                                                                                                                                                                                                          |
+| -------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RM-040.1 | **Default Guides** | HOLD<br>Site Administrator should be able to configure default Guides for each phase, and this will apply across all instances.  On first configuration, this should be copied to all instances.  Instance administrator should be able to Guides should be |
+| RM050    | Updated README     | HOLD                                                                                                                                                                                                                                                        |
+| BUG.010  |                    | HOLD<br>If AI Provider Spend tab is different from AI Providers / Configure / Monthly budgets, then remove the duplication                                                                                                                                  |
+| REQ.022  |                    | HOLD<br>Allow voting on comments                                                                                                                                                                                                                            |
+| REQ.023  |                    | HOLD<br>Include voting on comments on the Dashboard shown for all roles                                                                                                                                                                                     |
 
 
 

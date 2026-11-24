@@ -22,6 +22,9 @@ class FakeAuthStore extends AuthStore {
   Future<String?> readRefreshToken() async => _data['r'];
 
   @override
+  Future<String?> readInstanceId() async => _data['instance'];
+
+  @override
   Future<Map<String, dynamic>?> readUser() async => _user;
 
   @override
@@ -35,6 +38,7 @@ class FakeAuthStore extends AuthStore {
     _data['a'] = accessToken;
     _data['r'] = refreshToken;
     if (user != null) _user = user;
+    if (instanceId != null) _data['instance'] = instanceId;
   }
 
   @override
@@ -124,6 +128,57 @@ void main() {
       final data = await client.get('/api/v1/me');
       expect((data as Map)['me'], isTrue);
       expect(await store.readAccessToken(), 'new-a');
+    });
+
+    test('refresh keeps the active instance claim', () async {
+      final store = FakeAuthStore();
+      await store.saveTokens('old-a', 'old-r');
+      Map<String, dynamic>? refreshBody;
+      final client = ApiClient(
+        baseUrl: 'http://x',
+        store: store,
+        instanceId: 'site-90-uuid',
+        httpClient: MockClient((request) async {
+          if (request.url.path.endsWith('/refresh')) {
+            refreshBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return _ok({'access_token': 'new-a', 'refresh_token': 'new-r'});
+          }
+          if (request.headers['authorization'] == 'Bearer old-a') {
+            return _fail('expired', 401);
+          }
+          return _ok({'me': true});
+        }),
+      );
+      await client.get('/api/v1/me');
+      expect(refreshBody?['instance_id'], 'site-90-uuid');
+    });
+
+    test('refresh falls back to the persisted instance during restore',
+        () async {
+      final store = FakeAuthStore();
+      await store.saveSession(
+        accessToken: 'old-a',
+        refreshToken: 'old-r',
+        instanceId: 'site-90-uuid',
+      );
+      Map<String, dynamic>? refreshBody;
+      final client = ApiClient(
+        baseUrl: 'http://x',
+        store: store,
+        // No instanceId: the provider is not wired yet on startup.
+        httpClient: MockClient((request) async {
+          if (request.url.path.endsWith('/refresh')) {
+            refreshBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return _ok({'access_token': 'new-a', 'refresh_token': 'new-r'});
+          }
+          if (request.headers['authorization'] == 'Bearer old-a') {
+            return _fail('expired', 401);
+          }
+          return _ok({'me': true});
+        }),
+      );
+      await client.get('/api/v1/me');
+      expect(refreshBody?['instance_id'], 'site-90-uuid');
     });
 
     test('dead refresh clears the session', () async {

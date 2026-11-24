@@ -226,6 +226,7 @@ class IdeasController extends StateNotifier<IdeasState> {
     String status,
   ) async {
     if (ids.isEmpty) return null;
+    state = state.copyWith(error: null);
     try {
       final result = await _repo.bulkStatus(ids, status);
       await load();

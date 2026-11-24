@@ -345,9 +345,16 @@ class _IdeasPageState extends ConsumerState<IdeasPage> {
         .bulkStatus(_selected.toList(), status);
     if (!mounted) return;
     if (result == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not change status')));
+      final reason = ref.read(ideasControllerProvider).error;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            reason == null || reason.isEmpty
+                ? 'Could not change status'
+                : 'Could not change status: $reason',
+          ),
+        ),
+      );
       return;
     }
     final moved = result['moved'] ?? 0;

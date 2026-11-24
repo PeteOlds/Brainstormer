@@ -44,6 +44,16 @@ class _BrainstormerAppState extends ConsumerState<BrainstormerApp> {
       final token = await store.readAccessToken();
 
       if (token != null && user != null) {
+        // Restore the instance context BEFORE the first network call. If the
+        // stored access token has expired, /me triggers a refresh; without an
+        // instance id the backend reissues an unscoped token and every
+        // instance-admin action then fails with 403 (BUG.052/053/060/061).
+        final storedInstanceId = await store.readInstanceId();
+        final storedInstanceLabel = await store.readInstanceLabel();
+        ref.read(currentInstanceProvider.notifier).state = storedInstanceId;
+        ref.read(currentInstanceLabelProvider.notifier).state =
+            storedInstanceLabel;
+
         // Refresh profile from /me so role/admin ids are always current.
         Map<String, dynamic>? me;
         try {
@@ -57,17 +67,13 @@ class _BrainstormerAppState extends ConsumerState<BrainstormerApp> {
         }
         final restored = me ?? user;
         await store.saveSession(
-          accessToken: token,
+          accessToken: await store.readAccessToken() ?? token,
           refreshToken: (await store.readRefreshToken()) ?? '',
           user: restored,
-          instanceId: await store.readInstanceId(),
-          instanceLabel: await store.readInstanceLabel(),
+          instanceId: storedInstanceId,
+          instanceLabel: storedInstanceLabel,
         );
         ref.read(currentUserProvider.notifier).state = restored;
-        ref.read(currentInstanceProvider.notifier).state =
-            await store.readInstanceId();
-        ref.read(currentInstanceLabelProvider.notifier).state =
-            await store.readInstanceLabel();
       }
 
       // Web deep-link auto-scope: honour ?instance=90 (or instance UUID/name) on entry.
