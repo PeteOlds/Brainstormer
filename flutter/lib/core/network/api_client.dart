@@ -27,6 +27,7 @@ class ApiClient {
     required this.store,
     http.Client? httpClient,
     OfflineCache? cache,
+    this.instanceId,
   })  : _http = httpClient ?? http.Client(),
         _cache = cache ?? OfflineCache();
 
@@ -34,6 +35,12 @@ class ApiClient {
   final AuthStore store;
   final http.Client _http;
   final OfflineCache _cache;
+
+  /// Active instance id for scoped requests. Set when the user switches
+  /// instances; included in token refresh so the re-issued access token
+  /// keeps the instance context (prevents 403 on admin actions after
+  /// refresh). See BUG.053/BUG.054.
+  String? instanceId;
 
   Map<String, String> _headers(String? token) => {
         'Content-Type': 'application/json',
@@ -151,7 +158,11 @@ class ApiClient {
       final response = await _http.post(
         Uri.parse('$baseUrl/api/v1/refresh'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refresh_token': refresh}),
+        body: jsonEncode({
+          'refresh_token': refresh,
+          if (instanceId != null && instanceId!.isNotEmpty)
+            'instance_id': instanceId,
+        }),
       );
       final decoded = jsonDecode(response.body);
       if (decoded is Map<String, dynamic> &&

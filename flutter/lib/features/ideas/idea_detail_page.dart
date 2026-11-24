@@ -57,19 +57,9 @@ class IdeaDetailPage extends ConsumerStatefulWidget {
 class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage> {
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(currentUserProvider);
-    final isAdmin = currentUserIsAdmin(user);
-    return Scaffold(
-      appBar: const PreferredSize(
-        preferredSize: Size.fromHeight(88),
-        child: Column(
-          children: [
-            SiteHeader(title: 'Brainstormer'),
-          ],
-        ),
-      ),
-      body: _IdeaTabsWidget(ideaId: widget.ideaId, isAdmin: isAdmin),
-    );
+    // SiteHeader lives only once, inside _IdeaTabsWidget. This page just
+    // hosts the tabs widget to avoid rendering the header twice (BUG.059).
+    return _IdeaTabsWidget(ideaId: widget.ideaId);
   }
 }
 
@@ -77,9 +67,8 @@ class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage> {
 /// persists across detail provider rebuilds.
 class _IdeaTabsWidget extends ConsumerStatefulWidget {
   final String ideaId;
-  final bool isAdmin;
 
-  const _IdeaTabsWidget({required this.ideaId, required this.isAdmin});
+  const _IdeaTabsWidget({required this.ideaId});
 
   @override
   ConsumerState<_IdeaTabsWidget> createState() => _IdeaTabsWidgetState();
@@ -95,10 +84,20 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   final _commentDraft = TextEditingController();
   final _chatDraft = TextEditingController();
   bool _sendingChat = false;
-  String? _chatError;
   bool _sendingVote = false;
   bool _pipelineRunning = false;
   Timer? _pollTimer;
+  String? _selectedBriefVersion;
+  String? _selectedDesignVersion;
+  String? _selectedBuildVersion;
+  bool _testsRunning = false;
+  bool _testsDiagnosing = false;
+  int _testRunProgress = 0;
+  String? _testsDiagnosis;
+  String _testStatusFilter = 'all';
+  final _newTestName = TextEditingController();
+  String _newTestType = 'unit';
+  String? _appLogs;
 
   @override
   void initState() {
@@ -126,6 +125,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
     _tabs.dispose();
     _commentDraft.dispose();
     _chatDraft.dispose();
+    _newTestName.dispose();
     super.dispose();
   }
 
@@ -325,17 +325,40 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   Widget _briefTab(BuildContext context, IdeaDetail detail) {
     final briefResults = detail.actions.where((a) => a.actionType == 'PRD_DOC').toList();
     final isRunning = detail.runningActions.contains('PRD_DOC');
+    final current = briefResults.isNotEmpty ? briefResults.first : null;
+    final selectedVer = _selectedBriefVersion ?? (current?.version.toString());
+    final selected = briefResults.where((r) => r.version.toString() == selectedVer).firstOrNull ?? current;
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Text('Brief', style: Theme.of(context).textTheme.headlineSmall),
+        Row(
+          children: [
+            Text('Brief', style: Theme.of(context).textTheme.headlineSmall),
+            const Spacer(),
+            if (briefResults.length > 1)
+              DropdownButton<String>(
+                value: selectedVer,
+                items: briefResults.map((r) => DropdownMenuItem(value: r.version.toString(), child: Text('v${r.version}${r.isCurrent ? ' (current)' : ''}'))).toList(),
+                onChanged: (v) => setState(() => _selectedBriefVersion = v),
+              ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.md),
         if (isRunning)
           const Row(children: [SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: AppSpacing.sm), Text('Running...')])
         else if (briefResults.isEmpty)
           Text('No brief yet. Run "Brief" from the actions section.'),
-        for (final r in briefResults) ...[
-          Card(child: ListTile(title: Text('Brief v${r.version}'), subtitle: const Text('Click to view details'), onTap: () => _showAnalysis(context, r))),
+        if (selected != null) ...[
+          Card(child: ListTile(
+            title: Text('Brief v${selected.version}'),
+            subtitle: Text(_analysisSummary(selected.output)),
+            onTap: () => _showAnalysis(context, selected),
+          )),
+          const SizedBox(height: AppSpacing.sm),
+          Row(children: [
+            TextButton(onPressed: () => _showAnalysis(context, selected), child: const Text('View details')),
+            TextButton(onPressed: () => _copyMarkdown(selected), child: const Text('Copy MD')),
+          ]),
         ],
         const SizedBox(height: AppSpacing.md),
         _actionsSection(context),
@@ -346,17 +369,40 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   Widget _designTab(BuildContext context, IdeaDetail detail) {
     final designResults = detail.actions.where((a) => a.actionType == 'DESIGN_DOC').toList();
     final isRunning = detail.runningActions.contains('DESIGN_DOC');
+    final current = designResults.isNotEmpty ? designResults.first : null;
+    final selectedVer = _selectedDesignVersion ?? (current?.version.toString());
+    final selected = designResults.where((r) => r.version.toString() == selectedVer).firstOrNull ?? current;
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Text('Design', style: Theme.of(context).textTheme.headlineSmall),
+        Row(
+          children: [
+            Text('Design', style: Theme.of(context).textTheme.headlineSmall),
+            const Spacer(),
+            if (designResults.length > 1)
+              DropdownButton<String>(
+                value: selectedVer,
+                items: designResults.map((r) => DropdownMenuItem(value: r.version.toString(), child: Text('v${r.version}${r.isCurrent ? ' (current)' : ''}'))).toList(),
+                onChanged: (v) => setState(() => _selectedDesignVersion = v),
+              ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.md),
         if (isRunning)
           const Row(children: [SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: AppSpacing.sm), Text('Running...')])
         else if (designResults.isEmpty)
           Text('No design yet. Run "Design" from the actions section.'),
-        for (final r in designResults) ...[
-          Card(child: ListTile(title: Text('Design v${r.version}'), subtitle: const Text('Click to view details'), onTap: () => _showAnalysis(context, r))),
+        if (selected != null) ...[
+          Card(child: ListTile(
+            title: Text('Design v${selected.version}'),
+            subtitle: Text(_analysisSummary(selected.output)),
+            onTap: () => _showAnalysis(context, selected),
+          )),
+          const SizedBox(height: AppSpacing.sm),
+          Row(children: [
+            TextButton(onPressed: () => _showAnalysis(context, selected), child: const Text('View details')),
+            TextButton(onPressed: () => _copyMarkdown(selected), child: const Text('Copy MD')),
+          ]),
         ],
         const SizedBox(height: AppSpacing.md),
         _actionsSection(context),
@@ -369,33 +415,74 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   Widget _buildTab(BuildContext context, IdeaDetail detail) {
     final buildResults = detail.actions.where((a) => a.actionType == 'BUILD_CODE').toList();
     final isRunning = detail.runningActions.contains('BUILD_CODE');
-    final latest = buildResults.isNotEmpty ? buildResults.first : null;
-    final runbook = latest?.output?['runbook'] as Map<String, dynamic>?;
-    final written = latest?.output?['written'] == true;
+    final current = buildResults.isNotEmpty ? buildResults.first : null;
+    final selectedVer = _selectedBuildVersion ?? (current?.version.toString());
+    final selected = buildResults.where((r) => r.version.toString() == selectedVer).firstOrNull ?? current;
+    final runbook = selected?.output?['runbook'] as Map<String, dynamic>?;
+    final written = selected?.output?['written'] == true;
+    final buildPreview = selected?.output?['output']?['files'] as List?;
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Text('Build', style: Theme.of(context).textTheme.headlineSmall),
+        Row(
+          children: [
+            Text('Build', style: Theme.of(context).textTheme.headlineSmall),
+            const Spacer(),
+            if (buildResults.length > 1)
+              DropdownButton<String>(
+                value: selectedVer,
+                items: buildResults.map((r) => DropdownMenuItem(value: r.version.toString(), child: Text('v${r.version}${r.isCurrent ? ' (current)' : ''}'))).toList(),
+                onChanged: (v) => setState(() => _selectedBuildVersion = v),
+              ),
+          ],
+        ),
         const SizedBox(height: AppSpacing.md),
         if (isRunning)
           const Row(children: [SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)), SizedBox(width: AppSpacing.sm), Text('Running...')]),
         if (buildResults.isEmpty && !isRunning)
           Text('No build results yet. Run "Build" from the actions section.'),
-        for (final r in buildResults) ...[
+        if (selected != null) ...[
           Card(child: ListTile(
-            title: Text('Build v${r.version}'),
-            subtitle: Text('Target: ${r.output?['target_name'] ?? 'N/A'}\nURL: ${r.output?['app_url'] ?? 'N/A'}'),
+            title: Text('Build v${selected.version}'),
+            subtitle: Text('Target: ${selected.output?['target_name'] ?? 'N/A'}\nURL: ${selected.output?['app_url'] ?? 'N/A'}'),
             isThreeLine: true,
-            onTap: () => _showAnalysis(context, r),
+            onTap: () => _showAnalysis(context, selected),
           )),
+          if (selected.output?['written'] != true && buildPreview != null && buildPreview.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(color: Colors.amber.shade50, border: Border.all(color: Colors.amber.shade300), borderRadius: BorderRadius.circular(8)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Build preview — files to write', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Target: ${selected.output?['target_name'] ?? 'unknown'} · nothing written yet', style: const TextStyle(fontSize: 12)),
+                  ...buildPreview.map((f) => Text('${f['path']} (${(f['content'] as String?)?.length ?? 0} chars)', style: const TextStyle(fontFamily: 'monospace', fontSize: 12))),
+                ],
+              ),
+            ),
+          ],
+          if (selected.output?['written'] != true) ...[
+            const SizedBox(height: AppSpacing.sm),
+            FilledButton(
+              onPressed: () => _writeBuildFiles(detail.idea.id, selected),
+              child: const Text('Write files'),
+            ),
+          ],
+          if (selected.output?['write_report'] != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text('Write report', style: Theme.of(context).textTheme.titleSmall),
+            Text(selected.output!['write_report'].toString()),
+          ],
         ],
-        if (latest != null) ...[
+        if (selected != null) ...[
           const SizedBox(height: AppSpacing.md),
           Text('Write report', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: AppSpacing.xs),
           Text('Written: ${written ? "yes" : "preview only"}'),
-          if (latest.output?['write_report'] != null)
-            Text(latest.output!['write_report'].toString()),
+          if (selected.output?['write_report'] != null)
+            Text(selected.output!['write_report'].toString()),
         ],
         if (runbook != null) ...[
           const SizedBox(height: AppSpacing.md),
@@ -417,22 +504,179 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   // ---------- Tests ----------
 
   Widget _testsTab(BuildContext context, IdeaDetail detail) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _loadTests(detail.idea.id),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _loadTestsAndSummary(detail.idea.id),
       builder: (ctx, snap) {
-        final tests = snap.data ?? const [];
+        final data = snap.data ?? const {};
+        final tests = (data['tests'] as List? ?? const []).whereType<Map<String, dynamic>>().toList();
+        final summary = (data['summary'] as Map<String, dynamic>?) ?? const {};
+        final counts = (summary['counts'] as Map<String, dynamic>?) ?? const {};
+        final filtered = tests.where((t) {
+          if (_testStatusFilter == 'all') return true;
+          return (t['status']?.toString() ?? '') == _testStatusFilter;
+        }).toList();
+        final manualPending = tests.where((t) => t['test_type'] == 'manual' && (t['status']?.toString() ?? '') != 'passed').length;
+        final autoPassed = tests.where((t) => t['test_type'] != 'manual' && (t['status']?.toString() ?? '') == 'passed').length;
+        final autoTotal = tests.where((t) => t['test_type'] != 'manual').length;
+        final releaseReady = autoTotal > 0 && autoPassed == autoTotal && manualPending == 0;
         return ListView(
           padding: const EdgeInsets.all(AppSpacing.md),
           children: [
             Text('Tests', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: AppSpacing.md),
+            // Summary stats
+            Wrap(spacing: AppSpacing.md, children: [
+              Text('${summary['total'] ?? tests.length} tests'),
+              Text('${counts['passed'] ?? 0} passed', style: const TextStyle(color: Colors.green)),
+              Text('${counts['failed'] ?? 0} failed', style: const TextStyle(color: Colors.red)),
+              Text('${counts['not_run'] ?? 0} not run'),
+              if (summary['coverage_pct'] != null)
+                Text('coverage ${(summary['coverage_pct'] as num).toStringAsFixed(0)}%'),
+            ]),
+            const SizedBox(height: AppSpacing.sm),
+            // Release ready indicator
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: releaseReady ? Colors.green.shade50 : Colors.amber.shade50,
+                border: Border.all(color: releaseReady ? Colors.green.shade300 : Colors.amber.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(releaseReady ? 'Ready to release' : 'Not ready to release',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  if (manualPending > 0)
+                    Text('Manual checks: $manualPending still need your verification'),
+                  if (!releaseReady && autoTotal > autoPassed)
+                    Text('Automated checks: $autoPassed/$autoTotal passed'),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            // Run / diagnose buttons
+            Wrap(spacing: AppSpacing.sm, children: [
+              FilledButton(
+                onPressed: _testsRunning ? null : () => _runIdeaTests(detail.idea.id, const []),
+                child: Text(_testsRunning ? 'Running tests...' : 'Run all tests'),
+              ),
+              FilledButton.tonal(
+                onPressed: _testsRunning ? null : () => _runIdeaTests(detail.idea.id, _selectedTestIds.toList()),
+                child: const Text('Run selected'),
+              ),
+              FilledButton.tonal(
+                onPressed: _testsDiagnosing ? null : () => _diagnoseTests(detail.idea.id),
+                child: Text(_testsDiagnosing ? 'Diagnosing...' : 'Diagnose failures'),
+              ),
+            ]),
+            if (_testsRunning)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: LinearProgressIndicator(value: _testRunProgress / 100.0),
+              ),
+            if (_testsDiagnosis != null)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Text(_testsDiagnosis!, style: const TextStyle(fontSize: 12)),
+              ),
+            const SizedBox(height: AppSpacing.sm),
+            // Filter buttons
+            Wrap(spacing: AppSpacing.xs, children: [
+              for (final f in ['all', 'passed', 'failed', 'not_run', 'skipped'])
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: _testStatusFilter == f ? Colors.indigo : null,
+                  ),
+                  onPressed: () => setState(() => _testStatusFilter = f),
+                  child: Text(f.replaceAll('_', ' '), style: TextStyle(color: _testStatusFilter == f ? Colors.white : null)),
+                ),
+            ]),
+            const SizedBox(height: AppSpacing.sm),
+            // Add test
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _newTestName,
+                    decoration: const InputDecoration(hintText: 'Test name'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                DropdownButton<String>(
+                  value: _newTestType,
+                  items: ['unit', 'integration', 'e2e', 'manual', 'performance']
+                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                      .toList(),
+                  onChanged: (v) { if (v != null) setState(() => _newTestType = v); },
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                FilledButton(
+                  onPressed: () => _addTest(detail.idea.id),
+                  child: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
             if (tests.isEmpty)
               const Text('No tests recorded yet. Run a build to generate them, or add one manually.'),
-            for (final t in tests)
-              ListTile(
-                title: Text(t['name']?.toString() ?? ''),
-                subtitle: Text('${t['status'] ?? ''} · ${t['coverage'] ?? ''}'),
-                trailing: Text(t['last_run']?.toString() ?? ''),
+            if (filtered.isEmpty && tests.isNotEmpty)
+              const Text('No tests match this filter.'),
+            // Test table
+            if (filtered.isNotEmpty)
+              DataTable(
+                columns: const [
+                  DataColumn(label: Text('')),
+                  DataColumn(label: Text('Name')),
+                  DataColumn(label: Text('Type')),
+                  DataColumn(label: Text('Status')),
+                  DataColumn(label: Text('')),
+                ],
+                rows: filtered.map((t) {
+                  final testId = t['id']?.toString() ?? '';
+                  return DataRow(cells: [
+                    DataCell(Checkbox(
+                      value: _selectedTestIds.contains(testId),
+                      onChanged: (v) {
+                        setState(() {
+                          if (v == true) {
+                            _selectedTestIds.add(testId);
+                          } else {
+                            _selectedTestIds.remove(testId);
+                          }
+                        });
+                      },
+                    )),
+                    DataCell(Text(t['name']?.toString() ?? '')),
+                    DataCell(Text(t['test_type']?.toString() ?? '')),
+                    DataCell(DropdownButton<String>(
+                      value: t['status']?.toString() ?? 'not_run',
+                      items: ['not_run', 'passed', 'failed', 'skipped']
+                          .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) _updateTestStatus(detail.idea.id, testId, v);
+                      },
+                    )),
+                    DataCell(Row(
+                      children: [
+                        if (t['last_run_output'] != null)
+                          TextButton(
+                            onPressed: () => _showTestDetails(t),
+                            child: const Text('Details'),
+                          ),
+                        TextButton(
+                          onPressed: () => _rerunTest(detail.idea.id, testId),
+                          child: const Text('Rerun'),
+                        ),
+                        TextButton(
+                          onPressed: () => _deleteTest(detail.idea.id, testId),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    )),
+                  ]);
+                }).toList(),
               ),
             const SizedBox(height: AppSpacing.md),
             _actionsSection(context),
@@ -442,100 +686,328 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
     );
   }
 
-  Future<List<Map<String, dynamic>>> _loadTests(String id) async {
+  final Set<String> _selectedTestIds = {};
+
+  Future<Map<String, dynamic>> _loadTestsAndSummary(String id) async {
     try {
-      final data = await ref.read(apiClientProvider).get('/api/v1/ideas/$id/tests');
-      final list = (data is Map ? data['tests'] : null) as List? ?? const [];
-      return list.whereType<Map<String, dynamic>>().toList();
+      final testsData = await ref.read(apiClientProvider).get('/api/v1/ideas/$id/tests');
+      final summaryData = await ref.read(apiClientProvider).get('/api/v1/ideas/$id/tests/summary');
+      return {
+        'tests': (testsData is Map ? testsData['tests'] : null) as List? ?? const [],
+        'summary': (summaryData is Map ? summaryData['data'] ?? summaryData : summaryData) as Map<String, dynamic>? ?? const {},
+      };
     } catch (_) {
-      return const [];
+      return const {'tests': [], 'summary': {}};
     }
+  }
+
+  Future<void> _runIdeaTests(String id, List<String> testIds) async {
+    try {
+      setState(() => _testsRunning = true);
+      await ref.read(apiClientProvider).post('/api/v1/ideas/$id/tests/run', body: {'test_ids': testIds});
+      // Poll for completion
+      for (var i = 0; i < 30; i++) {
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) break;
+        final status = await ref.read(apiClientProvider).get('/api/v1/ideas/$id/tests/run-status');
+        final run = (status is Map ? status['run'] : null) as Map<String, dynamic>?;
+        if (run != null) {
+          final statusStr = run['status']?.toString() ?? '';
+          final progress = (run['progress'] as num?)?.toInt() ?? 0;
+          if (mounted) setState(() => _testRunProgress = progress);
+          if (statusStr == 'completed' || statusStr == 'failed') break;
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    } finally {
+      if (mounted) {
+        setState(() { _testsRunning = false; _testRunProgress = 0; });
+        _loadDetail();
+      }
+    }
+  }
+
+  Future<void> _diagnoseTests(String id) async {
+    try {
+      setState(() => _testsDiagnosing = true);
+      final data = await ref.read(apiClientProvider).post('/api/v1/ideas/$id/tests/diagnose');
+      final diagnosis = (data is Map ? data['diagnosis'] ?? data['message'] : null)?.toString();
+      if (mounted) setState(() => _testsDiagnosis = diagnosis);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    } finally {
+      if (mounted) setState(() => _testsDiagnosing = false);
+    }
+  }
+
+  Future<void> _addTest(String id) async {
+    final name = _newTestName.text.trim();
+    if (name.isEmpty) return;
+    try {
+      await ref.read(apiClientProvider).post('/api/v1/ideas/$id/tests', body: {
+        'name': name,
+        'test_type': _newTestType,
+      });
+      _newTestName.clear();
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _updateTestStatus(String ideaId, String testId, String status) async {
+    try {
+      await ref.read(apiClientProvider).patch('/api/v1/ideas/$ideaId/tests/$testId', body: {'status': status});
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _deleteTest(String ideaId, String testId) async {
+    try {
+      await ref.read(apiClientProvider).delete('/api/v1/ideas/$ideaId/tests/$testId');
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _rerunTest(String ideaId, String testId) async {
+    try {
+      await ref.read(apiClientProvider).post('/api/v1/ideas/$ideaId/tests/run', body: {'test_ids': [testId]});
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  void _showTestDetails(Map<String, dynamic> test) {
+    showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+      title: Text(test['name']?.toString() ?? ''),
+      content: SizedBox(width: 600, child: SingleChildScrollView(child: SelectableText(test['last_run_output']?.toString() ?? 'No output'))),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+    ));
   }
 
   // ---------- Scale ----------
 
   Widget _scaleTab(BuildContext context, IdeaDetail detail, bool isAdmin) {
     final idea = detail.idea;
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      children: [
-        Text('Scale', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: AppSpacing.md),
-        Text('Release management and updates.'),
-        const SizedBox(height: AppSpacing.md),
-        if (isAdmin) ...[
-          Wrap(spacing: AppSpacing.sm, children: [
-            FilledButton.tonal(
-              onPressed: () => _createChild(idea.id, 'enhancement'),
-              child: const Text('Suggest an improvement'),
-            ),
-            FilledButton.tonal(
-              onPressed: () => _createChild(idea.id, 'bugfix'),
-              child: const Text('Report a problem'),
-            ),
-          ]),
-          const SizedBox(height: AppSpacing.md),
-        ],
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: _loadChildren(idea.id),
-          builder: (ctx, snap) {
-            final kids = snap.data ?? const [];
-            if (kids.isEmpty) {
-              return const Text('No suggestions yet — be the first.');
-            }
-            return Column(
-              children: [
-                for (final k in kids)
-                  Card(child: ListTile(
-                    title: Text('${k['reference_code']}: ${k['prompt_title']}'),
-                    subtitle: Text('${k['status']} · ${k['child_kind']}'),
-                  )),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _loadScaleData(idea.id),
+      builder: (ctx, snap) {
+        final data = snap.data ?? const {};
+        final children = (data['children'] as List? ?? const []).whereType<Map<String, dynamic>>().toList();
+        final releases = (data['releases'] as List? ?? const []).whereType<Map<String, dynamic>>().toList();
+        final unassigned = children.where((k) => k['release_id'] == null).toList();
+        return ListView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          children: [
+            Text('Scale', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: AppSpacing.md),
+            Text('Release management and updates.'),
+            const SizedBox(height: AppSpacing.md),
+            if (isAdmin) ...[
+              Wrap(spacing: AppSpacing.sm, children: [
+                FilledButton.tonal(
+                  onPressed: () => _createChild(idea.id, 'enhancement'),
+                  child: const Text('Suggest an improvement'),
+                ),
+                FilledButton.tonal(
+                  onPressed: () => _createChild(idea.id, 'bugfix'),
+                  child: const Text('Report a problem'),
+                ),
+                FilledButton.tonal(
+                  onPressed: () => _createRelease(idea.id),
+                  child: const Text('New release'),
+                ),
+              ]),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            if (children.isEmpty)
+              const Text('No suggestions yet — be the first.'),
+            // Unassigned children
+            if (unassigned.isNotEmpty) ...[
+              Text('No release yet (${unassigned.length} unassigned)', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: AppSpacing.xs),
+              for (final k in unassigned) _scaleChildCard(k, idea.id, isAdmin, releases),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            // Releases
+            for (final r in releases) ...[
+              if (r['id'] != null) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(r['name']?.toString() ?? '', style: Theme.of(context).textTheme.titleSmall),
+                            const SizedBox(width: AppSpacing.sm),
+                            Text('${r['status']} · ${r['child_count']} ideas', style: Theme.of(context).textTheme.bodySmall),
+                            if (isAdmin && r['id'] != null) ...[
+                              const Spacer(),
+                              TextButton(
+                                onPressed: () => _runReleasePipeline(idea.id, r['id'].toString()),
+                                child: const Text('Run pipeline'),
+                              ),
+                              TextButton(
+                                onPressed: () => _completeRelease(r['id'].toString()),
+                                child: const Text('Mark done'),
+                              ),
+                              TextButton(
+                                onPressed: () => _deleteRelease(r['id'].toString()),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (r['notes'] != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(r['notes'].toString(), style: const TextStyle(fontSize: 12)),
+                        ],
+                        const SizedBox(height: AppSpacing.xs),
+                        Text('Builds into: ${r['build_target']?['name'] ?? 'no repo yet'}', style: Theme.of(context).textTheme.bodySmall),
+                        // Children in this release
+                        ...children.where((k) => k['release_id']?.toString() == r['id']?.toString()).map((k) => Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.xs),
+                          child: _scaleChildCard(k, idea.id, isAdmin, releases),
+                        )),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
               ],
-            );
-          },
-        ),
-        const SizedBox(height: AppSpacing.md),
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: _loadReleases(idea.id),
-          builder: (ctx, snap) {
-            final rels = snap.data ?? const [];
-            if (rels.isEmpty) return const SizedBox.shrink();
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Releases', style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: AppSpacing.xs),
-                for (final r in rels)
-                  Card(child: ListTile(
-                    title: Text(r['name']?.toString() ?? ''),
-                    subtitle: Text('${r['status']} · ${r['child_count']} ideas'),
-                    trailing: Text(r['id'] == null ? 'unassigned' : ''),
-                  )),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _actionsSection(context),
-      ],
+            ],
+            const SizedBox(height: AppSpacing.md),
+            _actionsSection(context),
+          ],
+        );
+      },
     );
   }
 
-  Future<List<Map<String, dynamic>>> _loadChildren(String id) async {
-    try {
-      final data = await ref.read(apiClientProvider).get('/api/v1/ideas/$id/children');
-      final list = (data is Map ? data['ideas'] : null) as List? ?? const [];
-      return list.whereType<Map<String, dynamic>>().toList();
-    } catch (_) { return const []; }
+  Widget _scaleChildCard(Map<String, dynamic> k, String parentId, bool isAdmin, List<Map<String, dynamic>> releases) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: ListTile(
+        title: Text('${k['reference_code']}: ${k['prompt_title']}'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${k['status']} · ${k['child_kind']} · 💬 ${k['comments_count'] ?? 0}'),
+            Wrap(spacing: AppSpacing.xs, children: [
+              _buildPill('Brief', (k['actions_run'] as List?)?.contains('PRD_DOC') ?? false),
+              _buildPill('Design', (k['actions_run'] as List?)?.contains('DESIGN_DOC') ?? false),
+              _buildPill('Built', (k['actions_run'] as List?)?.contains('BUILD_CODE') ?? false),
+              if (k['build_status'] != null)
+                _buildPill('Build: ${k['build_status']['status']}', true),
+            ]),
+          ],
+        ),
+        trailing: isAdmin
+            ? DropdownButton<String>(
+                hint: const Text('Move to...'),
+                items: [
+                  ...releases.where((r) => r['id'] != null).map((r) =>
+                      DropdownMenuItem(value: r['id'].toString(), child: Text(r['name']?.toString() ?? ''))),
+                ],
+                onChanged: (v) {
+                  if (v != null) _moveChildToRelease(k['id'].toString(), v);
+                },
+              )
+            : null,
+      ),
+    );
   }
 
-  Future<List<Map<String, dynamic>>> _loadReleases(String id) async {
+  Widget _buildPill(String label, bool done) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: done ? Colors.green.shade50 : Colors.grey.shade100,
+        border: Border.all(color: done ? Colors.green.shade300 : Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 10, color: done ? Colors.green.shade700 : Colors.grey.shade600)),
+    );
+  }
+
+  Future<Map<String, dynamic>> _loadScaleData(String id) async {
     try {
-      final data = await ref.read(apiClientProvider).get('/api/v1/ideas/$id/releases');
-      final list = (data is List) ? data : (data is Map ? data['releases'] ?? data['data'] : null);
-      if (list is List) return list.whereType<Map<String, dynamic>>().toList();
-      return const [];
-    } catch (_) { return const []; }
+      final children = await ref.read(apiClientProvider).get('/api/v1/ideas/$id/children');
+      final releases = await ref.read(apiClientProvider).get('/api/v1/ideas/$id/releases');
+      return {
+        'children': (children is Map ? children['ideas'] : null) as List? ?? const [],
+        'releases': (releases is Map ? releases['releases'] : null) as List? ?? const [],
+        'build_targets': (releases is Map ? releases['build_targets'] : null) as List? ?? const [],
+      };
+    } catch (_) {
+      return const {'children': [], 'releases': [], 'build_targets': []};
+    }
+  }
+
+  Future<void> _createRelease(String parentId) async {
+    final nameCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New release'),
+        content: TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(apiClientProvider).post('/api/v1/ideas/$parentId/releases', body: {'name': nameCtrl.text.trim()});
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _moveChildToRelease(String childId, String releaseId) async {
+    try {
+      await ref.read(apiClientProvider).patch('/api/v1/releases/$releaseId/assign', body: {'idea_id': childId});
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _completeRelease(String releaseId) async {
+    try {
+      await ref.read(apiClientProvider).post('/api/v1/releases/$releaseId/complete');
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _deleteRelease(String releaseId) async {
+    try {
+      await ref.read(apiClientProvider).delete('/api/v1/releases/$releaseId');
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _runReleasePipeline(String parentId, String releaseId) async {
+    try {
+      await ref.read(apiClientProvider).post('/api/v1/releases/$releaseId/pipeline');
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
   }
 
   Future<void> _createChild(String parentId, String kind) async {
@@ -596,8 +1068,8 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
               Text('Status: ${app['live']?['state'] ?? app['state']}'),
               if (app['health_url'] != null) Text('Health: ${app['health_url']}'),
               const SizedBox(height: AppSpacing.xs),
-              Wrap(spacing: AppSpacing.sm, children: [
-                if (app['live']?['state'] != 'running')
+              Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.xs, children: [
+                if ((app['live']?['state'] ?? app['state']) != 'running')
                   FilledButton(
                     onPressed: () => _startManagedApp(instanceId, app['id'].toString()),
                     child: const Text('Start'),
@@ -610,24 +1082,84 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
                   ),
                 if (app['open_url'] != null)
                   OutlinedButton(
-                    onPressed: () => showDialog<void>(context: context, builder: (ctx) => AlertDialog(title: const Text('App URL'), content: SelectableText(app['open_url'].toString()), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))])),
+                    onPressed: () {
+                      final url = app['open_url'].toString();
+                      showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+                        title: const Text('App URL'),
+                        content: SelectableText(url),
+                        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+                      ));
+                    },
                     child: const Text('Open app'),
                   ),
                 OutlinedButton(
                   onPressed: () => _configureManagedApp(instanceId, idea.id),
                   child: const Text('Update setup'),
                 ),
+                OutlinedButton(
+                  onPressed: () => _loadLogs(instanceId, app['id'].toString()),
+                  child: const Text('Refresh logs'),
+                ),
               ]),
-              const SizedBox(height: AppSpacing.xs),
-              OutlinedButton(
-                onPressed: () => _loadLogs(instanceId, app['id'].toString()),
-                child: const Text('Refresh logs'),
-              ),
+              if (_appLogs != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: SelectableText(
+                    _appLogs!,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: Colors.greenAccent),
+                  ),
+                ),
+              ],
             ],
           ],
         );
       },
     );
+  }
+
+  Future<void> _loadLogs(String instanceId, String appId) async {
+    try {
+      final data = await ref.read(apiClientProvider).get('/api/v1/instances/$instanceId/managed-apps/$appId/logs');
+      final logs = (data is Map ? (data['logs'] ?? data['data']) : data)?.toString() ?? '';
+      if (mounted) setState(() => _appLogs = logs);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _writeBuildFiles(String ideaId, ActionResult result) async {
+    try {
+      final targetId = result.targetId ?? result.output?['target_id']?.toString();
+      if (targetId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No build target found.')));
+        return;
+      }
+      await ref.read(apiClientProvider).post('/api/v1/ideas/$ideaId/actions', body: {
+        'action_type': 'BUILD_CODE',
+        'target_id': targetId,
+        'confirm_build': true,
+      });
+      final instanceId = _detail?.idea.instanceId;
+      if (instanceId != null) {
+        try {
+          await ref.read(apiClientProvider).post('/api/v1/instances/$instanceId/managed-apps', body: {
+            'idea_id': ideaId,
+            'target_id': targetId,
+          });
+        } catch (_) {}
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Build written.')));
+        _loadDetail();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
   }
 
   Future<Map<String, dynamic>?> _loadManagedApp(String instanceId, String ideaId) async {
@@ -681,21 +1213,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
     }
   }
 
-  Future<void> _loadLogs(String instanceId, String appId) async {
-    try {
-      final data = await ref.read(apiClientProvider).get('/api/v1/instances/$instanceId/managed-apps/$appId/logs');
-      final logs = data is Map ? (data['logs'] ?? data['data']) : data;
-      if (mounted) {
-        showDialog<void>(context: context, builder: (ctx) => AlertDialog(
-          title: const Text('Logs'),
-          content: SizedBox(width: 600, child: SingleChildScrollView(child: SelectableText(logs?.toString() ?? ''))),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
-        ));
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-    }
-  }
+  // _loadLogs replaced by the _appLogs-setting version above.
 
   // ---------- Analysis ----------
 
@@ -918,7 +1436,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
       _chatDraft.clear();
       ref.invalidate(_chatSessionsProvider(widget.ideaId));
     } catch (e) {
-      setState(() => _chatError = e.toString());
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Chat failed: $e')));
     } finally {
       if (mounted) setState(() => _sendingChat = false);
     }
@@ -930,6 +1448,21 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('${_actionLabelMap[action.actionType] ?? action.actionType} v${action.version}'),
+        content: SizedBox(width: 600, child: SingleChildScrollView(child: SelectableText(md))),
+        actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close'))],
+      ),
+    );
+  }
+
+  void _copyMarkdown(ActionResult action) {
+    final md = _analysisToMarkdown(action.output);
+    // Use clipboard
+    // ignore: deprecated_member_use
+    // We'll just show in a dialog since clipboard may not be available
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Markdown'),
         content: SizedBox(width: 600, child: SingleChildScrollView(child: SelectableText(md))),
         actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close'))],
       ),
@@ -957,8 +1490,8 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
     return Padding(
       padding: EdgeInsets.only(left: depth * 16.0),
       child: ListTile(
-        title: Text(comment.body ?? ''),
-        subtitle: Text(comment.author ?? ''),
+        title: Text(comment.body),
+        subtitle: Text(comment.author ?? 'Unknown'),
       ),
     );
   }

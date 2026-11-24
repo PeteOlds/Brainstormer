@@ -23,11 +23,15 @@ final _apiBaseUrl = _configuredBaseUrl.isNotEmpty
 
 final authStoreProvider = Provider<AuthStore>((ref) => AuthStore());
 
-final apiClientProvider = Provider<ApiClient>((ref) => ApiClient(
-      baseUrl: _apiBaseUrl,
-      store: ref.watch(authStoreProvider),
-      httpClient: http.Client(),
-    ));
+final apiClientProvider = Provider<ApiClient>((ref) {
+  final instanceId = ref.watch(currentInstanceProvider);
+  return ApiClient(
+    baseUrl: _apiBaseUrl,
+    store: ref.watch(authStoreProvider),
+    httpClient: http.Client(),
+    instanceId: instanceId,
+  );
+});
 
 /// Signed-in user document (null when anonymous). Refreshed on login
 /// and cleared on logout/expiry.

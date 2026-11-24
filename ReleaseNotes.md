@@ -13,6 +13,24 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.98.0 — 2026-11-24
+
+### Bug fixes
+- BUG.051: Voting now works on both list and detail views (upvote and downvote).
+- BUG.052: Bulk status change now works correctly.
+- BUG.053: Run full pipeline no longer shows "Admin access required" (instance context preserved in token refresh).
+- BUG.054: Change status no longer returns 403 (instance context preserved in token refresh).
+- BUG.056: Managed app Start button now reflects live state, logs display, Open app shows URL.
+- BUG.059: Page header no longer shown twice on idea detail.
+
+### Features
+- BUG.055: Version selector added to Brief/Design/Build tabs (Jinja parity).
+- BUG.057: Tests tab now has full Jinja parity (summary, run/diagnose/filter/add/per-test actions).
+- BUG.058: Scale tab now has full Jinja parity (children, releases, pipeline, notes, AI settings, bulk actions).
+- BUG.051: Upvote color change now works on detail view.
+
+---
+
 ## v0.97.0 — 2026-11-22
 
 ### Bug fixes
