@@ -44,6 +44,16 @@ INSTANCE_NAME = "Flutter Test Site"
 ADMIN_EMAIL = "flutter-admin@example.com"
 ADMIN_PASSWORD = "flutter123"
 
+# Mirror the live Site 90 accounts from MANUAL_TEST_PLAN.md. These are seeded
+# into the throwaway test DB (never the live one) so the reported login shapes
+# are covered: instance admin and standard member.
+LIVE_ADMIN_EMAIL = "admin@test.local"
+LIVE_ADMIN_PASSWORD = "Admin!2026"
+LIVE_ADMIN_NAME = "Test Admin"
+LIVE_USER_EMAIL = "user@test.local"
+LIVE_USER_PASSWORD = "User!2026"
+LIVE_USER_NAME = "Test User"
+
 NODES_JS = """
 () => Array.from(document.querySelectorAll('flt-semantics')).map((n) => {
   const r = n.getBoundingClientRect();
@@ -167,6 +177,28 @@ def _seed():
     db.session.add(
         Membership(user_id=admin.id, instance_id=instance.id, role="INSTANCE_ADMIN")
     )
+
+    for email, name, password, membership_role in (
+        (
+            LIVE_ADMIN_EMAIL,
+            LIVE_ADMIN_NAME,
+            LIVE_ADMIN_PASSWORD,
+            "INSTANCE_ADMIN",
+        ),
+        (
+            LIVE_USER_EMAIL,
+            LIVE_USER_NAME,
+            LIVE_USER_PASSWORD,
+            "USER",
+        ),
+    ):
+        user = User(email=email, name=name, role=UserRole.USER)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.flush()
+        db.session.add(
+            Membership(user_id=user.id, instance_id=instance.id, role=membership_role)
+        )
 
     prompt = PromptConfig(
         title="Seeded prompt",
@@ -477,6 +509,18 @@ def _login(page, base_url):
     except Exception:
         _click_text(page, INSTANCE_NAME)
         _wait_text(page, "matching ideas", timeout=25)
+
+
+def _login_from_protected_route(page, base_url, email, password):
+    """Sign in from a deep link that starts behind the auth gate."""
+    page.goto(
+        f"{base_url}/ideas?instance={INSTANCE_NUMBER}", wait_until="domcontentloaded"
+    )
+    _enable_semantics(page)
+    inputs = page.locator("input")
+    _fill_input(page, inputs.nth(0), email)
+    _fill_input(page, inputs.nth(1), password)
+    _click_text(page, "Sign in")
 
 
 # --------------------------------------------------------------------------
@@ -802,3 +846,31 @@ def test_expired_token_restore_keeps_site_admin_actions(
             ).all()
         }
     assert set(statuses.values()) == {"SCOPE"}, statuses
+
+
+@pytest.mark.parametrize(
+    "email,password,display_name,is_instance_admin",
+    [
+        (LIVE_ADMIN_EMAIL, LIVE_ADMIN_PASSWORD, LIVE_ADMIN_NAME, True),
+        (LIVE_USER_EMAIL, LIVE_USER_PASSWORD, LIVE_USER_NAME, False),
+    ],
+)
+def test_login_from_deep_link_stays_signed_in(
+    flutter_page, flutter_server, email, password, display_name, is_instance_admin
+):
+    """A successful login from /ideas must not bounce back to the login form.
+
+    The auth gate used to cache the first (anonymous) token read, so signing
+    in from a protected deep link kept showing LoginPage. Both Site 90 user
+    shapes are covered because the bounce affected either account.
+    """
+    page = flutter_page
+    _login_from_protected_route(page, flutter_server, email, password)
+
+    _wait_text(page, "matching ideas", timeout=30)
+    text = _text(page)
+    assert "Sign in" not in text, text
+    assert "Create an account" not in text, text
+    assert display_name in text, text
+    assert ("Admin" in text) is is_instance_admin, text
+    assert not page._page_errors, page._page_errors

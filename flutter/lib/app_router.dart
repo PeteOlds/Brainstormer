@@ -119,5 +119,10 @@ class _AdminGate extends ConsumerWidget {
 }
 
 final _tokenProvider = FutureProvider<String?>((ref) async {
+  // Auth changes update the signed-in user (login, register, logout, session
+  // restore). Watch only the null/non-null transition: a fresh token read is
+  // needed when auth appears or disappears, but rebuilding on every profile
+  // update disposes the instance picker before it can navigate onward.
+  ref.watch(currentUserProvider.select((user) => user != null));
   return ref.watch(authStoreProvider).readAccessToken();
 });

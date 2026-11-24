@@ -13,6 +13,14 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.99.1 — 2026-11-25
+
+### Bug fixes
+- Signing in from a protected deep link (for example `/ideas?instance=90`) no longer bounces back to the email/password screen. The cached anonymous token read is refreshed when authentication state changes, covering both instance-admin and standard Site 90 users.
+- A failed `?instance=` deep-link scope no longer clears an existing valid session.
+
+---
+
 ## v0.99.0 — 2026-11-24
 
 ### Bug fixes

@@ -77,7 +77,13 @@ class _BrainstormerAppState extends ConsumerState<BrainstormerApp> {
       }
 
       // Web deep-link auto-scope: honour ?instance=90 (or instance UUID/name) on entry.
-      await _maybeScopeFromQuery();
+      // Best-effort: a bad ?instance= value or a failed scope call must not
+      // clear an otherwise valid session and bounce back to the login form.
+      try {
+        await _maybeScopeFromQuery();
+      } catch (e) {
+        debugPrint('Deep-link instance scope failed: $e');
+      }
 
       if (kIsWeb && !_deepLinkDone) {
         _deepLinkDone = true;
