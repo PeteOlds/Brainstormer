@@ -954,6 +954,80 @@ def test_pipeline_status_survives_navigation_and_refresh(
     assert not page._page_errors, page._page_errors
 
 
+def test_idea_number_on_detail_and_activity_filter(
+    flutter_page, flutter_server, flutter_app
+):
+    """REQ.035 / REQ.036 / REQ.037: idea numbers are visible and filterable."""
+    from datetime import datetime, timezone
+
+    from app.extensions import db
+    from app.models import Idea, Instance, PromptConfig, PromptRun, User
+
+    with flutter_app.app_context():
+        instance = Instance.query.filter_by(number=INSTANCE_NUMBER).one()
+        admin = User.query.filter_by(email=ADMIN_EMAIL).one()
+        prompt = PromptConfig.query.filter_by(title="Seeded prompt").one()
+        ideas = [
+            Idea(
+                reference_code="IDEA-9401",
+                prompt_title="Title check idea",
+                raw_content="Content for IDEA-9401.",
+                status="SPARK",
+                instance_id=instance.id,
+                prompt_config_id=prompt.id,
+                created_by_id=admin.id,
+            ),
+            Idea(
+                reference_code="IDEA-9402",
+                prompt_title="Other idea",
+                raw_content="Content for IDEA-9402.",
+                status="SPARK",
+                instance_id=instance.id,
+                prompt_config_id=prompt.id,
+                created_by_id=admin.id,
+            ),
+        ]
+        db.session.add_all(ideas)
+        db.session.flush()
+        db.session.add_all(
+            [
+                PromptRun(
+                    idea_id=idea.id,
+                    instance_id=instance.id,
+                    prompt_config_id=prompt.id,
+                    action_type="GENERATION",
+                    status="SUCCESS",
+                    triggered_by="manual",
+                    created_at=datetime.now(timezone.utc),
+                )
+                for idea in ideas
+            ]
+        )
+        db.session.commit()
+        idea_id = str(ideas[0].id)
+
+    page = flutter_page
+    _login(page, flutter_server)
+    _open_admin(page, "Activity")
+    _scroll_until(page, "Recent runs")
+    assert page.locator("input").count() >= 1
+    field = page.locator("input").last
+    _fill_input(page, field, "IDEA-9401")
+    field.press("Enter")
+
+    _wait_any(page, "Filtered to idea: IDEA-9401", timeout=25)
+    _scroll_until(page, "Generation on IDEA-9401")
+    assert "Generation on IDEA-9402" not in _text(page)
+
+    page.goto(
+        f"{flutter_server}/ideas?instance={INSTANCE_NUMBER}&idea={idea_id}",
+        wait_until="domcontentloaded",
+    )
+    _enable_semantics(page)
+    _wait_any(page, "IDEA-9401: Title check idea", timeout=25)
+    assert not page._page_errors, page._page_errors
+
+
 @pytest.mark.parametrize(
     "email,password,display_name,is_instance_admin",
     [

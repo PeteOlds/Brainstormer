@@ -592,9 +592,9 @@ def activity_stats(user):
     from app.models import PromptRun, PromptRunStatus
     from datetime import datetime, timedelta, timezone
 
-    # Optional server-side run filters (?run_status=, ?model=). The stream
-    # defaults to the 20 most recent runs; a filter widens the window so
-    # older matching runs aren't cut off by pagination.
+    # Optional server-side run filters (?run_status=, ?model=, ?idea_number=).
+    # The stream defaults to the 20 most recent runs; a filter widens the
+    # window so older matching runs aren't cut off by pagination.
     status_filter = (request.args.get("run_status") or "").upper() or None
     if status_filter and status_filter not in (
         "PENDING",
@@ -618,6 +618,7 @@ def activity_stats(user):
 
     prompt_filter = (request.args.get("prompt") or "").strip() or None
     prompt_id_filter = (request.args.get("prompt_id") or "").strip() or None
+    idea_number_filter = (request.args.get("idea_number") or "").strip() or None
     error_condition = (request.args.get("error_condition") or "").strip() or None
     job_type = (request.args.get("job_type") or "all").lower()
     if job_type not in ("all", "ai", "app"):
@@ -709,7 +710,16 @@ def activity_stats(user):
                     f" on {idea_refs[item['idea_id']]}"
                 )
 
-    # Apply prompt and error-condition filters.
+    # Apply idea-number, prompt and error-condition filters. Idea numbers are
+    # added above, so this filter can run after enrichment without another
+    # query. A partial number is accepted (for example "10802").
+    if idea_number_filter:
+        needle = idea_number_filter.lower()
+        recent_runs = [
+            r
+            for r in recent_runs
+            if needle in str(r.get("idea_reference") or "").lower()
+        ]
     if prompt_id_filter:
 
         def _belongs_to_prompt(item):

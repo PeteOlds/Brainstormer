@@ -1,7 +1,7 @@
 # Brainstormer — Roadmap
 
 **Single source of truth for outstanding work.** Update on every build: add new items, refine scope, and remove items only when released (record them in `ReleaseNotes.md`).
-**Version:** 0.100.0 · **Date:** 2026-11-25 · **Branch:** `main`
+**Version:** 0.101.0 · **Date:** 2026-11-25 · **Branch:** `main`
 
 Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decisions: see **Decisions** below.
 
@@ -21,6 +21,7 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | RM-001 | blocked | **Device CI maiden run (Chrome)** | Workflow now builds with `./scripts/build_web.sh`; a confirmed green GitHub Actions run is still required. |
 | RM-002 | in-progress | **Coverage ratchet to 85%** | Gate restored to 75% with tests for release and supervision wrappers; the ratchet to 85% remains. |
 | RM-003 | blocked | **GitHub flow CI coverage** | Mocked push-flow tests always run; the optional `GITHUB_TEST_PAT` secret enables the CI-secret leg. Configure the repository secret to unblock. |
+| RM-005 | planned | **Housekeeping: untracked/stale artefacts** | Partly done in v0.99.2 (v0.26.9 doc archived); duplicate `Guides/` and `guidelines/` guide files still remain. |
 
 ## R2 — User-visible bug sweep
 
@@ -33,8 +34,6 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | BUG.065 | planned | **Create Idea upload button works on web** | The Create Idea / Upload .md/.txt button doesn't open an upload box |
 | BUG.066 | planned | **Copy Open App URL or command** | On Build tab, Open App should allow copy to clipboard.  Note that Open App may be either a URL or a command line |
 | BUG.067 | planned | **Build logs display** | On the Build tab, check that logs are working properly - they keep showing as blank |
-| REQ.035 | planned | **Idea number before title** | On the Idea tab show the Idea Number before  the title |
-| REQ.036 | planned | **Idea filter on Admin Activity** | On Admin Activity Recent Runs, add Idea to the existing options (Outcomes, Jobs, Models) |
 
 ## R3 — Features
 
@@ -49,7 +48,7 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | ------ | ------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | RM-004 | planned | **OpenCode attach-mode auth**     | Investigate and fix LAN attach-mode auth: `OPENCODE_PASSWORD`/server password from `~/.config/opencode/service.json` is rejected by the v2 CLI client. Replace the current Ollama workaround for SHIP/SCALE once verified.        |
 | RM-013 | planned | **Remove legacy Jinja templates** | After the Flutter cutover has been monitored with no P1 regressions, delete the retired Jinja templates/routes and related assets to end dual maintenance.                                                                        |
-| RM-030 | planned | **Live Stripe billing loop**      | Operational setup: configure real Stripe plans mapped to entitlement keys and verify the test/staging grant → gate → revoke loop. Primarily admin/configuration work; track any small code fixes discovered as separate RM items. |
+| RM-051 | planned | **Live Stripe billing loop**      | Operational setup: configure real Stripe plans mapped to entitlement keys and verify the test/staging grant → gate → revoke loop. Primarily admin/configuration work; track any small code fixes discovered as separate RM items. |
 
 ## Release Unassigned — no phase
 
@@ -59,7 +58,7 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | RM050    | Updated README     | HOLD                                                                                                                                                                                                                                                        |
 | BUG.010  |                    | HOLD<br>If AI Provider Spend tab is different from AI Providers / Configure / Monthly budgets, then remove the duplication                                                                                                                                  |
 | BUG.069  |                    | Debugging a failed job (Design Doc on IDEA-9263) gave the following error message<br><br>Failed to load: ApiException(0): Network error: ClientException: Failed to fetch, uri=/api/v1/ideas/f588be63-71bf-442f-8ba1-6a75e335a9ba                           |
-| REQ.037  |                    |                                                                                                                                                                                                                                                             |
+| BUG.070  |                    | HOLD<br>On the Admin Panel, update the System settings tile to read "System Settings Platform, location, build location" (old BUG.001 was reused for a different fix)                                                                                    |
 
 ---
 

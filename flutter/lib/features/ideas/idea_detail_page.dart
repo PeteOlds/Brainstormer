@@ -281,7 +281,11 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Text(idea.promptTitle, style: Theme.of(context).textTheme.headlineSmall),
+        Text(
+          '${idea.referenceCode}: ${idea.promptTitle}',
+          key: const Key('idea_detail_title'),
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
         const SizedBox(height: AppSpacing.sm),
         Text(idea.summary ?? '(no summary)',
             style: Theme.of(context).textTheme.bodyLarge),

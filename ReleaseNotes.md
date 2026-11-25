@@ -13,11 +13,24 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.101.0 — 2026-11-25
+
+### Features
+- REQ.035: Idea numbers continue to lead Ideas list titles, and idea detail now uses the same format.
+- REQ.036: Admin Activity → Recent Runs has an Idea number filter. Partial matches such as `9401` work alongside the existing outcome, job and model filters.
+- REQ.037: Idea detail titles now show the idea number before the title, for example `IDEA-9401: Title check idea`.
+
+### Bug fixes
+- Bookkeeping: the v0.100.0 status-bar items were renumbered to REQ.038/REQ.039, the duplicated v0.96.21 release block was merged, and the roadmap regained RM-005.
+- Bookkeeping: the live Stripe roadmap item is now RM-051, avoiding a clash with the shipped Guides request, and the old System settings tile wording request is recorded as BUG.070.
+
+---
+
 ## v0.100.0 — 2026-11-25
 
 ### Features
-- REQ.033: Full pipeline runs now have a persistent, server-backed status bar at the bottom of the app. It survives navigation and refresh and reports queued and running runs.
-- REQ.034: The Scale tab shows a live release pipeline status card with phase, child progress, errors and a Stop control. Active release runs also appear in the shared status bar.
+- REQ.038: Full pipeline runs now have a persistent, server-backed status bar at the bottom of the app. It survives navigation and refresh and reports queued and running runs.
+- REQ.039: The Scale tab shows a live release pipeline status card with phase, child progress, errors and a Stop control. Active release runs also appear in the shared status bar.
 
 ### Bug fixes
 - Full pipeline runs now create a tracking row before enqueue and mark it running, succeeded or failed, so queued work no longer disappears after the snackbar.
@@ -95,20 +108,6 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 ### Bug fixes
 - Tab switching now works correctly (TabController persists across rebuilds).
 - Phase-appropriate tabs (Brief/Design/Build/Scale) now display based on idea lifecycle stage.
-- BUG.039: Change Status dropdown added to idea detail overview.
-- BUG.040: Refresh button added to dashboard.
-- BUG.041: Build and Scale tabs now show content for built ideas.
-- BUG.042: BUILD_CODE results moved to Build tab (not Analysis).
-
-### Features
-- REQ.030: Dashboard comments show user who posted.
-- REQ.031: Idea title format updated (IDEA-number: Prompt title - first 2 lines).
-
----
-
-
-
-### Bug fixes
 - BUG.039: Change Status dropdown added to idea detail overview.
 - BUG.040: Refresh button added to dashboard.
 - BUG.041: Build and Scale tabs now show content for built ideas.

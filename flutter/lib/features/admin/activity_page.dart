@@ -30,8 +30,16 @@ class _AdminActivityPageState extends ConsumerState<AdminActivityPage> {
   late String _runStatus = widget.initialRunStatus ?? '';
   late String _model = widget.initialModel ?? '';
   String _jobType = 'all';
+  String _ideaNumber = '';
   int _page = 1;
   int _days = 30;
+  final _ideaNumberController = TextEditingController();
+
+  @override
+  void dispose() {
+    _ideaNumberController.dispose();
+    super.dispose();
+  }
 
   ({
     int page,
@@ -40,6 +48,7 @@ class _AdminActivityPageState extends ConsumerState<AdminActivityPage> {
     String jobType,
     int days,
     String? promptId,
+    String ideaNumber,
   })
   get _query => (
     page: _page,
@@ -48,6 +57,7 @@ class _AdminActivityPageState extends ConsumerState<AdminActivityPage> {
     jobType: _jobType,
     days: _days,
     promptId: _promptId,
+    ideaNumber: _ideaNumber,
   );
 
   void _update(VoidCallback change) {
@@ -170,6 +180,38 @@ class _AdminActivityPageState extends ConsumerState<AdminActivityPage> {
                     ),
                   ),
                 ],
+                if (_ideaNumber.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Card(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.xs,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.filter_alt_outlined, size: 18),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              'Filtered to idea: $_ideaNumber',
+                              key: const Key('activity_idea_filter'),
+                            ),
+                          ),
+                          TextButton(
+                            key: const Key('activity_clear_idea'),
+                            onPressed: () => _update(() {
+                              _ideaNumberController.clear();
+                              _ideaNumber = '';
+                            }),
+                            child: const Text('Clear'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 Wrap(
                   spacing: AppSpacing.sm,
@@ -227,9 +269,12 @@ class _AdminActivityPageState extends ConsumerState<AdminActivityPage> {
                         jobType: _jobType,
                         model: _model,
                         models: models,
+                        ideaNumberController: _ideaNumberController,
                         onStatus: (v) => _update(() => _runStatus = v ?? ''),
                         onJobType: (v) => _update(() => _jobType = v ?? 'all'),
                         onModel: (v) => _update(() => _model = v ?? ''),
+                        onIdeaNumber: (v) =>
+                            _update(() => _ideaNumber = v.trim()),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       if (runs.isEmpty)
@@ -371,18 +416,22 @@ class _RunFilters extends StatelessWidget {
     required this.jobType,
     required this.model,
     required this.models,
+    required this.ideaNumberController,
     required this.onStatus,
     required this.onJobType,
     required this.onModel,
+    required this.onIdeaNumber,
   });
 
   final String runStatus;
   final String jobType;
   final String model;
   final List<String> models;
+  final TextEditingController ideaNumberController;
   final ValueChanged<String?> onStatus;
   final ValueChanged<String?> onJobType;
   final ValueChanged<String?> onModel;
+  final ValueChanged<String> onIdeaNumber;
 
   @override
   Widget build(BuildContext context) {
@@ -424,6 +473,28 @@ class _RunFilters extends StatelessWidget {
               DropdownMenuItem(value: m, child: Text(m)),
           ],
           onChanged: onModel,
+        ),
+        SizedBox(
+          width: 220,
+          child: TextField(
+            key: const Key('activity_idea_number_filter'),
+            controller: ideaNumberController,
+            decoration: InputDecoration(
+              labelText: 'Idea number',
+              hintText: 'IDEA-10802',
+              prefixIcon: const Icon(Icons.tag),
+              suffixIcon: ideaNumberController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        ideaNumberController.clear();
+                        onIdeaNumber('');
+                      },
+                    )
+                  : null,
+            ),
+            onSubmitted: onIdeaNumber,
+          ),
         ),
       ],
     );
@@ -771,6 +842,7 @@ final activityProvider = FutureProvider.autoDispose
         String jobType,
         int days,
         String? promptId,
+        String ideaNumber,
       })
     >((ref, q) {
       return ref
@@ -782,5 +854,6 @@ final activityProvider = FutureProvider.autoDispose
             jobType: q.jobType,
             days: q.days,
             promptId: q.promptId,
+            ideaNumber: q.ideaNumber,
           );
     });

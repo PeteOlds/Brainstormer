@@ -2098,6 +2098,53 @@ class TestAdminEndpoints:
         assert len(runs) == 1
         assert runs[0]["prompt_config_id"] == prompt_id
 
+    def test_activity_stats_idea_number_filter(
+        self, admin_client, app, admin_user, admin_prompt
+    ):
+        """REQ.036: Recent Runs can be filtered by idea number."""
+        with app.app_context():
+            from app.extensions import db
+            from app.models import Idea, PromptConfig, PromptRun, User
+
+            admin = User.query.filter_by(email="admin@test.com").first()
+            prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
+            idea1 = Idea(
+                reference_code="IDEA-1001",
+                prompt_title="Alpha",
+                raw_content="A",
+                status="SPARK",
+                prompt_config_id=prompt.id,
+            )
+            idea2 = Idea(
+                reference_code="IDEA-2002",
+                prompt_title="Beta",
+                raw_content="B",
+                status="SPARK",
+                prompt_config_id=prompt.id,
+            )
+            db.session.add_all([idea1, idea2])
+            db.session.commit()
+            db.session.add_all(
+                [
+                    PromptRun(idea_id=idea1.id, triggered_by="manual"),
+                    PromptRun(idea_id=idea2.id, triggered_by="manual"),
+                    PromptRun(triggered_by="manual"),
+                ]
+            )
+            db.session.commit()
+
+        resp = admin_client.get("/api/v1/admin/activity/stats?idea_number=1001")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert len(data["recent_runs"]) == 1
+        assert data["recent_runs"][0]["idea_reference"] == "IDEA-1001"
+        assert data["recent_runs_pagination"]["total"] == 1
+
+        resp = admin_client.get("/api/v1/admin/activity/stats?idea_number=IDEA-2002")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert [r["idea_reference"] for r in data["recent_runs"]] == ["IDEA-2002"]
+
 
 class TestHealthEndpoints:
     def test_health_ok(self, client):

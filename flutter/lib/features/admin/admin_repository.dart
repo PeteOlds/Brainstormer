@@ -26,6 +26,7 @@ class AdminRepository {
     String jobType = 'all',
     int days = 30,
     String? promptId,
+    String ideaNumber = '',
   }) async {
     final query = <String, String>{
       'page': '$page',
@@ -36,6 +37,7 @@ class AdminRepository {
     if (runStatus.isNotEmpty) query['run_status'] = runStatus;
     if (model.isNotEmpty) query['model'] = model;
     if (promptId != null && promptId.isNotEmpty) query['prompt_id'] = promptId;
+    if (ideaNumber.isNotEmpty) query['idea_number'] = ideaNumber;
     final data = await api.get('/api/v1/admin/activity/stats', query: query);
     return (data as Map<String, dynamic>);
   }
