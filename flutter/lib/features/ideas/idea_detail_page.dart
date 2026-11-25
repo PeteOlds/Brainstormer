@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth_helpers.dart';
+import '../../core/widgets/pipeline_status_banner.dart';
 import '../../core/widgets/site_header.dart';
 import '../chat/chat_models.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/pipeline/pipeline_status_provider.dart';
 import '../../core/providers.dart';
 import '../../core/theme/tokens.dart';
 import '../chat/chat_repository.dart';
@@ -85,8 +87,8 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   final _chatDraft = TextEditingController();
   bool _sendingChat = false;
   bool _sendingVote = false;
-  bool _pipelineRunning = false;
   Timer? _pollTimer;
+  Timer? _scalePollTimer;
   String? _selectedBriefVersion;
   String? _selectedDesignVersion;
   String? _selectedBuildVersion;
@@ -122,6 +124,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _scalePollTimer?.cancel();
     _tabs.dispose();
     _commentDraft.dispose();
     _chatDraft.dispose();
@@ -138,12 +141,16 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
           _loading = false;
           _rebuildTabs(detail);
           _managePoll(detail);
+          _manageScalePoll(detail);
         });
       }
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
   }
+
+  bool get _fullPipelineRunning =>
+      _detail?.runningActions.contains('FULL_PIPELINE') ?? false;
 
   void _managePoll(IdeaDetail detail) {
     if (detail.runningActions.isNotEmpty) {
@@ -152,6 +159,20 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
       _pollTimer?.cancel();
       _pollTimer = null;
     }
+  }
+
+  /// Refresh the Scale tab while it is open so a release pipeline's phase
+  /// and counts keep moving without a manual reload.
+  void _manageScalePoll(IdeaDetail detail) {
+    _scalePollTimer?.cancel();
+    if (detail.idea.status != 'SCALE' || detail.idea.parentId != null) return;
+    _scalePollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      final tabs = _buildTabs(_detail ?? detail);
+      if (_tabs.index < tabs.length && tabs[_tabs.index].text == 'Scale') {
+        unawaited(_loadDetail());
+      }
+    });
   }
 
   void _rebuildTabs(IdeaDetail detail) {
@@ -165,7 +186,13 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
 
   // Secondary (non-lifecycle) analyses.
   List<ActionResult> _secondaryAnalyses(IdeaDetail detail) {
-    const lifecycle = {'PRD_DOC', 'DESIGN_DOC', 'BUILD_CODE', 'REFINE'};
+    const lifecycle = {
+      'PRD_DOC',
+      'DESIGN_DOC',
+      'BUILD_CODE',
+      'REFINE',
+      'FULL_PIPELINE',
+    };
     return detail.actions.where((a) => !lifecycle.contains(a.actionType)).toList();
   }
 
@@ -234,7 +261,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
     final isAdmin = currentUserIsAdmin(user);
     return Scaffold(
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(88),
+        preferredSize: const Size.fromHeight(104),
         child: Column(
           children: [
             SiteHeader(title: 'Brainstormer'),
@@ -243,6 +270,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
         ),
       ),
       body: TabBarView(controller: _tabs, children: _buildViews(detail, isAdmin)),
+      bottomNavigationBar: const PipelineStatusBanner(),
     );
   }
 
@@ -277,7 +305,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
             ),
             if (isAdmin && idea.status != 'DROP' && idea.status != 'ARCHIVE' && idea.status != 'FREEZE') ...[
               const SizedBox(width: AppSpacing.md),
-              if (_pipelineRunning)
+              if (_fullPipelineRunning)
                 const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -852,9 +880,17 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
                             if (isAdmin && r['id'] != null) ...[
                               const Spacer(),
                               TextButton(
-                                onPressed: () => _runReleasePipeline(idea.id, r['id'].toString()),
+                                onPressed: _releasePipelineActive(r)
+                                    ? null
+                                    : () => _runReleasePipeline(idea.id, r['id'].toString()),
                                 child: const Text('Run pipeline'),
                               ),
+                              if (_releasePipelineActive(r))
+                                TextButton(
+                                  key: Key('release_pipeline_stop_${r['id']}'),
+                                  onPressed: () => _stopReleasePipeline(r['id'].toString()),
+                                  child: const Text('Stop'),
+                                ),
                               TextButton(
                                 onPressed: () => _completeRelease(r['id'].toString()),
                                 child: const Text('Mark done'),
@@ -866,6 +902,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
                             ],
                           ],
                         ),
+                        _releasePipelineStatus(context, r),
                         if (r['notes'] != null) ...[
                           const SizedBox(height: AppSpacing.xs),
                           Text(r['notes'].toString(), style: const TextStyle(fontSize: 12)),
@@ -889,6 +926,101 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
           ],
         );
       },
+    );
+  }
+
+  Map<String, dynamic> _releasePipeline(Map<String, dynamic> release) {
+    final pipeline = release['pipeline'];
+    if (pipeline is Map) return Map<String, dynamic>.from(pipeline);
+    return const <String, dynamic>{};
+  }
+
+  bool _releasePipelineActive(Map<String, dynamic> release) {
+    final status = _releasePipeline(release)['status']?.toString() ?? 'idle';
+    return status == 'running' || status == 'stopping';
+  }
+
+  Widget _releasePipelineStatus(
+    BuildContext context,
+    Map<String, dynamic> release,
+  ) {
+    final pipeline = _releasePipeline(release);
+    final status = pipeline['status']?.toString() ?? 'idle';
+    if (status == 'idle') return const SizedBox.shrink();
+
+    const phaseLabels = {
+      'prd': 'Brief',
+      'design': 'Design',
+      'build': 'Build',
+      'test': 'Test',
+    };
+    final phase = pipeline['phase']?.toString() ?? '';
+    final phaseLabel = phaseLabels[phase] ?? (phase.isEmpty ? 'Starting' : phase);
+    final active = status == 'running' || status == 'stopping';
+    final label = switch (status) {
+      'running' => 'Running',
+      'stopping' => 'Stopping',
+      'done' => 'Done',
+      'failed' => 'Failed',
+      _ => status.toUpperCase(),
+    };
+    final headline = active ? '$label · $phaseLabel' : label;
+    final color = switch (status) {
+      'running' || 'stopping' => Colors.blue.shade700,
+      'done' => Colors.green.shade700,
+      'failed' => Colors.red.shade700,
+      _ => Colors.grey.shade700,
+    };
+
+    final counts = pipeline['counts'] is Map
+        ? Map<String, dynamic>.from(pipeline['counts'] as Map)
+        : const <String, dynamic>{};
+    final total = (pipeline['total'] as num?)?.toInt() ?? 0;
+    final done = (counts[phase] as num?)?.toInt() ?? 0;
+    final showProgress =
+        active && total > 0 && ['prd', 'design', 'build'].contains(phase);
+    final error = pipeline['error']?.toString();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                key: Key('release_pipeline_status_${release['id']}'),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  border: Border.all(color: color),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  headline,
+                  style: TextStyle(fontSize: 11, color: color),
+                ),
+              ),
+              if (showProgress) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  '$done/$total ${phaseLabel}s',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ],
+          ),
+          if (status == 'failed' && error != null && error.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                error,
+                style: TextStyle(fontSize: 11, color: Colors.red.shade700),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -1004,6 +1136,17 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   Future<void> _runReleasePipeline(String parentId, String releaseId) async {
     try {
       await ref.read(apiClientProvider).post('/api/v1/releases/$releaseId/pipeline');
+      ref.invalidate(pipelineStatusProvider);
+      if (mounted) _loadDetail();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _stopReleasePipeline(String releaseId) async {
+    try {
+      await ref.read(apiClientProvider).post('/api/v1/releases/$releaseId/pipeline/stop');
+      ref.invalidate(pipelineStatusProvider);
       if (mounted) _loadDetail();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
@@ -1218,7 +1361,13 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   // ---------- Analysis ----------
 
   Widget _analysisTab(BuildContext context, IdeaDetail detail) {
-    const lifecycle = {'PRD_DOC', 'DESIGN_DOC', 'BUILD_CODE', 'REFINE'};
+    const lifecycle = {
+      'PRD_DOC',
+      'DESIGN_DOC',
+      'BUILD_CODE',
+      'REFINE',
+      'FULL_PIPELINE',
+    };
     final analysisActions = detail.actions.where((a) => !lifecycle.contains(a.actionType)).toList();
     if (analysisActions.isEmpty) {
       return const Center(child: Text('No analyses yet.'));
@@ -1326,15 +1475,19 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
       ),
     );
     if (confirm != true) return;
-    setState(() => _pipelineRunning = true);
     try {
       await ref.read(apiClientProvider).post('/api/v1/ideas/$id/run-full');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Full pipeline queued.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Full pipeline queued. Status is shown at the bottom.'),
+          ),
+        );
+      }
+      ref.invalidate(pipelineStatusProvider);
       await _loadDetail();
     } on ApiException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-    } finally {
-      if (mounted) setState(() => _pipelineRunning = false);
     }
   }
 

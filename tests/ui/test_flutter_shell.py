@@ -848,6 +848,112 @@ def test_expired_token_restore_keeps_site_admin_actions(
     assert set(statuses.values()) == {"SCOPE"}, statuses
 
 
+def test_pipeline_status_survives_navigation_and_refresh(
+    flutter_page, flutter_server, flutter_app
+):
+    """REQ.033 / REQ.034: shell status is persistent, not a passing snackbar."""
+    from datetime import datetime, timezone
+
+    from app.extensions import db
+    from app.models import Idea, Instance, PromptRun, PromptRunStatus, Release, User
+
+    with flutter_app.app_context():
+        instance = Instance.query.filter_by(number=INSTANCE_NUMBER).one()
+        admin = User.query.filter_by(email=ADMIN_EMAIL).one()
+        parent = Idea(
+            reference_code="IDEA-9500",
+            prompt_title="Status test parent",
+            raw_content="Parent for a release pipeline.",
+            status="SCALE",
+            instance_id=instance.id,
+            created_by_id=admin.id,
+        )
+        db.session.add(parent)
+        db.session.flush()
+        run = PromptRun(
+            idea_id=parent.id,
+            instance_id=instance.id,
+            action_type="FULL_PIPELINE",
+            status=PromptRunStatus.RUNNING,
+            triggered_by="manual",
+            created_at=datetime.now(timezone.utc),
+        )
+        release = Release(
+            parent_idea_id=parent.id,
+            instance_id=instance.id,
+            name="Release Status 1.1",
+            created_by_id=admin.id,
+            pipeline_status="running",
+            pipeline_phase="design",
+            pipeline_started_at=datetime.now(timezone.utc),
+            pipeline_state={
+                "children": {
+                    "11111111-1111-4111-8111-111111111111": {
+                        "reference_code": "IDEA-9501",
+                        "prd": "done",
+                        "design": "done",
+                    },
+                    "22222222-2222-4222-8222-222222222222": {
+                        "reference_code": "IDEA-9502",
+                        "prd": "done",
+                        "design": "pending",
+                    },
+                }
+            },
+        )
+        db.session.add_all([run, release])
+        db.session.commit()
+        parent_id = str(parent.id)
+        release_id = str(release.id)
+
+    page = flutter_page
+    _login(page, flutter_server)
+    _wait_text(page, "Full pipeline running — IDEA-9500", timeout=30)
+    _wait_text(
+        page,
+        "Release pipeline running — Release Status 1.1 · Design (1/2)",
+        timeout=30,
+    )
+
+    # Navigation, then a browser refresh: both must keep the same banner
+    # because the status comes from the server, not widget-local state.
+    page.goto(
+        f"{flutter_server}/prompts?instance={INSTANCE_NUMBER}",
+        wait_until="domcontentloaded",
+    )
+    _enable_semantics(page)
+    _wait_text(page, "Full pipeline running — IDEA-9500", timeout=30)
+
+    page.reload(wait_until="domcontentloaded")
+    _enable_semantics(page)
+    _wait_text(page, "Release pipeline running — Release Status 1.1", timeout=30)
+
+    # The Scale card itself shows the persisted release phase and a Stop
+    # action while the pipeline is active.
+    page.goto(
+        f"{flutter_server}/ideas?instance={INSTANCE_NUMBER}&idea={parent_id}",
+        wait_until="domcontentloaded",
+    )
+    _enable_semantics(page)
+    _wait_any(page, "Scale", timeout=25)
+    _click_node(page, _smallest_node(page, "Scale"))
+    _wait_any(page, "Running · Design", timeout=25)
+    assert "Stop" in _text(page)
+
+    with flutter_app.app_context():
+        finished = db.session.get(Release, release_id)
+        finished.pipeline_status = "done"
+        finished.pipeline_phase = "done"
+        db.session.commit()
+
+    page.reload(wait_until="domcontentloaded")
+    _enable_semantics(page)
+    _wait_any(page, "Scale", timeout=25)
+    _click_node(page, _smallest_node(page, "Scale"))
+    _wait_any(page, "Done", timeout=25)
+    assert not page._page_errors, page._page_errors
+
+
 @pytest.mark.parametrize(
     "email,password,display_name,is_instance_admin",
     [

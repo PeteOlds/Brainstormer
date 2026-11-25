@@ -807,59 +807,99 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
     soft_time_limit=SECONDARY_SOFT_TIME_LIMIT,
     time_limit=SECONDARY_TIME_LIMIT,
 )
-def run_full_pipeline(self, idea_id: str, model_override: str = None):
-    """Run an idea from Spark all the way to a Build preview (admin only)."""
-    from app.models import Idea, IdeaStatus
+def run_full_pipeline(
+    self,
+    idea_id: str,
+    model_override: str = None,
+    run_id: str | None = None,
+):
+    """Run an idea from Spark all the way to a Build preview (admin only).
+
+    ``run_id`` is the optional tracking row created by the API before the
+    task is queued. It lets the shell show a persistent status while the
+    Celery task is still queued or running.
+    """
+    from app.models import Idea, IdeaStatus, PromptRun
     from app.models.lifecycle import can_transition
 
     from app.models import SecondaryActionResult, ActionType
 
-    idea = Idea.query.get(idea_id)
-    if not idea:
-        return
+    run = None
+    if run_id:
+        try:
+            run = db.session.get(PromptRun, uuid.UUID(str(run_id)))
+        except (ValueError, TypeError):
+            run = None
+    if run is not None:
+        run.mark_running()
+        db.session.commit()
 
-    def _has_current(atype):
-        return (
-            SecondaryActionResult.query.filter_by(
-                idea_id=idea.id, action_type=atype, is_current=True
-            ).first()
-            is not None
-        )
+    def _final_attempt():
+        max_retries = self.max_retries if self.max_retries is not None else 0
+        return self.request.retries >= max_retries
 
-    # Advance to SCOPE and run Brief (skip if a current Brief exists).
-    if not _has_current(ActionType.PRD_DOC):
-        if idea.status != IdeaStatus.SCOPE and can_transition(idea.status, IdeaStatus.SCOPE):
-            idea.status = IdeaStatus.SCOPE
-            db.session.commit()
-        run_secondary_action(
-            idea_id, "PRD_DOC", model_override=model_override, run_id=None,
-            extra_context={}, provider_override=None,
-        )
-    # Advance to MAP and run Design (skip if a current Design exists).
-    if not _has_current(ActionType.DESIGN_DOC):
-        if can_transition(idea.status, IdeaStatus.MAP):
-            idea.status = IdeaStatus.MAP
-            db.session.commit()
+    try:
+        idea = Idea.query.get(idea_id)
+        if not idea:
+            if run is not None:
+                run.mark_failed("Idea not found")
+                db.session.commit()
+            return
+
+        def _has_current(atype):
+            return (
+                SecondaryActionResult.query.filter_by(
+                    idea_id=idea.id, action_type=atype, is_current=True
+                ).first()
+                is not None
+            )
+
+        # Advance to SCOPE and run Brief (skip if a current Brief exists).
         if not _has_current(ActionType.PRD_DOC):
-            # Design needs a Brief; if none, skip.
-            pass
+            if idea.status != IdeaStatus.SCOPE and can_transition(idea.status, IdeaStatus.SCOPE):
+                idea.status = IdeaStatus.SCOPE
+                db.session.commit()
+            run_secondary_action(
+                idea_id, "PRD_DOC", model_override=model_override, run_id=None,
+                extra_context={}, provider_override=None,
+            )
+        # Advance to MAP and run Design (skip if a current Design exists).
+        if not _has_current(ActionType.DESIGN_DOC):
+            if can_transition(idea.status, IdeaStatus.MAP):
+                idea.status = IdeaStatus.MAP
+                db.session.commit()
+            if not _has_current(ActionType.PRD_DOC):
+                # Design needs a Brief; if none, skip.
+                pass
+            else:
+                run_secondary_action(
+                    idea_id, "DESIGN_DOC", model_override=model_override, run_id=None,
+                    extra_context={}, provider_override=None,
+                )
+        # Advance to SHIP and run Build preview (skip if a current Build exists).
+        if not _has_current(ActionType.BUILD_CODE):
+            has_design = _has_current(ActionType.DESIGN_DOC)
+            if has_design and can_transition(idea.status, IdeaStatus.SHIP):
+                idea.status = IdeaStatus.SHIP
+                db.session.commit()
+            if has_design:
+                run_secondary_action(
+                    idea_id, "BUILD_CODE", model_override=model_override, run_id=None,
+                    extra_context={}, provider_override=None,
+                )
+        db.session.commit()
+    except Exception as exc:
+        # Keep the run RUNNING while Celery still has retries left; a failed
+        # final attempt is the only failure the user needs to see.
+        if _final_attempt():
+            _record_failure(run_id, exc)
         else:
-            run_secondary_action(
-                idea_id, "DESIGN_DOC", model_override=model_override, run_id=None,
-                extra_context={}, provider_override=None,
-            )
-    # Advance to SHIP and run Build preview (skip if a current Build exists).
-    if not _has_current(ActionType.BUILD_CODE):
-        has_design = _has_current(ActionType.DESIGN_DOC)
-        if has_design and can_transition(idea.status, IdeaStatus.SHIP):
-            idea.status = IdeaStatus.SHIP
+            db.session.rollback()
+        raise
+    else:
+        if run is not None:
+            run.mark_success()
             db.session.commit()
-        if has_design:
-            run_secondary_action(
-                idea_id, "BUILD_CODE", model_override=model_override, run_id=None,
-                extra_context={}, provider_override=None,
-            )
-    db.session.commit()
 
 
 @celery.task(

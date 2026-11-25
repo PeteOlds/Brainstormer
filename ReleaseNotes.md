@@ -13,6 +13,18 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.100.0 — 2026-11-25
+
+### Features
+- REQ.033: Full pipeline runs now have a persistent, server-backed status bar at the bottom of the app. It survives navigation and refresh and reports queued and running runs.
+- REQ.034: The Scale tab shows a live release pipeline status card with phase, child progress, errors and a Stop control. Active release runs also appear in the shared status bar.
+
+### Bug fixes
+- Full pipeline runs now create a tracking row before enqueue and mark it running, succeeded or failed, so queued work no longer disappears after the snackbar.
+- The idea detail tab bar is no longer clipped, so phase tabs such as Scale and Chat remain visible and selectable.
+
+---
+
 ## v0.99.2 — 2026-11-25
 
 ### Features

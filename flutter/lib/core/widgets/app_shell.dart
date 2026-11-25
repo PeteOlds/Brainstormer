@@ -5,6 +5,7 @@ import 'package:brainstormer/core/auth_helpers.dart';
 import '../providers.dart';
 import '../theme/tokens.dart';
 import 'connectivity_banner.dart';
+import 'pipeline_status_banner.dart';
 import 'package:brainstormer/core/widgets/site_header.dart';
 
 /// App shell: nav rail/drawer, version footer (golden rule — the build
@@ -68,6 +69,7 @@ class AppShell extends ConsumerWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const PipelineStatusBanner(),
     );
   }
 }

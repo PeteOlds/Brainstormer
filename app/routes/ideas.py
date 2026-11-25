@@ -16,6 +16,7 @@ from app.models import (
     IdeaEdit,
     IdeaStatusHistory,
     PromptRun,
+    PromptRunStatus,
     SecondaryActionResult,
     User,
     Vote,
@@ -1153,10 +1154,100 @@ def run_full_pipeline_endpoint(user, idea_id):
             status_code=400,
         )
 
+    # Persist a PENDING row before enqueue so the Flutter shell can show a
+    # status that survives navigation and refresh. The task moves it to
+    # RUNNING/SUCCESS/FAILED; without this row a full run has no server-side
+    # state until one of its child actions happens to create one.
+    run = PromptRun(
+        instance_id=idea.instance_id,
+        action_type="FULL_PIPELINE",
+        triggered_by="manual",
+        idea_id=idea.id,
+        status=PromptRunStatus.PENDING,
+        job_type="ai",
+    )
+    db.session.add(run)
+    db.session.commit()
+
     from app.tasks.ollama_tasks import run_full_pipeline
 
-    task = run_full_pipeline.delay(str(idea.id))
-    return api_accepted({"task_id": task.id})
+    try:
+        task = run_full_pipeline.delay(str(idea.id), run_id=str(run.id))
+    except Exception:
+        run.mark_failed("Failed to enqueue full pipeline")
+        db.session.commit()
+        raise
+    run.job_id = task.id
+    db.session.commit()
+    return api_accepted({"task_id": task.id, "run_id": str(run.id)})
+
+
+@bp.route("/pipeline/status", methods=["GET"])
+@token_required
+def pipeline_status(user):
+    """Compact status of active full-pipeline and release runs.
+
+    Used by the Flutter shell's persistent status bar. Only PENDING/RUNNING
+    idea runs and running/stopping releases are returned; historical runs are
+    still available on Admin → Activity and the release card respectively.
+    """
+    from app.models import Release
+
+    idea_rows = (
+        apply_scope(
+            db.session.query(PromptRun, Idea).filter(
+                PromptRun.action_type == "FULL_PIPELINE",
+                PromptRun.status.in_(
+                    [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
+                ),
+            ),
+            PromptRun,
+        )
+        .join(Idea, PromptRun.idea_id == Idea.id)
+        .order_by(PromptRun.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    idea_runs = [
+        {
+            "run_id": str(run.id),
+            "idea_id": str(run.idea_id),
+            "reference_code": idea.reference_code,
+            "prompt_title": idea.prompt_title,
+            "status": run.status.value,
+            "created_at": run.created_at.isoformat() if run.created_at else None,
+        }
+        for run, idea in idea_rows
+    ]
+
+    release_rows = (
+        apply_scope(
+            Release.query.filter(
+                Release.pipeline_status.in_(["running", "stopping"])
+            ),
+            Release,
+        )
+        .order_by(Release.pipeline_started_at.desc())
+        .limit(50)
+        .all()
+    )
+    release_runs = []
+    for release in release_rows:
+        summary = release.pipeline_summary()
+        release_runs.append(
+            {
+                "release_id": str(release.id),
+                "parent_idea_id": str(release.parent_idea_id),
+                "name": release.name,
+                "status": summary["status"],
+                "phase": summary["phase"],
+                "error": summary["error"],
+                "total": summary["total"],
+                "counts": summary["counts"],
+            }
+        )
+
+    return api_ok({"idea_runs": idea_runs, "release_runs": release_runs})
 
 
 @bp.route("/ideas/<uuid:idea_id>/actions", methods=["POST"])

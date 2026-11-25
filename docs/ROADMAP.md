@@ -1,7 +1,7 @@
 # Brainstormer — Roadmap
 
 **Single source of truth for outstanding work.** Update on every build: add new items, refine scope, and remove items only when released (record them in `ReleaseNotes.md`).
-**Version:** 0.99.2 · **Date:** 2026-11-25 · **Branch:** `main`
+**Version:** 0.100.0 · **Date:** 2026-11-25 · **Branch:** `main`
 
 Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decisions: see **Decisions** below.
 
@@ -38,20 +38,18 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 
 ## R3 — Features
 
-| ID | Status | Item | Notes / acceptance |
-| --- | --- | --- | --- |
-| REQ.022 | planned | **Vote on comments** | Allow voting on comments |
-| REQ.023 | planned | **Comment votes on Dashboard for all roles** | Include voting on comments on the Dashboard shown for all roles |
-| REQ.033 | planned | **Persistent pipeline status** | When the user selects Run Full Pipeline, there is an information bar shown at the bottom of the screen for several seconds.  But after that it disappears and there is no indication to the user.  Suggest a more persistent notification |
-| REQ.034 | planned | **Persistent release status on Scale** | On the Scale tab, when the user selects Run Full Pipeline on a Release, there is no indication that the Release is running.  Suggest a more persistent notification |
+| ID      | Status  | Item                                         | Notes / acceptance                                                                                                                                                                                                                        |
+| ------- | ------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| REQ.022 | planned | **Vote on comments**                         | Allow voting on comments                                                                                                                                                                                                                  |
+| REQ.023 | planned | **Comment votes on Dashboard for all roles** | Include voting on comments on the Dashboard shown for all roles                                                                                                                                                                           |
 
 ## R4 — Platform follow-through
 
-| ID | Status | Item | Notes / acceptance |
-| --- | --- | --- | --- |
-| RM-004 | planned | **OpenCode attach-mode auth** | Investigate and fix LAN attach-mode auth: `OPENCODE_PASSWORD`/server password from `~/.config/opencode/service.json` is rejected by the v2 CLI client. Replace the current Ollama workaround for SHIP/SCALE once verified. |
-| RM-013 | planned | **Remove legacy Jinja templates** | After the Flutter cutover has been monitored with no P1 regressions, delete the retired Jinja templates/routes and related assets to end dual maintenance. |
-| RM-030 | planned | **Live Stripe billing loop** | Operational setup: configure real Stripe plans mapped to entitlement keys and verify the test/staging grant → gate → revoke loop. Primarily admin/configuration work; track any small code fixes discovered as separate RM items. |
+| ID     | Status  | Item                              | Notes / acceptance                                                                                                                                                                                                                |
+| ------ | ------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RM-004 | planned | **OpenCode attach-mode auth**     | Investigate and fix LAN attach-mode auth: `OPENCODE_PASSWORD`/server password from `~/.config/opencode/service.json` is rejected by the v2 CLI client. Replace the current Ollama workaround for SHIP/SCALE once verified.        |
+| RM-013 | planned | **Remove legacy Jinja templates** | After the Flutter cutover has been monitored with no P1 regressions, delete the retired Jinja templates/routes and related assets to end dual maintenance.                                                                        |
+| RM-030 | planned | **Live Stripe billing loop**      | Operational setup: configure real Stripe plans mapped to entitlement keys and verify the test/staging grant → gate → revoke loop. Primarily admin/configuration work; track any small code fixes discovered as separate RM items. |
 
 ## Release Unassigned — no phase
 
