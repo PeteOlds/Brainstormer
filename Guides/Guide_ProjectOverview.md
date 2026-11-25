@@ -40,6 +40,6 @@ lib/
 
 > **Aspirational for Flutter clients; principle applies to all clients:** keep a single networking layer with token-refresh and error parsing, and validate strict domain models before building UI on them.
 
-* **Domain Models First:** When interfacing with your Python backend, always have the AI generate and validate strict domain models and JSON serialization (Dart: `freezed` or `json_serializable`) before generating any UI. This ensures the client–server contract remains rigid and strongly typed. For the current web frontend, the equivalent is the `{success, data}` response envelope (see `docs/APPLICATION_DOCUMENTATION.md` §4).
+* **Domain Models First:** When interfacing with your Python backend, always have the AI generate and validate strict domain models and JSON serialization (Dart: `freezed` or `json_serializable`) before generating any UI. This ensures the client–server contract remains rigid and strongly typed. For the current web frontend, the equivalent is the `{success, data}` response envelope (see `app/utils/responses.py` and `scripts/check_api_contract.py`).
 * **Centralized Networking:** Create a single networking client in your `core/network` directory to handle interceptors, token refresh logic, and error parsing. Instruct the AI to route all requests through this client rather than instantiating raw `http` calls across various services. (Current web equivalent: the `authFetch` wrapper in `app/templates/base.html`.)
 

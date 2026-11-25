@@ -1,4 +1,8 @@
-# Brainstormer — Full Application Documentation
+# Brainstormer — Full Application Documentation (archived)
+
+> Historical snapshot of v0.26.9. Do not treat it as the current spec.
+> Current behaviour is recorded in `PRD_V2.md`, `docs/Design.md`,
+> `Guardrail.md`, `AGENTS.md` and `ReleaseNotes.md`.
 
 **Version:** 0.26.9 (`VERSION`, 2026-09-27)
 **Purpose:** AI-driven business idea generator and evaluator. Automatically generates ideas via a local LLM (Ollama), supports voting, threaded discussion, structured analysis documents, and Slack collaboration.

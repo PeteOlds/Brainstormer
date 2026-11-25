@@ -2,7 +2,7 @@
 
 **Status:** Approved for planning (decisions locked 2026-09-29).
 **Supersedes:** `PRD.md` (V1, single-tenant Flask + Jinja + Ollama-only).
-**Current baseline:** v0.27.0, documented in `docs/APPLICATION_DOCUMENTATION.md`.
+**Current baseline:** v0.27.0 (historical snapshot in `docs/archive/APPLICATION_DOCUMENTATION-0.26.9.md`). This file, `docs/Design.md` and `Guardrail.md` are the current spec.
 **Related:** `docs/architecture.md`, `docs/erd.md`, `Guardrail.md`, `AGENTS.md`.
 **Design:** `docs/Design.md` (whole-V2 system design implementing this PRD).
 **Guides baseline:** `Guides/` catalogue — `Guide_SocialLogin.md` and

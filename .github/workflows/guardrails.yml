@@ -47,6 +47,7 @@ jobs:
       - name: Backend suite with coverage gate
         env:
           DATABASE_URL: sqlite:////tmp/ci.db
+          GITHUB_TEST_PAT: ${{ secrets.GITHUB_TEST_PAT }}
         run: pytest
       - name: Install Playwright
         run: python -m playwright install chromium
@@ -126,8 +127,7 @@ jobs:
       - run: flutter pub get
         working-directory: flutter
       - name: Web build compiles
-        working-directory: flutter
-        run: flutter build web --release
+        run: ./scripts/build_web.sh
       - name: Widget + unit tests in Chrome
         working-directory: flutter
         run: flutter test --platform chrome test/ --exclude-tags golden

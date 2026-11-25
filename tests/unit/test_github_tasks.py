@@ -1,5 +1,6 @@
 """Unit tests for github_tasks.py - GitHub push task for releases."""
 
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -96,8 +97,8 @@ class TestPushReleaseToGithub:
 
     def test_successful_push(self, app):
         """Successful push records SHA and timestamp on release."""
-        from app.tasks.github_tasks import push_release_to_github
         from app.models import Idea
+        from app.tasks.github_tasks import push_release_to_github
 
         release = FakeRelease("123e4567-e89b-12d3-a456-426614174000", "R1")
         config = FakeConfig()
@@ -105,16 +106,22 @@ class TestPushReleaseToGithub:
 
         with app.app_context():
             with patch("app.tasks.github_tasks.db") as mock_db:
+
                 def _get(model, id):
                     if model is Idea:
                         return None
                     return release
+
                 mock_db.session.get.side_effect = _get
                 with patch("app.models.InstanceGitHubConfig") as mock_cls:
                     mock_cls.query.filter_by.return_value.first.return_value = config
                     with patch("app.models.InstanceBuildTarget") as mock_tgt:
-                        mock_tgt.query.filter_by.return_value.all.return_value = [target]
-                        with patch("app.tasks.github_tasks.os.path.isdir", return_value=True):
+                        mock_tgt.query.filter_by.return_value.all.return_value = [
+                            target
+                        ]
+                        with patch(
+                            "app.tasks.github_tasks.os.path.isdir", return_value=True
+                        ):
                             with patch("app.tasks.github_tasks._run_git") as mock_git:
                                 mock_git.return_value = "abc123def456"
                                 with patch("app.tasks.github_tasks._now") as mock_now:
@@ -186,8 +193,8 @@ class TestPatHandling:
 
         with app.app_context():
             with patch("app.tasks.github_tasks.db") as mock_db:
-                mock_db.session.get.side_effect = (
-                    lambda model, ident: None if model is Idea else release
+                mock_db.session.get.side_effect = lambda model, ident: (
+                    None if model is Idea else release
                 )
                 with patch("app.models.InstanceGitHubConfig") as mock_cls:
                     mock_cls.query.filter_by.return_value.first.return_value = config
@@ -199,9 +206,7 @@ class TestPatHandling:
                             "app.tasks.github_tasks.os.path.isdir",
                             return_value=True,
                         ):
-                            with patch(
-                                "app.tasks.github_tasks._run_git"
-                            ) as mock_git:
+                            with patch("app.tasks.github_tasks._run_git") as mock_git:
                                 mock_git.return_value = "abc123"
                                 push_release_to_github(str(release.id))
 
@@ -209,3 +214,28 @@ class TestPatHandling:
         argv = " ".join(clone_call[0][0])
         assert "ghp_token" not in argv
         assert clone_call[1].get("pat") == "ghp_token"
+
+    @pytest.mark.skipif(
+        not os.getenv("GITHUB_TEST_PAT"),
+        reason="GITHUB_TEST_PAT secret is not configured in this environment",
+    )
+    def test_ci_secret_is_scrubbed_without_a_live_git_call(self, app):
+        """Exercise the real CI secret without contacting GitHub.
+
+        The PAT only travels through the mocked subprocess environment; it
+        must never appear in argv or in surfaced error text.
+        """
+        from app.tasks.github_tasks import _run_git
+
+        token = os.environ["GITHUB_TEST_PAT"]
+        with app.app_context():
+            with patch("app.tasks.github_tasks.subprocess.run") as run:
+                run.return_value = MagicMock(
+                    returncode=128, stdout="", stderr=f"fatal: rejected {token}"
+                )
+                with pytest.raises(RuntimeError) as excinfo:
+                    _run_git(["fetch"], cwd="/tmp", pat=token)
+
+        assert token not in str(excinfo.value)
+        assert "***" in str(excinfo.value)
+        assert token not in " ".join(run.call_args[0][0])

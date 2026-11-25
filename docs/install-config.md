@@ -45,7 +45,15 @@ source venv/bin/activate
 pytest
 ```
 
-Coverage is reported and must stay >= 80%.
+Coverage is reported and must stay >= 75%.
+
+### CI secrets
+
+GitHub Actions uses ephemeral values for `SECRET_KEY`, `JWT_SECRET_KEY` and
+`FERNET_KEY`; no repository secrets are needed for those. The optional
+`GITHUB_TEST_PAT` repository secret enables the credential-scrubbing leg of
+the GitHub push tests. Use a short-lived token with no repo access: the test
+mocks `git` and never contacts GitHub. Rotate it like any other PAT.
 
 ## Database migrations
 After changing models, use Flask-Migrate:

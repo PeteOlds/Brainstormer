@@ -13,6 +13,19 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.99.2 — 2026-11-25
+
+### Features
+- Chrome CI now builds the web bundle with `scripts/build_web.sh`, keeping CanvasKit same-origin and CSP-safe.
+- GitHub push-flow tests can optionally exercise the real CI secret via `GITHUB_TEST_PAT` without contacting GitHub.
+
+### Bug fixes
+- Restored the backend coverage gate to green by adding tests for release-pipeline tick failures and managed-app start/stop handling.
+- Archived the outdated v0.26.9 application document and updated references to current sources.
+- Roadmap phases now reflect the agreed delivery order; blank and HOLD rows were preserved.
+
+---
+
 ## v0.99.1 — 2026-11-25
 
 ### Bug fixes
