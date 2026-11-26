@@ -42,7 +42,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             target, data=body, headers=headers, method=self.command
         )
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            # Backend is derived from the supervised app's runtime info.
+            with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310
                 self.send_response(response.status, response.reason)
                 for key, value in response.headers.items():
                     if key.lower() not in {
@@ -121,7 +122,8 @@ def main():
     handler = lambda *handler_args, **handler_kwargs: ProxyHandler(
         *handler_args, directory=args.root, backend=args.backend, **handler_kwargs
     )
-    httpd = socketserver.ThreadingTCPServer(("0.0.0.0", args.port), handler)
+    # Bind all interfaces so sibling containers can reach the proxy.
+    httpd = socketserver.ThreadingTCPServer(("0.0.0.0", args.port), handler)  # nosec B104
     httpd.allow_reuse_address = True
     try:
         httpd.serve_forever()

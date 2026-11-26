@@ -68,7 +68,8 @@ def poll_health(url: str | None, timeout: float = 3) -> bool | None:
     if not (url or "").strip():
         return None
     try:
-        with urllib.request.urlopen(url.strip(), timeout=timeout) as res:
+        # Health URL is server-recorded for a supervised local app.
+        with urllib.request.urlopen(url.strip(), timeout=timeout) as res:  # nosec B310
             return True
     except urllib.error.HTTPError as e:
         # Any HTTP response means the app is up (even 404).
@@ -464,7 +465,8 @@ class LocalRunner(Runner):
         healthy = None
         if health_url:
             try:
-                with urllib.request.urlopen(
+                # Health URL is server-recorded for a supervised local app.
+                with urllib.request.urlopen(  # nosec B310
                     health_url, timeout=self.HEALTH_TIMEOUT
                 ) as res:
                     healthy = 200 <= res.status < 300

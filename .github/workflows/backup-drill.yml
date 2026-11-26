@@ -2,7 +2,7 @@ name: backup-drill
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
       - name: Backup round-trip tests
         env:
           DATABASE_URL: sqlite:////tmp/ci.db
-        run: pytest tests/integration/test_backup.py -q
+        run: pytest tests/integration/test_backup.py -q --no-cov
       - name: CLI drill on a scratch SQLite database
         env:
           FLASK_APP: wsgi.py

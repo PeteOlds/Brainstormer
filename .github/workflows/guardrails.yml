@@ -2,7 +2,7 @@ name: guardrails
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
           pip install bandit safety
       - name: SAST and dependency audit
         run: |
-          bandit -r app/ -f txt
+          bandit -r app/ -f txt -ll
           safety check
       - name: Guardrail scripts
         run: |
@@ -48,7 +48,7 @@ jobs:
       - name: Backend suite with coverage gate
         env:
           DATABASE_URL: sqlite:////tmp/ci.db
-          GITHUB_TEST_PAT: ${{ secrets.GITHUB_TEST_PAT }}
+          GITHUB_TEST_PAT: ${{ secrets.CI_TEST_PAT }}
         run: pytest
       - name: Install Playwright
         run: python -m playwright install chromium

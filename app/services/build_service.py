@@ -558,7 +558,8 @@ def port_in_use(port: int) -> bool:
     binder = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         binder.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        binder.bind(("0.0.0.0", port))
+        # Bind all interfaces so sibling containers can reach the app.
+        binder.bind(("0.0.0.0", port))  # nosec B104
     except OSError:
         return True
     finally:

@@ -20,7 +20,7 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | --- | --- | --- | --- |
 | RM-001 | blocked | **Device CI maiden run (Chrome)** | Workflow now builds with `./scripts/build_web.sh`; a confirmed green GitHub Actions run is still required. |
 | RM-002 | in-progress | **Coverage ratchet to 85%** | Gate restored to 75% with tests for release and supervision wrappers; the ratchet to 85% remains. |
-| RM-003 | blocked | **GitHub flow CI coverage** | Mocked push-flow tests always run; the optional `GITHUB_TEST_PAT` secret enables the CI-secret leg. Configure the repository secret to unblock. |
+| RM-003 | blocked | **GitHub flow CI coverage** | Mocked push-flow tests always run; the optional Actions secret `CI_TEST_PAT` (exposed to tests as `GITHUB_TEST_PAT`) enables the CI-secret leg. The secret is now configured; live GitHub-flow coverage still needs test work. |
 | RM-005 | planned | **Housekeeping: untracked/stale artefacts** | Partly done in v0.99.2 (v0.26.9 doc archived); duplicate `Guides/` and `guidelines/` guide files still remain. |
 
 ## R2 — User-visible bug sweep
