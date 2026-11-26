@@ -69,6 +69,7 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 | RM-062 | planned | **Protect `main`** | Enable branch protection on GitHub: require a PR before merge and require the `guardrails` status checks to pass; no direct pushes. Both workflows already trigger on `pull_request` and all branch pushes, so enforcement is the only missing piece. Needs repo admin access. |
 | RM-063 | planned | **Worktree isolation for agent sessions** | Document `git worktree add ../brainstormer-<RM-id> -b feat/RM-052 main`, moving the OpenCode session into that directory with `session_move`, testing there, and removing the worktree after merge. Keeps the primary checkout, dev servers, DB and venv untouched; avoids the broken `git stash`. |
 | RM-064 | planned | **Issue-driven slices and small PRs** | One GitHub issue per RM item with acceptance criteria; reference the issue in the Stage 1 plan prompt and close it with `Closes #N` in the PR. Keep diffs under ~400–500 lines, squash-merge, delete the branch, and tag `vX.Y.Z-stable` before risky refactors or dependency upgrades. |
+| RM-068 | planned | **Restore a working dependency audit** | `safety check` is deprecated, crashes on a clean runner (`httpx.Timeout` TypeError with httpx 0.28.1) and reports 46 known vulnerabilities locally. Triage and upgrade affected dependencies, choose a maintained audit tool, then restore it as a required CI check. Removed from the gate in v0.101.1 so bandit and the guardrail scripts can block merges. |
 
 ## Release Unassigned — no phase
 
@@ -84,7 +85,7 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 
 ## Agentic-readiness design notes
 
-Guidance applied to both generated apps and brainstormer itself. These are standing principles, not work items; the work is tracked as RM-052–RM-064.
+Guidance applied to both generated apps and brainstormer itself. These are standing principles, not work items; the work is tracked as RM-052–RM-068.
 
 - **Small, single-purpose files** — roughly 150–300 lines where practical, with clear entry and exit points.
 - **Organise by feature/domain slice** for generated apps; keep brainstormer's existing layer layout (see RM-058).
