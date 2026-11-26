@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.101.1 — 2026-11-26
+
+### Bug fixes
+- RM-065: removed the GitHub PAT embedded in the `origin` remote URL; git now authenticates through the `gh` credential helper. Added `scripts/check_no_credentials_in_config.py` to pre-commit and CI so credential-bearing remote URLs are rejected before they leak.
+
+---
+
 ## v0.101.0 — 2026-11-25
 
 ### Features

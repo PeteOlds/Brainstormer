@@ -26,6 +26,7 @@ jobs:
         run: |
           python scripts/check_no_external_calls.py
           python scripts/check_no_secrets.py
+          python scripts/check_no_credentials_in_config.py
       - name: Flutter gates
         uses: subosito/flutter-action@v2
         with:
