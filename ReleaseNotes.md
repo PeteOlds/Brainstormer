@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.0 — 2026-11-27
+
+### Features
+- RM-071: every confirmed build now automatically queues a `BUILD_REVIEW` action. It reviews the whole release when the idea belongs to one, and returns structured strengths, gaps, suggested features, approach suggestions, risks and open questions. Results appear in a new section of the Build tab; the review never edits generated files.
+
+---
+
 ## v0.108.0 — 2026-11-27
 
 ### Features

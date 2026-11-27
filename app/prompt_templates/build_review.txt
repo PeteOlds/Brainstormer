@@ -1,0 +1,28 @@
+Act as a senior engineer and product reviewer. Review the build described in the supporting material and suggest what to improve next. This is analysis only — do not propose rewriting working screens unless they are broken.
+
+### PRODUCT IDEA:
+${ORIGINAL_IDEA_CONTENT}
+
+---
+### SUPPORTING MATERIAL (design contract, build manifest, runbook, release context, repo snapshot):
+${SUPPORTING_MATERIAL}
+
+---
+### INSTRUCTIONS:
+1. Cover the whole release when a release context is present: the parent idea, its children, and the screens/endpoints each child changed. Otherwise review this single build.
+2. Be concrete: name files, screens, endpoints or fields from the supporting material. Do not invent features the design does not describe.
+3. Every list entry must be short and readable: "Title — one-line rationale". Prefer 2–5 entries per list over long prose.
+4. `gaps` covers missing behaviour or broken states; `suggested_features` covers worthwhile additions; `approach_suggestions` covers architecture, testing or delivery order; `risks` covers security, data and operational concerns.
+5. Output STRICTLY a valid JSON object matching the schema below. No prose, no markdown fences, no commentary outside the JSON.
+
+### OUTPUT JSON SCHEMA:
+{
+  "summary": "string (3-5 sentences: what shipped and how complete it is)",
+  "scope": "string (which idea/release and files were reviewed)",
+  "strengths": ["short point — why it matters"],
+  "gaps": ["short gap — impact"],
+  "suggested_features": ["feature — rationale"],
+  "approach_suggestions": ["suggestion — rationale"],
+  "risks": ["risk — mitigation"],
+  "open_questions": ["question a human should answer"]
+}

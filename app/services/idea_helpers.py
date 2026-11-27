@@ -94,7 +94,7 @@ def _check_action_allowed(idea, action_type):
     return True
 
 
-def _enqueue_action(idea, action_type, extra=None):
+def _enqueue_action(idea, action_type, extra=None, triggered_by="manual"):
     """Enqueue a secondary action task."""
     from app.models import PromptRun, PromptRunStatus
     from app.services.action_context import build_idea_context
@@ -182,7 +182,7 @@ def _enqueue_action(idea, action_type, extra=None):
     run = PromptRun(
         instance_id=idea.instance_id,
         action_type=action_type,
-        triggered_by="manual",
+        triggered_by=triggered_by,
         idea_id=idea.id,
         status=PromptRunStatus.PENDING,
         job_type="ai",

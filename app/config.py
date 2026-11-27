@@ -221,6 +221,9 @@ class TestingConfig(Config):
     CELERY_RESULT_BACKEND = "redis://localhost:6379/3"
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
+    # Auto post-build reviews would run inline in eager tests and need a
+    # second model response; individual tests opt in when testing the trigger.
+    AUTO_BUILD_REVIEW = False
     WTF_CSRF_ENABLED = False
     JWT_COOKIE_SECURE = False
     SQLALCHEMY_ENGINE_OPTIONS = {}

@@ -3120,6 +3120,14 @@ function ideasApp() {
         // different target's build must never pose as this one's. Falls
         // back past a same-target preview so the last working instructions
         // stay visible while a rebuild is in flight.
+        buildReview(key) {
+            if (key !== 'BUILD_CODE') return null;
+            const row = this.docViewResult('BUILD_REVIEW');
+            if (!row || !row.output) return null;
+            const data = typeof row.output === 'string' ? null : row.output;
+            return data && data.summary ? data : null;
+        },
+
         buildRunInfo(key) {
             if (key !== 'BUILD_CODE') return null;
             const rows = (this.selectedIdea?.actions || []).filter((a) => a.action_type === key);

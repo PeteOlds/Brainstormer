@@ -448,6 +448,34 @@ class TestBuildTask:
             assert rows[1].result_data["write_report"]
             assert rows[1].result_data.get("target_path") == str(tmp_path)
 
+    def test_confirm_queues_release_review(self, celery_app, tmp_path):
+        celery_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
+        celery_app.config["AUTO_BUILD_REVIEW"] = True
+        with celery_app.app_context():
+            inst = make_instance(87, "BR")
+            idea = seed_idea(db, inst.id, email="br@t.test")
+            seed_design(idea)
+            target = seed_target(inst.id, path=str(tmp_path))
+            tid, idea_id = target.id, idea.id
+            from app.tasks.ollama_tasks import run_secondary_action
+
+            with patch("app.tasks.ollama_tasks.OllamaClient") as mock_cls:
+                mock_cls.return_value.generate_sync.return_value = {
+                    "response": json.dumps(MANIFEST)
+                }
+                run_secondary_action(
+                    str(idea_id), "BUILD_CODE", extra_context={"target_id": str(tid)}
+                )
+                with patch("app.services.idea_helpers._enqueue_action") as enqueue:
+                    run_secondary_action(
+                        str(idea_id),
+                        "BUILD_CODE",
+                        extra_context={"target_id": str(tid), "confirm_build": True},
+                    )
+            enqueue.assert_called_once()
+            assert enqueue.call_args.args[1] == "BUILD_REVIEW"
+            assert enqueue.call_args.kwargs["triggered_by"] == "auto"
+
     def test_confirm_refuses_unrunnable_manifest(self, celery_app, tmp_path):
         """No entry point -> fail before writing, so Built means runnable."""
         celery_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
