@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.105.1 — 2026-11-27
+
+### Bug fixes
+- RM-060: consolidated the duplicate `Guides/` and `guidelines/` trees into a single `guidelines/` catalogue. Duplicate copies were removed, unique guides moved, the index updated, and spec/doc references now point at `guidelines/`.
+
+---
+
 ## v0.105.0 — 2026-11-27
 
 ### Features

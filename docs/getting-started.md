@@ -129,7 +129,7 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
 ```
 
 Browsers warn about self-signed certificates until you trust them; see
-`Guides/Guide_SecuringWithSSL.md` for the trust steps and for running a
+`guidelines/Guide_SecuringWithSSL.md` for the trust steps and for running a
 private CA when you have several services.
 
 If TLS is terminated by a reverse proxy *instead*, leave the two TLS
