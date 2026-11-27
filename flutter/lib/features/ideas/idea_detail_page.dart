@@ -280,6 +280,11 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
 
   Widget _overviewTab(BuildContext context, IdeaDetail detail, bool isAdmin) {
     final idea = detail.idea;
+    final pipelineRuns =
+        ref.watch(pipelineStatusProvider).valueOrNull?.ideaRuns ?? const [];
+    final pipelineBusy = pipelineRuns.any((r) =>
+        r.ideaId == idea.id &&
+        ['PENDING', 'RUNNING'].contains(r.status.toUpperCase()));
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
@@ -311,7 +316,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
             ),
             if (isAdmin && idea.status != 'DROP' && idea.status != 'ARCHIVE' && idea.status != 'FREEZE') ...[
               const SizedBox(width: AppSpacing.md),
-              if (_fullPipelineRunning)
+              if (_fullPipelineRunning || pipelineBusy)
                 const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

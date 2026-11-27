@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.11 — 2026-11-28
+
+### Bug fixes
+- BUG.073 (#57): the pipeline status API now keeps completed full runs visible for 60 seconds (finished/failed labels), and the Run full pipeline button stays disabled while a run is pending or running.
+
+---
+
 ## v0.109.10 — 2026-11-28
 
 ### Features

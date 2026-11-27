@@ -117,7 +117,16 @@ const Map<String, String> _phaseLabels = {
 /// Short label for the shell banner. `PENDING` is called "queued" because
 /// that is what the user sees in the queue UI.
 String ideaPipelineStatusLabel(IdeaPipelineRun run) {
-  final state = run.status.toUpperCase() == 'PENDING' ? 'queued' : 'running';
+  final status = run.status.toUpperCase();
+  final state = status == 'PENDING'
+      ? 'queued'
+      : status == 'RUNNING'
+          ? 'running'
+          : status == 'SUCCESS'
+              ? 'finished'
+              : status == 'FAILED'
+                  ? 'failed'
+                  : status.toLowerCase();
   final reference = run.referenceCode.isNotEmpty
       ? run.referenceCode
       : run.promptTitle;
