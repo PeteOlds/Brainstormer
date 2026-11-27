@@ -30,6 +30,7 @@ jobs:
           python scripts/check_no_secrets.py
           python scripts/check_no_credentials_in_config.py
           python scripts/check_dependencies.py
+          python scripts/check_version_sync.py
       - name: Flutter gates
         uses: subosito/flutter-action@v2
         with:
