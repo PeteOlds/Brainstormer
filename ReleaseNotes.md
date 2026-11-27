@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.102.0 — 2026-11-27
+
+### Features
+- RM-052: Design documents can now carry a typed build contract (`screen_specs`, `entity_specs`, `endpoint_specs`). The legacy flat sections are filled from those arrays, so stored documents and current views keep working. BUILD_CODE renders the current Design doc into a capped "Design contract" section of its prompt, replacing the old key-only analysis summary.
+
+---
+
 ## v0.101.2 — 2026-11-27
 
 ### Features

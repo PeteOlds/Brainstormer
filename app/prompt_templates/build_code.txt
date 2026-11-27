@@ -7,6 +7,8 @@ ${ORIGINAL_IDEA_CONTENT}
 ### SUPPORTING MATERIAL (idea, Brief, Design doc, comments, prior analyses, votes):
 ${SUPPORTING_MATERIAL}
 
+If a "### Design contract" section is present, its named screens, entities and endpoints are the authoritative build contract. Implement those names and shapes exactly; treat any prose elsewhere as explanatory only.
+
 ---
 ### INSTRUCTIONS:
 1. Implement exactly what the Design Document specifies: architecture, screens/components, data model, API contracts. Do not invent features the design does not describe; if the design is missing something essential, implement the smallest reasonable choice and say so in the summary.

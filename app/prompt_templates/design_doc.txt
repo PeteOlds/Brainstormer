@@ -17,9 +17,20 @@ ${SUPPORTING_MATERIAL}
 ### OUTPUT JSON SCHEMA:
 {
   "architecture": "string (overall system shape: frontend, backend, data stores, third-party services, how they connect)",
-  "screens": "string (each screen: purpose, key components, states — loading, empty, error)",
-  "data_model": "string (each entity: fields with types, relationships, constraints)",
-  "api_contracts": "string (each endpoint: method, path, request/response shape, auth)",
+  "screens": "string (short summary of the screens; the structured list below is authoritative)",
+  "data_model": "string (short summary of entities; the structured list below is authoritative)",
+  "api_contracts": "string (short summary of endpoints; the structured list below is authoritative)",
   "build_notes": "string (build order, riskiest parts first, what to stub or defer)",
-  "open_questions": ["question blocking the build", "..."]
+  "open_questions": ["question blocking the build", "..."],
+  "screen_specs": [
+    {"name": "ScreenName", "purpose": "string", "components": ["string"], "states": ["loading", "empty", "error"]}
+  ],
+  "entity_specs": [
+    {"name": "EntityName", "fields": ["field: type"], "relationships": "string"}
+  ],
+  "endpoint_specs": [
+    {"method": "GET|POST|PUT|PATCH|DELETE", "path": "/api/...", "request": "string", "response": "string", "auth": "string"}
+  ]
 }
+
+The three `*_specs` arrays are the build contract: keep each entry short and concrete, name real screens/entities/endpoints, and do not invent fields the Brief does not describe. The flat string sections may be brief summaries; they are filled from the arrays when omitted.
