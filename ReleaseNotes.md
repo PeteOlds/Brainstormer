@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.105.3 — 2026-11-27
+
+### Bug fixes
+- RM-068 (first slice): replaced the broken `safety check` gate with `pip-audit` plus a reviewed baseline (`docs/dependency-audit-baseline.txt`). CI now fails on new advisories; the 96 accepted advisories remain tracked as RM-070.
+
+---
+
 ## v0.105.2 — 2026-11-27
 
 ### Bug fixes
