@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.9 — 2026-11-28
+
+### Bug fixes
+- BUG.074 (#54): API calls that receive a 200 HTML page (stale session served the SPA shell) now refresh once and retry; if that fails, the error names the HTML response instead of "Unexpected response (200)". Added client tests for both paths.
+
+---
+
 ## v0.109.8 — 2026-11-28
 
 ### Bug fixes

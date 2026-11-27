@@ -109,6 +109,51 @@ void main() {
       }
     });
 
+    test('HTML 200 is reported as a clear session/page error', () async {
+      final store = FakeAuthStore();
+      await store.saveTokens('a', 'r');
+      final client = ApiClient(
+        baseUrl: 'http://x',
+        store: store,
+        httpClient: MockClient((_) async => http.Response(
+              '<html><body>login</body></html>',
+              200,
+              headers: {'content-type': 'text/html'},
+            )),
+      );
+      try {
+        await client.get('/api/v1/login');
+        fail('expected ApiException');
+      } on ApiException catch (e) {
+        expect(e.errorCode, 'HTML_RESPONSE');
+        expect(e.message, contains('HTML page'));
+      }
+    });
+
+    test('HTML 200 refreshes once and retries API calls', () async {
+      final store = FakeAuthStore();
+      await store.saveTokens('old-a', 'old-r');
+      var calls = 0;
+      final client = ApiClient(
+        baseUrl: 'http://x',
+        store: store,
+        httpClient: MockClient((request) async {
+          calls++;
+          if (request.url.path.endsWith('/refresh')) {
+            return _ok({'access_token': 'new-a', 'refresh_token': 'new-r'});
+          }
+          if (calls == 1) {
+            return http.Response('<html>expired</html>', 200,
+                headers: {'content-type': 'text/html'});
+          }
+          return _ok({'recent_runs': []});
+        }),
+      );
+      final data = await client.get('/api/v1/admin/activity/stats');
+      expect((data as Map)['recent_runs'], isEmpty);
+      expect(await store.readAccessToken(), 'new-a');
+    });
+
     test('401 refreshes once and retries', () async {
       final store = FakeAuthStore();
       await store.saveTokens('old-a', 'old-r');

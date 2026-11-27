@@ -60,7 +60,6 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 | REQ.040  |                    | On Build tab, add "Copy logs" and "Clear logs" Issue: #56 |
 | BUG.072  |                    | The Diagnose Failures (or similar) button is missing from the Build tab (for when the application fails to start) Issue: #55 |
 | BUG.073  |                    | REQ.032 added a message for "Run full pipeline" status - but it disappears after a few seconds so the user still can't see the status (and could click the "Run full pipeline" again) Issue: #57 |
-| BUG.074  |                    | After kicking off "Run full pipeline" for IDEA-6031, the Admin page is giving "Failed to load: ApiException(200): Unexpected response (200)" Issue: #54 |
 
 ---
 
@@ -156,7 +155,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **BUG.071** — Diagnose Failures now returns a safe diagnosis on every failure path, including malformed managed-app specs; regression tests added. Issue: #53 *(v0.109.8)*
 - **BUG.072** — Build tab needs a Diagnose failures button for apps that fail to start. Issue: #55 *(outstanding)*
 - **BUG.073** — Run full pipeline status disappears after a few seconds; status must persist and prevent re-clicking. Issue: #57 *(outstanding)*
-- **BUG.074** — Admin Activity returns ApiException(200) Unexpected response after a full run. Issue: #54 *(outstanding)*
+- **BUG.074** — HTML 200 responses are detected, refreshed once, then reported clearly; admin Activity no longer shows an opaque Unexpected response (200). Issue: #54 *(v0.109.9)*
 - **REQ.040** — Build tab needs Copy logs and Clear logs buttons. Issue: #56 *(outstanding)*
 - **REQ.001** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*
 - **REQ.002** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*

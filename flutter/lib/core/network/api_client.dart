@@ -81,6 +81,20 @@ class ApiClient {
       if (stale != null) return stale;
       throw ApiException('Network error: $e', statusCode: 0);
     }
+    // A stale session can be answered with the SPA's index.html and a 200
+    // instead of a 401. Treat that like expiry and refresh once.
+    if (response.statusCode == 200 &&
+        _isHtml(response) &&
+        retryAuth &&
+        !_isAnonymous(path)) {
+      if (await _refresh()) {
+        return request(method, path,
+            query: query, body: body, retryAuth: false);
+      }
+      await store.clear();
+      throw ApiException('Session expired. Please sign in again.',
+          statusCode: 401);
+    }
     if (response.statusCode == 401 && retryAuth) {
       if (_isAnonymous(path)) {
         // Login/register/refresh failures are credential problems, not
@@ -104,6 +118,13 @@ class ApiClient {
       _cache.set(cacheKey, data, cacheFor);
     }
     return data;
+  }
+
+  static bool _isHtml(http.Response response) {
+    final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+    return contentType.contains('text/html') ||
+        (!contentType.contains('application/json') &&
+            response.body.trimLeft().startsWith('<'));
   }
 
   static bool _isAnonymous(String path) =>
@@ -146,8 +167,18 @@ class ApiClient {
         errorCode: decoded['error_code']?.toString(),
       );
     }
-    throw ApiException('Unexpected response (${response.statusCode}).',
-        statusCode: response.statusCode);
+    final contentType = response.headers['content-type'] ?? 'unknown';
+    if (_isHtml(response)) {
+      throw ApiException(
+        'Server returned an HTML page instead of JSON. Your session may have expired.',
+        statusCode: response.statusCode,
+        errorCode: 'HTML_RESPONSE',
+      );
+    }
+    throw ApiException(
+      'Unexpected response (${response.statusCode}; $contentType).',
+      statusCode: response.statusCode,
+    );
   }
 
   /// Rotates the refresh token; true when the session continues.
