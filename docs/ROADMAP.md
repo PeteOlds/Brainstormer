@@ -56,7 +56,7 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 
 | ID | Status | Item | Notes / acceptance |
 | --- | --- | --- | --- |
-| RM-058 | planned | **Decompose oversized brainstormer modules** | `ideas.py` (2,311), `instances.py` (1,698), `ollama_tasks.py` (1,546), `build_runtime.py` (1,396). Extract cohesive helpers incrementally, target ~150–300 lines per module, URLs and behaviour unchanged. Keep the layer-based layout; do not restructure to feature-first (see `Guide_ProjectOverview.md`). Issue: #10 |
+| RM-058 | in-progress | **Decompose oversized brainstormer modules** | `build_runtime.py` split into `build_file_helpers.py` and `build_port_helpers.py` in v0.105.2 (helpers re-exported, no callers changed). Still to do: `ollama_tasks.py` (1,546), `ideas.py` (2,311), `instances.py` (1,698). Target ~150–300 lines per module, URLs and behaviour unchanged. Keep the layer-based layout; do not restructure to feature-first (see `guidelines/Guide_ProjectOverview.md`). Issue: #10 |
 | RM-069 | planned | **Make fast checks required** | `fast-checks.yml` is advisory until the existing baseline is clean: black would reformat 85 files, isort reports many files, and mypy reports ~280 errors. Fix the baseline in small slices, then remove `continue-on-error` and add `fast-checks` to branch protection. |
 | RM-068 | planned | **Restore a working dependency audit** | `safety check` is deprecated, crashes on a clean runner (`httpx.Timeout` TypeError with httpx 0.28.1) and reports 46 known vulnerabilities locally. Triage and upgrade affected dependencies, choose a maintained audit tool, then restore it as a required CI check. Removed from the gate in v0.101.1 so bandit and the guardrail scripts can block merges. Issue: #14 |
 

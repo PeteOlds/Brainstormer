@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.105.2 — 2026-11-27
+
+### Bug fixes
+- RM-058 (first slice): split `app/services/build_runtime.py` into focused modules — `build_file_helpers.py` (manifest merge, root route, requirements) and `build_port_helpers.py` (host IP, port rewrites, allocation). Helpers are re-exported from `build_runtime.py`, so no callers changed. The remaining oversized files stay in scope for later slices.
+
+---
+
 ## v0.105.1 — 2026-11-27
 
 ### Bug fixes
