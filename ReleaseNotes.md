@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.1 — 2026-11-27
+
+### Bug fixes
+- Synced the Flutter footer version with the backend `VERSION` file; the web bundle was still showing v0.101.0 after a hard refresh. Rebuilt the same-origin CanvasKit bundle with `scripts/build_web.sh`.
+
+---
+
 ## v0.109.0 — 2026-11-27
 
 ### Features
