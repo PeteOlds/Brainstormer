@@ -4,7 +4,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 from app.extensions import db
-from app.models import InstanceBuildTarget, SecondaryActionResult, IdeaStatus
+from app.models import IdeaStatus, InstanceBuildTarget, SecondaryActionResult
 from tests.integration.test_build import MANIFEST, make_instance, seed_idea, seed_target
 
 PRD = {
