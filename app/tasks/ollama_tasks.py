@@ -733,12 +733,26 @@ def run_full_pipeline(
                 idea.status = IdeaStatus.SHIP
                 db.session.commit()
             if has_design:
+                # The Build route normally resolves (and lazily creates) a
+                # repo; a full run calls the task directly, so do it here or
+                # the Build step silently fails with "No build repo selected".
+                from app.services.build_targets import resolve_build_target
+
+                target, reason = resolve_build_target(idea, allow_create=True)
+                if target is None:
+                    logger.warning(
+                        "full_pipeline_no_build_target",
+                        idea_id=idea_id,
+                        reason=reason,
+                    )
                 run_secondary_action(
                     idea_id,
                     "BUILD_CODE",
                     model_override=model_override,
                     run_id=None,
-                    extra_context={},
+                    extra_context=(
+                        {"target_id": str(target.id)} if target is not None else {}
+                    ),
                     provider_override=None,
                 )
         db.session.commit()

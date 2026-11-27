@@ -26,7 +26,6 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 
 | ID | Status | Item | Notes / acceptance |
 | --- | --- | --- | --- |
-| BUG.063 | planned | **Full pipeline continues past Design** | On "Run full pipeline" for IDEA-10802,the pipeline stopped at Design Issue: #42 |
 
 ## R3 — Features
 
@@ -143,7 +142,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **BUG.058** — BUG.058: Scale tab now has full Jinja parity (children, releases, pipeline, notes, AI settings, bulk actions). *(v0.98.0)*
 - **BUG.059** — BUG.059: Page header no longer shown twice on idea detail. *(v0.98.0)*
 - **BUG.062** — Brief documents now render as labelled sections and bullets in Flutter; raw JSON stays available via View details. *(v0.109.4)*
-- **BUG.063** — Full pipeline continues past Design. On "Run full pipeline" for IDEA-10802,the pipeline stopped at Design *(outstanding)*
+- **BUG.063** — Full run now resolves or auto-creates a build repo before the Build step, so it continues past Design to a preview. *(v0.109.6)*
 - **BUG.064** — Design documents now render as labelled sections and bullets, including typed screen/entity/endpoint specs. *(v0.109.4)*
 - **BUG.065** — Browser-native upload fallback makes Create Idea .md/.txt upload work on Flutter web. *(v0.109.5)*
 - **BUG.066** — Build tab can copy runbook commands and the Open App URL. *(v0.109.5)*
