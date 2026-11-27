@@ -57,7 +57,6 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 | BUG.010  |                    | HOLD<br>If AI Provider Spend tab is different from AI Providers / Configure / Monthly budgets, then remove the duplication                                                                                                                                  |
 | BUG.069  |                    | Debugging a failed job (Design Doc on IDEA-9263) gave the following error message<br><br>Failed to load: ApiException(0): Network error: ClientException: Failed to fetch, uri=/api/v1/ideas/f588be63-71bf-442f-8ba1-6a75e335a9ba                           |
 | BUG.070  |                    | HOLD<br>On the Admin Panel, update the System settings tile to read "System Settings Platform, location, build location" (old BUG.001 was reused for a different fix)                                                                                       |
-| BUG.073  |                    | REQ.032 added a message for "Run full pipeline" status - but it disappears after a few seconds so the user still can't see the status (and could click the "Run full pipeline" again) Issue: #57 |
 
 ---
 
@@ -152,7 +151,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **BUG.070** — Bookkeeping: the live Stripe roadmap item is now RM-051, avoiding a clash with the shipped Guides request, and the old System settings tile wording request is recorded as BUG.070. *(v0.101.0)*
 - **BUG.071** — Diagnose Failures now returns a safe diagnosis on every failure path, including malformed managed-app specs; regression tests added. Issue: #53 *(v0.109.8)*
 - **BUG.072** — Build tab now has a Diagnose failures button using the managed-app diagnose endpoint. Issue: #55 *(v0.109.10)*
-- **BUG.073** — Run full pipeline status disappears after a few seconds; status must persist and prevent re-clicking. Issue: #57 *(outstanding)*
+- **BUG.073** — Terminal Full pipeline runs stay visible for 60 seconds and the Run button stays disabled while active. Issue: #57 *(v0.109.11)*
 - **BUG.074** — HTML 200 responses are detected, refreshed once, then reported clearly; admin Activity no longer shows an opaque Unexpected response (200). Issue: #54 *(v0.109.9)*
 - **REQ.040** — Build tab now has Copy logs and Clear logs; the API truncates the log in place. Issue: #56 *(v0.109.10)*
 - **REQ.001** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*

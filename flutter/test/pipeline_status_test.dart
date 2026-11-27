@@ -30,6 +30,23 @@ void main() {
     expect(snapshot.releaseRuns.single.total, 4);
   });
 
+  test('formats terminal pipeline labels', () {
+    for (final entry in {'SUCCESS': 'finished', 'FAILED': 'failed'}.entries) {
+      expect(
+        ideaPipelineStatusLabel(
+          IdeaPipelineRun(
+            runId: 'r',
+            ideaId: 'i',
+            referenceCode: 'IDEA-1',
+            promptTitle: 'Idea',
+            status: entry.key,
+          ),
+        ),
+        'Full pipeline ${entry.value} — IDEA-1',
+      );
+    }
+  });
+
   test('formats queued, running and stopping labels', () {
     expect(
       ideaPipelineStatusLabel(

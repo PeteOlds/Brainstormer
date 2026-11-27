@@ -3,12 +3,12 @@ import os
 import random
 import string
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, g, request
 from flask_jwt_extended import get_jwt_identity
 from flask_limiter.util import get_remote_address
-from sqlalchemy import asc, desc, func, or_
+from sqlalchemy import and_, asc, desc, func, or_
 
 from app.extensions import db, limiter
 from app.models import (
@@ -1047,19 +1047,27 @@ def run_full_pipeline_endpoint(user, idea_id):
 def pipeline_status(user):
     """Compact status of active full-pipeline and release runs.
 
-    Used by the Flutter shell's persistent status bar. Only PENDING/RUNNING
-    idea runs and running/stopping releases are returned; historical runs are
-    still available on Admin → Activity and the release card respectively.
+    Used by the Flutter shell's persistent status bar. Active runs, plus
+    terminal runs finished in the last 60 seconds, are returned so the
+    outcome remains visible. Older runs live on Admin → Activity.
     """
     from app.models import Release
 
+    # Keep a completed run visible briefly so the user sees the outcome and
+    # cannot accidentally start a second pipeline before reading it.
+    recent_cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+    visible_statuses = or_(
+        PromptRun.status.in_([PromptRunStatus.PENDING, PromptRunStatus.RUNNING]),
+        and_(
+            PromptRun.status.in_([PromptRunStatus.SUCCESS, PromptRunStatus.FAILED]),
+            PromptRun.finished_at >= recent_cutoff,
+        ),
+    )
     idea_rows = (
         apply_scope(
             db.session.query(PromptRun, Idea).filter(
                 PromptRun.action_type == "FULL_PIPELINE",
-                PromptRun.status.in_(
-                    [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
-                ),
+                visible_statuses,
             ),
             PromptRun,
         )

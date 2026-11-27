@@ -109,6 +109,27 @@ def test_pipeline_status_returns_only_active_runs(app, admin_client):
     assert release_run["counts"]["prd"] == 2
 
 
+def test_pipeline_status_keeps_recent_completed_run(app, admin_client):
+    from datetime import datetime, timedelta, timezone
+
+    with app.app_context():
+        idea = _idea()
+        run = PromptRun(
+            idea_id=idea.id,
+            action_type="FULL_PIPELINE",
+            status=PromptRunStatus.SUCCESS,
+            finished_at=datetime.now(timezone.utc) - timedelta(seconds=5),
+        )
+        db.session.add(run)
+        db.session.commit()
+        reference_code = idea.reference_code
+
+    response = admin_client.get("/api/v1/pipeline/status")
+    data = response.get_json()["data"]
+    assert [r["reference_code"] for r in data["idea_runs"]] == [reference_code]
+    assert data["idea_runs"][0]["status"] == "SUCCESS"
+
+
 def test_full_pipeline_task_marks_its_tracking_run_complete(celery_app):
     from app.tasks.ollama_tasks import run_full_pipeline
 
