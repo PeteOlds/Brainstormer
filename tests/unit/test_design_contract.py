@@ -28,9 +28,7 @@ TYPED = {
             "states": ["loading", "empty", "error"],
         }
     ],
-    "entity_specs": [
-        {"name": "Idea", "fields": ["id: UUID", "title: str"]}
-    ],
+    "entity_specs": [{"name": "Idea", "fields": ["id: UUID", "title: str"]}],
     "endpoint_specs": [
         {
             "method": "GET",

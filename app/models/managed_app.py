@@ -6,6 +6,7 @@ kills the process group. Pids live here, logs live in files (see
 app.services.runner); state is a plain string, never an enum, so no
 out-of-band enum surgery is ever needed.
 """
+
 import uuid
 from datetime import datetime, timezone
 

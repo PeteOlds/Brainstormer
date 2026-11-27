@@ -70,7 +70,9 @@ def mirror_message_to_slack(message, client=None, app_base_url=None):
         blocks.append(
             {
                 "type": "context",
-                "elements": [{"type": "mrkdwn", "text": f"<{link}|View in Brainstormer>"}],
+                "elements": [
+                    {"type": "mrkdwn", "text": f"<{link}|View in Brainstormer>"}
+                ],
             }
         )
     blocks.append(
@@ -138,9 +140,11 @@ def handle_message_thread_reply(client, event, event_id=None):
     # only carries idea_id, so we look up the message via the stored ts.
     from app.models import Message
 
-    original = Message.query.filter_by(
-        instance_id=post.instance_id
-    ).order_by(Message.created_at.desc()).first()
+    original = (
+        Message.query.filter_by(instance_id=post.instance_id)
+        .order_by(Message.created_at.desc())
+        .first()
+    )
     # Best-effort: we cannot perfectly map ts->message without a new column.
     # Fall back to the most recent message in the instance.
     if original is None:
@@ -179,9 +183,10 @@ def _get_client():
 
 
 def _mark_event_seen(event_id):
+    from sqlalchemy.exc import IntegrityError
+
     from app.extensions import db
     from app.models import SlackEvent
-    from sqlalchemy.exc import IntegrityError
 
     if not event_id:
         return True

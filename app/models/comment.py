@@ -74,7 +74,9 @@ class Comment(db.Model):
     # backrefs `idea`; User defines no comment relationship to clash with).
     user = db.relationship("User", foreign_keys="Comment.user_id", viewonly=True)
 
-    def to_dict(self, author_name=None, children=None, include_flag=False, action_result_id=None):
+    def to_dict(
+        self, author_name=None, children=None, include_flag=False, action_result_id=None
+    ):
         data = {
             "id": str(self.id),
             "idea_id": str(self.idea_id),

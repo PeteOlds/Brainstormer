@@ -67,9 +67,7 @@ def test_ensure_raises_with_all_problems():
 
 
 def test_agents_md_is_server_authored_and_compact():
-    content = render_agents_md(
-        _files()[:2], target_name="IDEA-1234"
-    )
+    content = render_agents_md(_files()[:2], target_name="IDEA-1234")
     assert "# AGENTS.md" in content
     assert "IDEA-1234" in content
     assert "python app.py" in content

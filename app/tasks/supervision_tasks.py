@@ -6,6 +6,7 @@ process group — it must run on a worker because pids are
 container-local (a kill from the web container could hit an unrelated
 process). Status/tail stay in the routes (health-first, file-based).
 """
+
 import os
 import re
 import uuid
@@ -15,8 +16,7 @@ import structlog
 
 from app.extensions import db
 from app.models import ManagedApp
-from app.tasks import celery
-from app.tasks import BaseTask
+from app.tasks import BaseTask, celery
 
 logger = structlog.get_logger()
 
@@ -50,8 +50,9 @@ def start_managed_app(self, app_id: str, run_id: str | None = None):
     if app_row is None:
         logger.warning("supervise_missing", app_id=str(app_id)[:40])
         return
-    from app.models import PromptRun, PromptRunStatus
     import uuid as _uuid
+
+    from app.models import PromptRun, PromptRunStatus
 
     run = None
     if run_id:
@@ -124,7 +125,7 @@ def start_managed_app(self, app_id: str, run_id: str | None = None):
         workdir = spec.get("workdir") or app_row.workdir or ""
         app_port = app_row.port
         entry = None
-        for a in (spec.get("run_argv") or []):
+        for a in spec.get("run_argv") or []:
             if isinstance(a, str) and a.endswith(".py"):
                 entry = a
                 break
@@ -146,7 +147,9 @@ def start_managed_app(self, app_id: str, run_id: str | None = None):
             new_port, _ = allocate_port(int(app_port))
             if new_port and new_port != int(app_port):
                 if entry:
-                    full = entry if os.path.isabs(entry) else os.path.join(workdir, entry)
+                    full = (
+                        entry if os.path.isabs(entry) else os.path.join(workdir, entry)
+                    )
                     try:
                         with open(full) as fh:
                             text = fh.read()

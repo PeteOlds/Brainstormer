@@ -46,9 +46,7 @@ def test_admin_can_grant_idea_creation(app, client, admin_client):
         db.session.commit()
         user_id = str(user.id)
 
-    res = admin_client.patch(
-        f"/admin/users/{user_id}", json={"can_create_ideas": True}
-    )
+    res = admin_client.patch(f"/admin/users/{user_id}", json={"can_create_ideas": True})
     assert res.status_code == 200, res.get_json()
 
     with app.app_context():
@@ -69,9 +67,7 @@ def test_logout_revokes_the_refresh_token(client, app):
     )
     assert res.status_code == 200
 
-    res = client.post(
-        "/api/v1/refresh", json={"refresh_token": data["refresh_token"]}
-    )
+    res = client.post("/api/v1/refresh", json={"refresh_token": data["refresh_token"]})
     assert res.status_code == 401, res.get_json()
 
 

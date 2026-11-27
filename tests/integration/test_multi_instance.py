@@ -25,8 +25,13 @@ def _two_instances(app):
             db.session.add(i2)
             db.session.flush()
         for inst in (i1, i2):
-            if Membership.query.filter_by(user_id=u.id, instance_id=inst.id).first() is None:
-                db.session.add(Membership(user_id=u.id, instance_id=inst.id, role="USER"))
+            if (
+                Membership.query.filter_by(user_id=u.id, instance_id=inst.id).first()
+                is None
+            ):
+                db.session.add(
+                    Membership(user_id=u.id, instance_id=inst.id, role="USER")
+                )
         db.session.commit()
         return str(u.id), str(i1.id), str(i2.id)
 
@@ -57,7 +62,9 @@ def test_switch_instance_issues_scoped_token(app, client):
     data, headers = _login(client, instance_id=i1)
     assert data.get("instances") is not None
 
-    res = client.post("/api/v1/switch-instance", json={"instance_id": i2}, headers=headers)
+    res = client.post(
+        "/api/v1/switch-instance", json={"instance_id": i2}, headers=headers
+    )
     assert res.status_code == 200, res.get_json()
     new_token = res.get_json()["data"]["access_token"]
 
@@ -68,7 +75,11 @@ def test_switch_instance_issues_scoped_token(app, client):
     assert claims["instance_id"] == i2
 
     # Switching to an instance the user is NOT a member of is refused.
-    res = client.post("/api/v1/switch-instance", json={"instance_id": "00000000-0000-0000-0000-000000000000"}, headers=headers)
+    res = client.post(
+        "/api/v1/switch-instance",
+        json={"instance_id": "00000000-0000-0000-0000-000000000000"},
+        headers=headers,
+    )
     assert res.status_code == 403
 
 
@@ -87,7 +98,9 @@ def test_switch_instance_keeps_admin_flags(app, client):
         db.session.commit()
 
     _, headers = _login(client, instance_id=i1)
-    res = client.post("/api/v1/switch-instance", json={"instance_id": i2}, headers=headers)
+    res = client.post(
+        "/api/v1/switch-instance", json={"instance_id": i2}, headers=headers
+    )
     assert res.status_code == 200, res.get_json()
     user = res.get_json()["data"]["user"]
     assert user["is_site_admin"] is False
@@ -99,7 +112,9 @@ def test_switch_instance_keeps_admin_flags(app, client):
 
 def test_login_returns_instances_when_multiple(app, client):
     _two_instances(app)
-    res = client.post("/api/v1/login", json={"email": "multi@example.com", "password": "password123"})
+    res = client.post(
+        "/api/v1/login", json={"email": "multi@example.com", "password": "password123"}
+    )
     assert res.status_code == 200
     assert len(res.get_json()["data"]["instances"]) == 2
 
@@ -108,7 +123,8 @@ def test_add_and_remove_member(app, client):
     _, i1, _ = _two_instances(app)
     # site admin
     with app.app_context():
-        from app.models import User, UserRole, Membership
+        from app.models import Membership, User, UserRole
+
         admin = User.query.filter_by(email="siteadmin@example.com").first()
         if admin is None:
             admin = User(email="siteadmin@example.com", role=UserRole.ADMIN)
@@ -116,8 +132,15 @@ def test_add_and_remove_member(app, client):
             db.session.add(admin)
             db.session.commit()
         # grant site admin
-        if Membership.query.filter_by(user_id=admin.id, instance_id=None, role="SITE_ADMIN").first() is None:
-            db.session.add(Membership(user_id=admin.id, instance_id=None, role="SITE_ADMIN"))
+        if (
+            Membership.query.filter_by(
+                user_id=admin.id, instance_id=None, role="SITE_ADMIN"
+            ).first()
+            is None
+        ):
+            db.session.add(
+                Membership(user_id=admin.id, instance_id=None, role="SITE_ADMIN")
+            )
             db.session.commit()
     _, admin_headers = _login(client, email="siteadmin@example.com")
 
@@ -130,16 +153,25 @@ def test_add_and_remove_member(app, client):
             db.session.add(newu)
             db.session.commit()
 
-    res = client.post(f"/api/v1/instances/{i1}/members", json={"email": "newbie@example.com", "role": "USER"}, headers=admin_headers)
+    res = client.post(
+        f"/api/v1/instances/{i1}/members",
+        json={"email": "newbie@example.com", "role": "USER"},
+        headers=admin_headers,
+    )
     assert res.status_code == 201, res.get_json()
 
     # duplicate
-    res = client.post(f"/api/v1/instances/{i1}/members", json={"email": "newbie@example.com"}, headers=admin_headers)
+    res = client.post(
+        f"/api/v1/instances/{i1}/members",
+        json={"email": "newbie@example.com"},
+        headers=admin_headers,
+    )
     assert res.status_code == 409
 
     # remove
     with app.app_context():
         from app.models import User
+
         uid = str(User.query.filter_by(email="newbie@example.com").one().id)
     res = client.delete(f"/api/v1/instances/{i1}/members/{uid}", headers=admin_headers)
     assert res.status_code == 200

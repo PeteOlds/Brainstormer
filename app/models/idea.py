@@ -166,12 +166,8 @@ class Idea(db.Model):
             data["parent_title"] = self.parent.prompt_title
         data["release_id"] = str(self.release_id) if self.release_id else None
         data["repository"] = self.repository
-        data["created_at"] = (
-            self.created_at.isoformat() if self.created_at else None
-        )
-        data["updated_at"] = (
-            self.updated_at.isoformat() if self.updated_at else None
-        )
+        data["created_at"] = self.created_at.isoformat() if self.created_at else None
+        data["updated_at"] = self.updated_at.isoformat() if self.updated_at else None
         data["actions_run"] = [a.action_type for a in self.actions]
         if user_vote is not None:
             data["user_vote"] = user_vote

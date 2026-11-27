@@ -66,18 +66,18 @@ def create_app(config_name: str | None = None, init_celery_app: bool = True):
     from .routes.admin import admin_api_bp, admin_pages_bp
     from .routes.auth import bp as auth_bp
     from .routes.backup import bp as backup_bp
+    from .routes.billing import bp as billing_bp
     from .routes.health import bp as health_bp
     from .routes.ideas import bp as ideas_bp
     from .routes.instances import bp as instances_bp
     from .routes.messages import bp as messages_bp
     from .routes.oauth import bp as oauth_bp
-    from .routes.releases import bp as releases_bp
-    from .routes.billing import bp as billing_bp
     from .routes.ollama import bp as ollama_bp
 
     # Register blueprints
     from .routes.pages import bp as pages_bp
     from .routes.prompts import bp as prompts_bp
+    from .routes.releases import bp as releases_bp
 
     flutter_root = (app.config.get("FLUTTER_WEB_ROOT") or "").strip()
     jinia_prefix = "/jinja" if flutter_root else None

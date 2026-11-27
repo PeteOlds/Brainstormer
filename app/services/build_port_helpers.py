@@ -7,6 +7,7 @@ so existing callers keep working.
 import os
 import re
 
+
 def _host_network_ip() -> str:
     """Best-effort LAN IP of this machine (never 127.x) for shareable URLs."""
     import socket

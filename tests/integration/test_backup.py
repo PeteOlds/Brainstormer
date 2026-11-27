@@ -267,9 +267,7 @@ def _tenant_admin_headers(client, app):
             db.session.add(user)
             db.session.flush()
         if (
-            Membership.query.filter_by(
-                user_id=user.id, instance_id=inst.id
-            ).first()
+            Membership.query.filter_by(user_id=user.id, instance_id=inst.id).first()
             is None
         ):
             db.session.add(
@@ -306,10 +304,15 @@ def test_instance_admin_cannot_reach_site_backup(app, client, method, path):
     if method in ("post", "put"):
         kwargs["json"] = {}
     res = getattr(client, method)(path, **kwargs)
-    assert res.status_code == 403, (path, res.status_code, res.get_data(as_text=True)[:200])
+    assert res.status_code == 403, (
+        path,
+        res.status_code,
+        res.get_data(as_text=True)[:200],
+    )
 
 
 # --- Authenticity: a bundle must be signed by this server -------------------
+
 
 def _tamper(bundle):
     """Edit one idea title and recompute the (non-secret) checksum."""
@@ -366,6 +369,7 @@ def test_bundle_signed_with_another_key_rejected(app):
 
 
 # --- Restore must stay inside its tenant and must not grant privilege -------
+
 
 def test_instance_restore_rejects_rows_for_another_instance(app):
     """A bundle relabelled for tenant A must not write tenant B's rows."""

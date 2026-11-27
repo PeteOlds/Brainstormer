@@ -1,0 +1,157 @@
+# Reviewed mypy errors accepted for this release.
+# Generated 2026-11-27 after black/isort baseline formatting.
+# Format: count<TAB>file|code|message. New counts fail CI.
+1	app/__init__.py|method-assign|Cannot assign to a method
+1	app/__init__.py|no-untyped-def|Function is missing a return type annotation
+12	app/cli.py|no-untyped-def|Function is missing a return type annotation
+1	app/config.py|return-value|Incompatible return value type (got "str | None", expected "str")
+2	app/models/ai_config.py|name-defined|Name "db.Model" is not defined
+1	app/models/build_target.py|name-defined|Name "db.Model" is not defined
+2	app/models/chat.py|name-defined|Name "db.Model" is not defined
+1	app/models/comment.py|name-defined|Name "db.Model" is not defined
+1	app/models/entitlement.py|name-defined|Name "db.Model" is not defined
+1	app/models/github_config.py|name-defined|Name "db.Model" is not defined
+2	app/models/idea.py|attr-defined|"RelationshipProperty[Any]" has no attribute "__iter__"; maybe "__str__"? (not iterable)
+3	app/models/idea.py|index|Value of type "Row[tuple[int, int, Any]] | None" is not indexable
+1	app/models/idea.py|name-defined|Name "db.Model" is not defined
+1	app/models/idea.py|no-untyped-def|Function is missing a return type annotation
+1	app/models/idea_edit.py|name-defined|Name "db.Model" is not defined
+2	app/models/idea_test.py|name-defined|Name "db.Model" is not defined
+2	app/models/instance.py|name-defined|Name "db.Model" is not defined
+1	app/models/instance.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/models/managed_app.py|name-defined|Name "db.Model" is not defined
+1	app/models/message.py|name-defined|Name "db.Model" is not defined
+2	app/models/oauth.py|name-defined|Name "db.Model" is not defined
+1	app/models/oauth.py|no-untyped-def|Function is missing a return type annotation
+1	app/models/password_reset.py|name-defined|Name "db.Model" is not defined
+1	app/models/password_reset.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/models/prompt_config.py|name-defined|Name "db.Model" is not defined
+2	app/models/prompt_config.py|no-untyped-def|Function is missing a return type annotation
+1	app/models/prompt_run.py|name-defined|Name "db.Model" is not defined
+1	app/models/refresh_token.py|name-defined|Name "db.Model" is not defined
+2	app/models/refresh_token.py|no-untyped-def|Function is missing a return type annotation
+1	app/models/release.py|name-defined|Name "db.Model" is not defined
+1	app/models/release.py|no-untyped-def|Function is missing a return type annotation
+1	app/models/release_config.py|name-defined|Name "db.Model" is not defined
+1	app/models/release_config.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/models/secondary_action.py|name-defined|Name "db.Model" is not defined
+2	app/models/slack.py|name-defined|Name "db.Model" is not defined
+1	app/models/stage_config.py|name-defined|Name "db.Model" is not defined
+1	app/models/status_history.py|name-defined|Name "db.Model" is not defined
+1	app/models/stripe_event.py|name-defined|Name "db.Model" is not defined
+1	app/models/system_settings.py|name-defined|Name "db.Model" is not defined
+5	app/models/system_settings.py|no-untyped-def|Function is missing a return type annotation
+1	app/models/user.py|name-defined|Name "db.Model" is not defined
+1	app/models/vote.py|name-defined|Name "db.Model" is not defined
+3	app/routes/admin.py|operator|Unsupported operand types for + ("object" and "int")
+1	app/routes/admin.py|var-annotated|Need type annotation for "by_model" (hint: "by_model: dict[<type>, <type>] = ...")
+1	app/routes/admin.py|var-annotated|Need type annotation for "idea_ids" (hint: "idea_ids: set[<type>] = ...")
+1	app/routes/admin.py|var-annotated|Need type annotation for "prompt_ids" (hint: "prompt_ids: set[<type>] = ...")
+1	app/routes/admin.py|var-annotated|Need type annotation for "prompt_run_health" (hint: "prompt_run_health: dict[<type>, <type>] = ...")
+4	app/routes/backup.py|arg-type|Argument 1 to "_verify_or_error" has incompatible type "dict[Any, Any] | None"; expected "dict[Any, Any]"
+1	app/routes/backup.py|arg-type|Argument 1 to "restore_instance" has incompatible type "dict[Any, Any] | None"; expected "dict[str, Any]"
+1	app/routes/backup.py|arg-type|Argument 1 to "restore_site" has incompatible type "dict[Any, Any] | None"; expected "dict[str, Any]"
+1	app/routes/backup.py|no-untyped-def|Function is missing a return type annotation
+2	app/routes/backup.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/routes/health.py|no-any-return|Returning Any from function declared to return "bool"
+1	app/routes/ideas.py|arg-type|Argument 1 to "exists" has incompatible type "Any | None"; expected "int | str | bytes | PathLike[str] | PathLike[bytes]"
+1	app/routes/ideas.py|arg-type|Argument 1 to "open" has incompatible type "Any | None"; expected "int | str | bytes | PathLike[str] | PathLike[bytes]"
+1	app/routes/ideas.py|attr-defined|"ModelMetaclass" has no attribute "model_validate"
+1	app/routes/ideas.py|name-defined|Name "idea_id" is not defined
+1	app/routes/ideas.py|union-attr|Item "None" of "Any | None" has no attribute "isoformat"
+1	app/routes/ideas.py|union-attr|Item "None" of "Redis | None" has no attribute "get"
+1	app/routes/ideas.py|var-annotated|Need type annotation for "latest_by_idea" (hint: "latest_by_idea: dict[<type>, <type>] = ...")
+1	app/routes/instances.py|arg-type|Argument 1 to "ensure_target_path" has incompatible type "Any | None"; expected "str"
+3	app/routes/instances.py|arg-type|Argument 1 to "int" has incompatible type "Any | None"; expected "str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc"
+1	app/routes/instances.py|assignment|Incompatible types in assignment (expression has type "Decimal", target has type "bool")
+2	app/routes/instances.py|assignment|Incompatible types in assignment (expression has type "None", target has type "bool")
+2	app/routes/instances.py|assignment|Incompatible types in assignment (expression has type "date", target has type "bool")
+3	app/routes/instances.py|assignment|Incompatible types in assignment (expression has type "str | None", target has type "bool")
+2	app/routes/instances.py|assignment|Incompatible types in assignment (expression has type "str", target has type "bool")
+1	app/routes/instances.py|attr-defined|"_Prompt" has no attribute "instance_id"
+1	app/routes/instances.py|attr-defined|"_Prompt" has no attribute "model_name"
+1	app/routes/instances.py|attr-defined|"_Prompt" has no attribute "provider"
+1	app/routes/instances.py|unused-coroutine|Value of type "Coroutine[Any, Any, Any]" must be used
+1	app/routes/messages.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/routes/ollama.py|no-redef|Name "models" already defined on line 76
+1	app/routes/ollama.py|unused-coroutine|Value of type "Coroutine[Any, Any, Any]" must be used
+1	app/routes/prompts.py|arg-type|Argument 1 to "int" has incompatible type "Any | None"; expected "str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc"
+1	app/routes/releases.py|arg-type|Argument 1 to "get" of "dict" has incompatible type "Any | None"; expected "str"
+1	app/routes/releases.py|assignment|Incompatible types in assignment (expression has type "str", target has type "bool")
+1	app/schemas/ollama_schemas.py|attr-defined|"ModelMetaclass" has no attribute "model_validate"
+1	app/schemas/ollama_schemas.py|attr-defined|"ModelMetaclass" has no attribute "model_validate_json"
+2	app/schemas/ollama_schemas.py|no-untyped-def|Function is missing a return type annotation
+1	app/schemas/ollama_schemas.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/services/action_context.py|var-annotated|Need type annotation for "by_doc" (hint: "by_doc: dict[<type>, <type>] = ...")
+2	app/services/build_port_helpers.py|arg-type|Argument 1 to "allocate_port" has incompatible type "int | None"; expected "int"
+2	app/services/build_port_helpers.py|arg-type|Argument 1 to "int" has incompatible type "Any | None"; expected "str | Buffer | SupportsInt | SupportsIndex | SupportsTrunc"
+2	app/services/build_port_helpers.py|arg-type|Argument 2 to "_rewrite_compose_host_port" has incompatible type "int | None"; expected "int"
+2	app/services/build_port_helpers.py|arg-type|Argument 2 to "_rewrite_source_port" has incompatible type "int | None"; expected "int"
+1	app/services/build_port_helpers.py|no-any-return|Returning Any from function declared to return "str"
+1	app/services/build_port_helpers.py|var-annotated|Need type annotation for "report" (hint: "report: list[<type>] = ...")
+1	app/services/build_runtime.py|no-untyped-def|Function is missing a return type annotation
+7	app/services/build_runtime.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/services/build_runtime.py|var-annotated|Need type annotation for "compose" (hint: "compose: dict[<type>, <type>] = ...")
+2	app/services/build_service.py|no-any-return|Returning Any from function declared to return "str"
+2	app/services/build_service.py|no-untyped-def|Function is missing a return type annotation
+2	app/services/build_service.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/services/build_service.py|var-annotated|Need type annotation for "out" (hint: "out: list[<type>] = ...")
+1	app/services/build_targets.py|no-untyped-def|Function is missing a return type annotation
+2	app/services/build_targets.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+5	app/services/build_tests.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/services/design_contract.py|assignment|Incompatible types in assignment (expression has type "dict[Any, Any]", variable has type "str")
+6	app/services/design_contract.py|attr-defined|"str" has no attribute "get"
+4	app/services/design_contract.py|index|Invalid index type "str" for "str"; expected type "SupportsIndex | slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]"
+1	app/services/design_contract.py|misc|List comprehension has incompatible type List[dict[Any, Any]]; expected List[str]
+1	app/services/discovery.py|no-any-return|Returning Any from function declared to return "str | None"
+5	app/services/discovery.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+2	app/services/embedding_service.py|assignment|Incompatible default for parameter "threshold" (default has type "None", parameter has type "float")
+1	app/services/embedding_service.py|name-defined|Name "data" is not defined
+2	app/services/embedding_service.py|no-any-return|Returning Any from function declared to return "list[float]"
+4	app/services/embedding_service.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/services/llm_backends.py|call-overload|No overload variant of "embedding" matches argument types "Any", "list[str]", "Any", "dict[str, str | None]"
+1	app/services/message_slack.py|list-item|List item 0 has incompatible type "dict[str, str]"; expected "str"
+3	app/services/ollama_client.py|no-any-return|Returning Any from function declared to return "dict[str, Any]"
+2	app/services/ollama_client.py|no-any-return|Returning Any from function declared to return "list[dict[str, Any]]"
+1	app/services/ollama_client.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/services/prompt_templates.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+4	app/services/release_notes.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/services/release_pipeline.py|no-any-return|Returning Any from function declared to return "int"
+3	app/services/release_pipeline.py|no-untyped-def|Function is missing a return type annotation
+18	app/services/release_pipeline.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/services/release_pipeline.py|var-annotated|Need type annotation for "pending" (hint: "pending: list[<type>] = ...")
+1	app/services/runner.py|assignment|Incompatible types in assignment (expression has type "Popen[bytes]", variable has type "CompletedProcess[bytes]")
+4	app/services/runner.py|attr-defined|"CompletedProcess[bytes]" has no attribute "pid"
+1	app/services/runner.py|attr-defined|"CompletedProcess[bytes]" has no attribute "wait"
+1	app/services/runner.py|name-defined|Name "_re" is not defined; did you mean "re"?
+1	app/services/runner.py|union-attr|Item "None" of "str | None" has no attribute "strip"
+1	app/services/slack_service.py|call-arg|Unexpected keyword argument "event_type" for "handle_thread_reply"
+1	app/tasks/github_tasks.py|no-untyped-def|Function is missing a return type annotation
+1	app/tasks/github_tasks.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/tasks/github_tasks.py|union-attr|Item "None" of "Idea | None" has no attribute "id"
+1	app/tasks/github_tasks.py|union-attr|Item "None" of "Idea | None" has no attribute "reference_code"
+1	app/tasks/github_tasks.py|union-attr|Item "None" of "Release | None" has no attribute "instance_id"
+3	app/tasks/maintenance_tasks.py|index|Value of type "Row[tuple[int, int, Any]] | None" is not indexable
+1	app/tasks/maintenance_tasks.py|no-untyped-def|Function is missing a return type annotation
+4	app/tasks/maintenance_tasks.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/tasks/ollama_tasks.py|arg-type|Argument 1 to "existing_repo_snapshot" has incompatible type "str | None"; expected "str"
+2	app/tasks/ollama_tasks.py|assignment|Incompatible default for parameter "model_override" (default has type "None", parameter has type "str")
+3	app/tasks/ollama_tasks.py|no-untyped-def|Function is missing a return type annotation
+7	app/tasks/ollama_tasks.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/tasks/ollama_tasks.py|union-attr|Item "None" of "Any | None" has no attribute "name"
+2	app/tasks/ollama_tasks.py|unused-coroutine|Value of type "Coroutine[Any, Any, Any]" must be used
+3	app/tasks/supervision_tasks.py|no-untyped-def|Function is missing a return type annotation
+2	app/tasks/supervision_tasks.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+2	app/tasks/test_tasks.py|assignment|Incompatible types in assignment (expression has type "Request", variable has type "str")
+2	app/tasks/test_tasks.py|attr-defined|"str" has no attribute "add_header"
+2	app/tasks/test_tasks.py|no-untyped-def|Function is missing a return type annotation
+3	app/tasks/test_tasks.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/utils/auth.py|assignment|Incompatible default for parameter "email" (default has type "None", parameter has type "str")
+1	app/utils/auth.py|no-redef|Name "decode_token" already defined on line 81
+1	app/utils/auth.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/utils/decorators.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/utils/markdown.py|union-attr|Item "AttributeValueList" of "str | AttributeValueList" has no attribute "startswith"
+1	app/utils/net.py|misc|Set comprehension has incompatible type Set[str | int]; expected Set[str]
+1	app/utils/responses.py|no-untyped-def|Function is missing a return type annotation
+1	app/utils/responses.py|no-untyped-def|Function is missing a type annotation for one or more parameters
+1	app/utils/tenancy.py|no-any-return|Returning Any from function declared to return "dict[Any, Any]"

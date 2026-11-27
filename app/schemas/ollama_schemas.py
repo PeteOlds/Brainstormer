@@ -1,8 +1,9 @@
-from typing import List, get_args, get_origin
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
-from enum import Enum
 import json
+from enum import Enum
 from json import JSONDecodeError
+from typing import List, get_args, get_origin
+
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 
 class Verdict(str, Enum):
@@ -47,6 +48,7 @@ class FeasibilityOutput(BaseModel):
 class FiveForcesOutput(BaseModel):
     """Porter's Five Forces — flat strings/lists only: nested objects
     garble on small models (see: COMPETITORS validation failures)."""
+
     competitive_rivalry: str = Field(..., min_length=20)
     threat_of_substitutes: str = Field(..., min_length=20)
     threat_of_new_entrants: str = Field(..., min_length=20)
@@ -59,6 +61,7 @@ class FiveForcesOutput(BaseModel):
 
 class PestelOutput(BaseModel):
     """PESTEL analysis — same flat-shape rule as FiveForcesOutput."""
+
     political: str = Field(..., min_length=20)
     economic: str = Field(..., min_length=20)
     social: str = Field(..., min_length=20)
@@ -72,6 +75,7 @@ class PestelOutput(BaseModel):
 
 class PrdOutput(BaseModel):
     """PRD document — flat sections plus capped open-questions list."""
+
     executive_summary: str = Field(..., min_length=20)
     user_personas: str = Field(..., min_length=20)
     product_scope: str = Field(..., min_length=20)
@@ -84,6 +88,7 @@ class PrdOutput(BaseModel):
 
 class ScreenSpec(BaseModel):
     """One screen/component in the typed design contract."""
+
     name: str = Field(..., min_length=1, max_length=120)
     purpose: str = ""
     components: List[str] = Field(default_factory=list)
@@ -92,6 +97,7 @@ class ScreenSpec(BaseModel):
 
 class EntitySpec(BaseModel):
     """One data entity in the typed design contract."""
+
     name: str = Field(..., min_length=1, max_length=120)
     fields: List[str] = Field(default_factory=list)
     relationships: str = ""
@@ -99,6 +105,7 @@ class EntitySpec(BaseModel):
 
 class EndpointSpec(BaseModel):
     """One API endpoint in the typed design contract."""
+
     method: str = Field(..., min_length=2, max_length=10)
     path: str = Field(..., min_length=1, max_length=200)
     request: str = ""
@@ -148,6 +155,7 @@ class DesignDocOutput(BaseModel):
     When the model emits only the arrays, the flat summaries are filled in
     automatically so nothing downstream needs changing.
     """
+
     architecture: str = Field(default="", min_length=20)
     screens: str = Field(default="", min_length=20)
     data_model: str = Field(default="", min_length=20)
@@ -171,6 +179,7 @@ class DesignDocOutput(BaseModel):
 
 class VrioOutput(BaseModel):
     """VRIO Framework — 4 criteria + 5-tier classification + recommendations."""
+
     value: str = Field(..., min_length=3)
     rarity: str = Field(..., min_length=2)
     imitability: str = Field(..., min_length=2)
@@ -181,6 +190,7 @@ class VrioOutput(BaseModel):
 
 class ThreeCsOutput(BaseModel):
     """3Cs Strategic Analysis — Customer, Competitor, Company + alignment + recommendations."""
+
     customer: str = Field(..., min_length=20)
     competitor: str = Field(..., min_length=20)
     company: str = Field(..., min_length=20)
@@ -190,6 +200,7 @@ class ThreeCsOutput(BaseModel):
 
 class MarketSizingOutput(BaseModel):
     """Market Sizing — TAM/SAM/SOM with formulas and assumptions."""
+
     tam: str = Field(..., min_length=20)
     sam: str = Field(..., min_length=20)
     som: str = Field(..., min_length=20)
@@ -199,6 +210,7 @@ class MarketSizingOutput(BaseModel):
 
 class BusinessModelCanvasOutput(BaseModel):
     """Business Model Canvas — 9 blocks + vulnerabilities + validation experiments."""
+
     value_propositions: str = Field(..., min_length=20)
     customer_segments: str = Field(..., min_length=20)
     channels: str = Field(..., min_length=20)
@@ -214,6 +226,7 @@ class BusinessModelCanvasOutput(BaseModel):
 
 class HypothesisTestOutput(BaseModel):
     """Hypothesis Test — Assumptions matrix + hypotheses + experiments + roadmap."""
+
     assumptions_matrix: str = Field(..., min_length=20)
     hypotheses: List[str]
     experiments: List[str]
@@ -222,6 +235,7 @@ class HypothesisTestOutput(BaseModel):
 
 class GtmStrategyOutput(BaseModel):
     """GTM Execution Strategy — 6 pillars + AARRR metrics + launch roadmap."""
+
     market_segmentation: str = Field(..., min_length=20)
     value_proposition: str = Field(..., min_length=20)
     pricing_packaging: str = Field(..., min_length=20)
@@ -393,8 +407,11 @@ def _coerce_scalar_lists(obj, schema):
         val = obj[name]
         ann = field.annotation
         if ann is str and isinstance(val, list):
-            texts = [str(v).strip() for v in val
-                     if isinstance(v, (str, int, float)) and str(v).strip()]
+            texts = [
+                str(v).strip()
+                for v in val
+                if isinstance(v, (str, int, float)) and str(v).strip()
+            ]
             if texts:
                 obj[name] = " ".join(texts)
         elif ann is str and isinstance(val, dict):
@@ -419,9 +436,16 @@ def _coerce_scalar_lists(obj, schema):
             _walk(val)
             if leaves:
                 obj[name] = " ".join(leaves)
-        elif get_origin(ann) is list and get_args(ann) == (str,) and isinstance(val, list):
-            strs = [str(v).strip() for v in val
-                    if isinstance(v, (str, int, float)) and str(v).strip()]
+        elif (
+            get_origin(ann) is list
+            and get_args(ann) == (str,)
+            and isinstance(val, list)
+        ):
+            strs = [
+                str(v).strip()
+                for v in val
+                if isinstance(v, (str, int, float)) and str(v).strip()
+            ]
             if strs != val:
                 obj[name] = strs
     return obj
@@ -437,8 +461,8 @@ def validate_ollama_output(action_type: str, raw_json: str):
     schema = _ACTION_SCHEMAS.get(action_type)
     if not schema:
         raise ValueError(
-            f"Unknown action type: {action_type}. "
-            f"Known: {sorted(_ACTION_SCHEMAS)}")
+            f"Unknown action type: {action_type}. " f"Known: {sorted(_ACTION_SCHEMAS)}"
+        )
     try:
         return schema.model_validate_json(raw_json)
     except JSONDecodeError:

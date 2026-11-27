@@ -4,9 +4,10 @@ Handles release CRUD, assignment, completion, notes, AI config, and
 GitHub push for releases tied to parent ideas.
 """
 
-from datetime import datetime, timezone
-from flask import Blueprint, request
 import uuid
+from datetime import datetime, timezone
+
+from flask import Blueprint, request
 
 from app.extensions import db
 from app.models import (
@@ -18,10 +19,10 @@ from app.models import (
     ReleaseAIConfig,
     SecondaryActionResult,
 )
+from app.services.release_notes import write_release_notes_file
 from app.utils.decorators import require_permission, token_required
 from app.utils.responses import api_created, api_error, api_ok
 from app.utils.tenancy import check_access, stamp
-from app.services.release_notes import write_release_notes_file
 
 bp = Blueprint("releases", __name__)
 
@@ -70,9 +71,7 @@ def list_releases(user, parent_id):
     # build-target API.
     payload["build_targets"] = [
         {"id": str(t.id), "name": t.name}
-        for t in InstanceBuildTarget.query.filter_by(
-            instance_id=parent.instance_id
-        )
+        for t in InstanceBuildTarget.query.filter_by(instance_id=parent.instance_id)
         .order_by(InstanceBuildTarget.name)
         .all()
     ]
@@ -143,9 +142,7 @@ def create_release(user, parent_id):
 
     requested_target = data.get("build_target_id")
     if requested_target:
-        target, _ = resolve_build_target(
-            parent, explicit_id=requested_target
-        )
+        target, _ = resolve_build_target(parent, explicit_id=requested_target)
         if target is None:
             return api_error(
                 "That build repo does not exist for this instance.",
@@ -317,7 +314,9 @@ def complete_release(user, release_id):
         return denied
     children = Idea.query.filter_by(release_id=release.id).all()
     if not children:
-        return api_error("Nothing in this release yet — move ideas into it first.", status_code=400)
+        return api_error(
+            "Nothing in this release yet — move ideas into it first.", status_code=400
+        )
 
     data = request.get_json() or {}
     force = bool(data.get("force"))
@@ -327,15 +326,13 @@ def complete_release(user, release_id):
     elif target in ("drop", "dropped"):
         target = "drop"
     else:
-        return api_error(
-            "status must be 'shipped' or 'drop'.", status_code=400
-        )
+        return api_error("status must be 'shipped' or 'drop'.", status_code=400)
 
     # Pre-release readiness (enforced). With force=false we only report;
     # with force=true an admin can override, recorded in release notes.
     missing = []
     for child in children:
-        from app.models import SecondaryActionResult, ManagedApp
+        from app.models import ManagedApp, SecondaryActionResult
         from app.models.idea_test import IdeaTest, TestStatus
 
         # Confirmed build?
@@ -405,7 +402,9 @@ def complete_release(user, release_id):
         {
             "moved": moved,
             "skipped": 0,
-            "status": "SHIP" if target == "shipped" else "DROP",  # frontend keys off uppercase
+            "status": (
+                "SHIP" if target == "shipped" else "DROP"
+            ),  # frontend keys off uppercase
             "child_count": counts.get(str(release.id), 0),
             "total": moved,
             "updated_count": moved,
@@ -425,7 +424,9 @@ def regenerate_release_notes(user, release_id):
         return denied
     parent = Idea.query.get(release.parent_idea_id)
     write_release_notes_file(release, parent)
-    return api_ok({"message": "Release notes regenerated.", "release": release.to_dict()})
+    return api_ok(
+        {"message": "Release notes regenerated.", "release": release.to_dict()}
+    )
 
 
 @bp.route("/releases/<uuid:release_id>/ai-config", methods=["GET"])
@@ -462,13 +463,17 @@ def update_release_ai_config(user, release_id):
     if model_name is not None:
         model_name = str(model_name).strip() or None
         if model_name is not None and len(model_name) > 100:
-            return api_error("model_name must be 100 characters or fewer.", status_code=400)
+            return api_error(
+                "model_name must be 100 characters or fewer.", status_code=400
+            )
     temperature = data.get("temperature")
     if temperature is not None:
         try:
             temperature = float(temperature)
             if not 0 <= temperature <= 2:
-                return api_error("temperature must be between 0 and 2.", status_code=400)
+                return api_error(
+                    "temperature must be between 0 and 2.", status_code=400
+                )
         except (TypeError, ValueError):
             return api_error("temperature must be a number.", status_code=400)
     top_p = data.get("top_p")
@@ -484,7 +489,9 @@ def update_release_ai_config(user, release_id):
         try:
             num_predict = int(num_predict)
             if not 1 <= num_predict <= 4096:
-                return api_error("num_predict must be between 1 and 4096.", status_code=400)
+                return api_error(
+                    "num_predict must be between 1 and 4096.", status_code=400
+                )
         except (TypeError, ValueError):
             return api_error("num_predict must be an integer.", status_code=400)
     num_ctx = data.get("num_ctx")
@@ -492,7 +499,9 @@ def update_release_ai_config(user, release_id):
         try:
             num_ctx = int(num_ctx)
             if not 512 <= num_ctx <= 131072:
-                return api_error("num_ctx must be between 512 and 131072.", status_code=400)
+                return api_error(
+                    "num_ctx must be between 512 and 131072.", status_code=400
+                )
         except (TypeError, ValueError):
             return api_error("num_ctx must be an integer.", status_code=400)
     skills = data.get("skills")
@@ -501,7 +510,9 @@ def update_release_ai_config(user, release_id):
             return api_error("skills must be a list of strings.", status_code=400)
     guidelines = data.get("guidelines")
     if guidelines is not None:
-        if not isinstance(guidelines, list) or not all(isinstance(v, str) for v in guidelines):
+        if not isinstance(guidelines, list) or not all(
+            isinstance(v, str) for v in guidelines
+        ):
             return api_error("guidelines must be a list of strings.", status_code=400)
     row = ReleaseAIConfig.query.filter_by(release_id=release.id).first()
     if row is None:
@@ -552,7 +563,11 @@ def push_release_to_github_route(user, release_id):
         return denied
     from app.models import InstanceGitHubConfig
 
-    status_val = release.status.value if hasattr(release.status, "value") else str(release.status)
+    status_val = (
+        release.status.value
+        if hasattr(release.status, "value")
+        else str(release.status)
+    )
     if status_val != "done":
         return api_error("Finish the release before pushing.", status_code=400)
     gh = InstanceGitHubConfig.query.filter_by(instance_id=release.instance_id).first()
@@ -586,10 +601,12 @@ def bulk_run_action(user, release_id):
     confirm_build = bool(data.get("confirm_build", False))
     children = Idea.query.filter_by(release_id=release.id).all()
     if not children:
-        return api_error("Nothing in this release yet — move ideas into it first.", status_code=400)
+        return api_error(
+            "Nothing in this release yet — move ideas into it first.", status_code=400
+        )
     from app.services.action_context import parent_context
-    from app.tasks.ollama_tasks import run_secondary_action
     from app.tasks import enqueue_generation
+    from app.tasks.ollama_tasks import run_secondary_action
 
     requested_target = data.get("target_id")
 
@@ -631,7 +648,11 @@ def bulk_run_action(user, release_id):
 
         # Bulk docs skip work that already exists; recreating one is the
         # single-idea path (Recreate), not a release-wide sweep.
-        if action_type in ("PRD_DOC", "DESIGN_DOC") and row is not None and row.is_current:
+        if (
+            action_type in ("PRD_DOC", "DESIGN_DOC")
+            and row is not None
+            and row.is_current
+        ):
             skipped.append(
                 {
                     "reference_code": child.reference_code,
@@ -742,9 +763,8 @@ def bulk_run_action(user, release_id):
                 }
             )
     db.session.commit()
-    summary = (
-        f"Started {launched} of {len(children)}. "
-        + (f"Skipped {len(skipped)}." if skipped else "Nothing skipped.")
+    summary = f"Started {launched} of {len(children)}. " + (
+        f"Skipped {len(skipped)}." if skipped else "Nothing skipped."
     )
     return api_ok(
         {
@@ -776,7 +796,9 @@ def start_release_pipeline_route(user, release_id):
     data = request.get_json(silent=True) or {}
     force = bool(data.get("force"))
     target_phase = data.get("target_phase")
-    ok, message = start_release_pipeline(release, user, force=force, target_phase=target_phase)
+    ok, message = start_release_pipeline(
+        release, user, force=force, target_phase=target_phase
+    )
     if not ok:
         return api_error(message, status_code=400)
     count = Idea.query.filter_by(release_id=release.id).count()

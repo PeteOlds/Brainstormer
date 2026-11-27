@@ -16,6 +16,7 @@ Nothing is cached and nothing touches the DB: sets are small and the
 admin's add/remove must show up immediately. Reads are traversal-safe
 (names are resolved and confined to the known directories).
 """
+
 import os
 import re
 from pathlib import Path
@@ -74,15 +75,19 @@ def list_skills() -> list:
             continue
         for skill_file in sorted(base.glob("*/SKILL.md")):
             try:
-                meta = _parse_frontmatter(skill_file.read_text(encoding="utf-8", errors="replace"))
+                meta = _parse_frontmatter(
+                    skill_file.read_text(encoding="utf-8", errors="replace")
+                )
             except OSError:
                 continue
             name = meta.get("name") or skill_file.parent.name
-            found.append({
-                "name": name,
-                "description": meta.get("description", ""),
-                "source": str(base),
-            })
+            found.append(
+                {
+                    "name": name,
+                    "description": meta.get("description", ""),
+                    "source": str(base),
+                }
+            )
     return found
 
 
@@ -125,7 +130,9 @@ def read_skill_body(name: str) -> str | None:
             continue
         for skill_file in base.glob("*/SKILL.md"):
             try:
-                meta = _parse_frontmatter(skill_file.read_text(encoding="utf-8", errors="replace"))
+                meta = _parse_frontmatter(
+                    skill_file.read_text(encoding="utf-8", errors="replace")
+                )
             except OSError:
                 continue
             if (meta.get("name") or skill_file.parent.name) == name:
@@ -162,8 +169,8 @@ def read_guideline(name: str, instance_id=None) -> str | None:
 
 def discover(user) -> dict:
     """Discovery endpoint data: skills, guidelines, and available actions."""
-    from app.utils.tenancy import current_instance_id
     from app.services.secondary_actions import list_actions
+    from app.utils.tenancy import current_instance_id
 
     iid = current_instance_id()
     return {
@@ -181,8 +188,8 @@ def discover_actions(user, idea=None) -> list:
     _check_action_allowed().
     """
     from app.models.roles import role_permissions
-    from app.services.secondary_actions import list_actions
     from app.routes.ideas import _check_action_allowed
+    from app.services.secondary_actions import list_actions
     from app.utils.decorators import _membership_allows_admin
 
     if not _membership_allows_admin(user):

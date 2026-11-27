@@ -19,10 +19,14 @@ def _config(key: str, default: Optional[str] = None) -> Optional[str]:
         return os.getenv(key, default)
 
 
-def send_email(to: str, subject: str, text_body: str, html_body: Optional[str] = None) -> None:
+def send_email(
+    to: str, subject: str, text_body: str, html_body: Optional[str] = None
+) -> None:
     """Send an email, or log it to the console in dev mode."""
     host = _config("SMTP_HOST")
-    sender = _config("SMTP_FROM") or _config("SMTP_USER") or "noreply@brainstormer.local"
+    sender = (
+        _config("SMTP_FROM") or _config("SMTP_USER") or "noreply@brainstormer.local"
+    )
 
     if not host:
         # Dev mode: no SMTP configured. Log the message so the reset link
@@ -34,7 +38,11 @@ def send_email(to: str, subject: str, text_body: str, html_body: Optional[str] =
     port = int(_config("SMTP_PORT", "587") or 587)
     user = _config("SMTP_USER")
     password = _config("SMTP_PASSWORD")
-    use_tls = (_config("SMTP_USE_TLS", "true") or "true").lower() in ("1", "true", "yes")
+    use_tls = (_config("SMTP_USE_TLS", "true") or "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
     msg = EmailMessage()
     msg["Subject"] = subject

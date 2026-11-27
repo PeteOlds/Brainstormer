@@ -31,7 +31,7 @@ ROLE_PERMISSIONS = {
         "edit_docs",
         "change_status",
         "edit_any_idea",
-      },
+    },
     "INSTANCE_ADMIN": USER_PERMS
     | {
         "run_actions",

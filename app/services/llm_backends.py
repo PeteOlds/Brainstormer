@@ -565,7 +565,11 @@ def embed_for_instance(text: str, instance_id: Any = None) -> list[float] | None
                     model=row.embedding_model,
                     input=[text],
                     api_key=row.api_key,
-                    **({"api_base": _safe_endpoint(row.endpoint)} if row.endpoint else {}),
+                    **(
+                        {"api_base": _safe_endpoint(row.endpoint)}
+                        if row.endpoint
+                        else {}
+                    ),
                 )
                 record_spend(
                     instance_id,

@@ -11,10 +11,6 @@ from pydantic import ValidationError
 from app.extensions import db
 from app.models import Idea, IdeaStatus, PromptConfig, SecondaryActionResult
 from app.schemas.ollama_schemas import validate_ollama_output
-from app.services.ollama_client import OllamaClient, OllamaError
-from app.services.prompt_templates import get_base_prompt, get_prompt_template
-from app.tasks import BaseTask, celery, enqueue_generation
-from app.utils.crypto import decrypt
 
 # Build runtime/runbook/port helpers (moved to app.services.build_runtime for
 # maintainability). Re-exported here so existing callers/tests keep working.
@@ -31,9 +27,10 @@ from app.services.build_runtime import (
     _rewrite_compose_host_port,
     _rewrite_source_port,
 )
-
-
-
+from app.services.ollama_client import OllamaClient, OllamaError
+from app.services.prompt_templates import get_base_prompt, get_prompt_template
+from app.tasks import BaseTask, celery, enqueue_generation
+from app.utils.crypto import decrypt
 
 logger = structlog.get_logger()
 
@@ -639,28 +636,7 @@ def _accumulate_answers(idea_id, action_type, new_answers):
     return list(keyed.values()) + unkeyed
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Map common import names to their pip package names.
-
-
 
 
 def _write_confirmed_build(idea, build_target, build_root, run_id):
@@ -672,6 +648,8 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
     before anything is written, so "Built" always means runnable. Every
     failure marks the run failed with a plain message and returns.
     """
+    from pydantic import ValidationError
+
     from app.models import SecondaryActionResult
     from app.schemas.ollama_schemas import BuildCodeOutput
     from app.services.build_service import (
@@ -680,7 +658,6 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
         server_path,
         write_manifest,
     )
-    from pydantic import ValidationError
 
     preview = SecondaryActionResult.query.filter_by(
         idea_id=idea.id, action_type="BUILD_CODE", is_current=True
@@ -876,10 +853,14 @@ def run_full_pipeline(
     task is queued. It lets the shell show a persistent status while the
     Celery task is still queued or running.
     """
-    from app.models import Idea, IdeaStatus, PromptRun
+    from app.models import (
+        ActionType,
+        Idea,
+        IdeaStatus,
+        PromptRun,
+        SecondaryActionResult,
+    )
     from app.models.lifecycle import can_transition
-
-    from app.models import SecondaryActionResult, ActionType
 
     run = None
     if run_id:
@@ -913,12 +894,18 @@ def run_full_pipeline(
 
         # Advance to SCOPE and run Brief (skip if a current Brief exists).
         if not _has_current(ActionType.PRD_DOC):
-            if idea.status != IdeaStatus.SCOPE and can_transition(idea.status, IdeaStatus.SCOPE):
+            if idea.status != IdeaStatus.SCOPE and can_transition(
+                idea.status, IdeaStatus.SCOPE
+            ):
                 idea.status = IdeaStatus.SCOPE
                 db.session.commit()
             run_secondary_action(
-                idea_id, "PRD_DOC", model_override=model_override, run_id=None,
-                extra_context={}, provider_override=None,
+                idea_id,
+                "PRD_DOC",
+                model_override=model_override,
+                run_id=None,
+                extra_context={},
+                provider_override=None,
             )
         # Advance to MAP and run Design (skip if a current Design exists).
         if not _has_current(ActionType.DESIGN_DOC):
@@ -930,8 +917,12 @@ def run_full_pipeline(
                 pass
             else:
                 run_secondary_action(
-                    idea_id, "DESIGN_DOC", model_override=model_override, run_id=None,
-                    extra_context={}, provider_override=None,
+                    idea_id,
+                    "DESIGN_DOC",
+                    model_override=model_override,
+                    run_id=None,
+                    extra_context={},
+                    provider_override=None,
                 )
         # Advance to SHIP and run Build preview (skip if a current Build exists).
         if not _has_current(ActionType.BUILD_CODE):
@@ -941,8 +932,12 @@ def run_full_pipeline(
                 db.session.commit()
             if has_design:
                 run_secondary_action(
-                    idea_id, "BUILD_CODE", model_override=model_override, run_id=None,
-                    extra_context={}, provider_override=None,
+                    idea_id,
+                    "BUILD_CODE",
+                    model_override=model_override,
+                    run_id=None,
+                    extra_context={},
+                    provider_override=None,
                 )
         db.session.commit()
     except Exception as exc:
@@ -1264,7 +1259,8 @@ def run_secondary_action(
             # The current Design doc is the build contract. Render its typed
             # specs (or legacy strings) into the prompt instead of relying
             # on the generic "Prior Analyses" key list.
-            from app.models import ActionType, SecondaryActionResult as _Result
+            from app.models import ActionType
+            from app.models import SecondaryActionResult as _Result
             from app.services.design_contract import render_design_contract
 
             design = (
@@ -1440,9 +1436,7 @@ def run_secondary_action(
                 )
             except (TypeError, ValueError):
                 validated.build_stage = 1
-            validated.files = [
-                f for f in validated.files if f.path != "AGENTS.md"
-            ] + [
+            validated.files = [f for f in validated.files if f.path != "AGENTS.md"] + [
                 BuildFile(
                     path="AGENTS.md",
                     content=render_agents_md(

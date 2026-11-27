@@ -429,9 +429,7 @@ def _smallest_node(page, needle):
     candidates = [
         n
         for n in _nodes(page)
-        if n["w"] > 0
-        and n["h"] > 0
-        and needle in f"{n['label']} {n['text']}"
+        if n["w"] > 0 and n["h"] > 0 and needle in f"{n['label']} {n['text']}"
     ]
     if not candidates:
         return None
@@ -462,9 +460,7 @@ def _click_dialog_run(page):
              (n.innerText || '').trim() === 'Run')"""
     )
     run = next(
-        n
-        for n in _nodes(page)
-        if n["role"] == "button" and n["text"].strip() == "Run"
+        n for n in _nodes(page) if n["role"] == "button" and n["text"].strip() == "Run"
     )
     _click_node(page, run)
 
@@ -624,13 +620,9 @@ def test_instance_settings_edits_provider_and_phase_defaults(
     # Click the "gpt-4o" chip (exact match, not "gpt-4o-mini").
     # Chips render as checkboxes in the accessibility tree.
     gpt_nodes = [
-        n for n in _nodes(page)
-        if "gpt-4o" in (n["label"] + n["text"]).lower()
+        n for n in _nodes(page) if "gpt-4o" in (n["label"] + n["text"]).lower()
     ]
-    chip = [
-        n for n in gpt_nodes
-        if "mini" not in n["label"].lower()
-    ]
+    chip = [n for n in gpt_nodes if "mini" not in n["label"].lower()]
     assert chip, [n["label"] for n in gpt_nodes]
     _click_node(page, chip[0])
     page.wait_for_timeout(300)
@@ -641,9 +633,7 @@ def test_instance_settings_edits_provider_and_phase_defaults(
 
     with flutter_app.app_context():
         config = InstanceAIConfig.query.filter_by(provider="openai").first()
-        assert sorted(config.model_allowlist or []) == sorted(
-            ["gpt-4o-mini", "gpt-4o"]
-        )
+        assert sorted(config.model_allowlist or []) == sorted(["gpt-4o-mini", "gpt-4o"])
 
     _scroll_top(page)
     _click_text(page, "Phase defaults")

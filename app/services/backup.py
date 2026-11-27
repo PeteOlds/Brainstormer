@@ -301,7 +301,9 @@ def verify_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
         _canonical(
             {
                 "manifest": {
-                    k: v for k, v in manifest.items() if k not in ("checksum", "signature")
+                    k: v
+                    for k, v in manifest.items()
+                    if k not in ("checksum", "signature")
                 },
                 "data": bundle.get("data", {}),
             }
@@ -511,9 +513,7 @@ def restore_instance(bundle: dict[str, Any]) -> dict[str, int]:
             if row_instance is None:
                 if name == "memberships":
                     # A NULL-instance membership is a site-wide grant.
-                    raise BackupIntegrityError(
-                        "bundle contains a site-wide membership"
-                    )
+                    raise BackupIntegrityError("bundle contains a site-wide membership")
                 continue
             if str(row_instance) != str(instance_id):
                 raise BackupIntegrityError(
@@ -563,9 +563,7 @@ def restore_instance(bundle: dict[str, Any]) -> dict[str, int]:
                 # at a different account by a tenant restore.
                 _upsert_rows(model, data.get(name, []), update_columns=set())
             elif name == "memberships":
-                _upsert_rows(
-                    model, data.get(name, []), update_columns={"role"}
-                )
+                _upsert_rows(model, data.get(name, []), update_columns={"role"})
             else:
                 _upsert_rows(model, data.get(name, []))
         elif "instance_id" in model.__table__.columns:
@@ -641,7 +639,11 @@ def _upsert_rows(
         stmt: Any = (
             pg_base.on_conflict_do_update(
                 index_elements=[table.c[_row_key(model)]],
-                set_={c.name: pg_base.excluded[c.name] for c in table.columns if c.name in writable},
+                set_={
+                    c.name: pg_base.excluded[c.name]
+                    for c in table.columns
+                    if c.name in writable
+                },
             )
             if writable
             else pg_base.on_conflict_do_nothing(
@@ -653,7 +655,11 @@ def _upsert_rows(
         stmt = (
             lite_base.on_conflict_do_update(
                 index_elements=[table.c[_row_key(model)]],
-                set_={c.name: lite_base.excluded[c.name] for c in table.columns if c.name in writable},
+                set_={
+                    c.name: lite_base.excluded[c.name]
+                    for c in table.columns
+                    if c.name in writable
+                },
             )
             if writable
             else lite_base.on_conflict_do_nothing(

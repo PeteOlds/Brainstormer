@@ -76,7 +76,9 @@ def test_unassigned_child_listed_once_before_any_release(
 
 def test_create_child_idea_appears_in_scale_tab(scale_idea_page, live_server, seeded):
     page = scale_idea_page
-    page.locator(DETAIL).locator("button:has-text('Suggest an improvement')").first.click()
+    page.locator(DETAIL).locator(
+        "button:has-text('Suggest an improvement')"
+    ).first.click()
     page.wait_for_timeout(800)
     page.fill("input[x-model='childTitle']", "E2E test enhancement")
     page.fill("textarea[x-model='childBody']", "Add an export button to the dashboard.")
@@ -96,5 +98,3 @@ def test_create_child_idea_appears_in_scale_tab(scale_idea_page, live_server, se
     assert "Brief" in body
     assert "Design" in body
     assert_no_page_errors(page)
-
-

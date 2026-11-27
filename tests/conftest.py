@@ -1,6 +1,7 @@
 import os
 
 import pytest
+
 from app import create_app
 from app.extensions import db
 from app.models import User
@@ -53,6 +54,7 @@ def celery_app():
 def user_with_token(app):
     with app.app_context():
         from app.utils.auth import create_tokens
+
         user = User.query.filter_by(email="test@example.com").first()
         if user is None:
             user = User(email="test@example.com")
@@ -143,8 +145,9 @@ def admin_client(client, app):
             admin.set_password("admin123")
             db.session.add(admin)
             db.session.commit()
-    login = client.post("/api/v1/login", json={
-        "email": "admin@example.com", "password": "admin123"})
+    login = client.post(
+        "/api/v1/login", json={"email": "admin@example.com", "password": "admin123"}
+    )
     assert login.status_code == 200
     headers = {"Authorization": f"Bearer {login.get_json()['data']['access_token']}"}
     return _AuthHeaderClient(client, headers)

@@ -136,8 +136,15 @@ def login():
 
         inst = _Instance.query.get(m.instance_id)
         if inst is not None:
-            data = {"id": str(inst.id), "number": inst.number, "name": inst.name, "role": m.role}
-            if m.role in ("INSTANCE_ADMIN", "SITE_ADMIN") or Membership.is_site_admin(user.id):
+            data = {
+                "id": str(inst.id),
+                "number": inst.number,
+                "name": inst.name,
+                "role": m.role,
+            }
+            if m.role in ("INSTANCE_ADMIN", "SITE_ADMIN") or Membership.is_site_admin(
+                user.id
+            ):
                 data.update(inst.to_dict(include_billing=True))
             instances.append(data)
 
@@ -307,6 +314,8 @@ def reset_password():
     db.session.commit()
 
     return api_ok({"message": "Password reset successfully."})
+
+
 @bp.route("/me/instances", methods=["GET"])
 @token_required
 def my_instances(current_user):
@@ -346,7 +355,11 @@ def switch_instance(current_user):
 
     remember = False
     tokens = auth.create_tokens(
-        current_user.id, current_user.role.value, current_user.email, remember, instance_id
+        current_user.id,
+        current_user.role.value,
+        current_user.email,
+        remember,
+        instance_id,
     )
     resp, code = api_ok(
         {
@@ -402,6 +415,7 @@ def upload_avatar(current_user):
     """Upload an avatar image (multipart). Stores under static/avatars."""
     import os
     import uuid as _uuid
+
     from werkzeug.utils import secure_filename
 
     if "file" not in request.files:
@@ -412,9 +426,7 @@ def upload_avatar(current_user):
     ext = os.path.splitext(f.filename)[1].lower()
     if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
         return api_error("unsupported image type", 400)
-    upload_dir = os.path.join(
-        current_app.root_path, "static", "avatars"
-    )
+    upload_dir = os.path.join(current_app.root_path, "static", "avatars")
     os.makedirs(upload_dir, exist_ok=True)
     name = f"{_uuid.uuid4().hex}{ext}"
     path = os.path.join(upload_dir, name)

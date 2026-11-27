@@ -91,8 +91,8 @@ def _inject_root_route(files: list) -> None:
                 "def _brainstormer_home():\n"
                 "    return ('<h1>App is running</h1>'\n"
                 "            '<p>Your app is live. Upload an image below:</p>'\n"
-                "            '<form action=\"/upload\" method=\"POST\" enctype=\"multipart/form-data\">'\n"
-                "            '<input type=\"file\" name=\"image\" accept=\"image/*\">'\n"
+                '            \'<form action="/upload" method="POST" enctype="multipart/form-data">\'\n'
+                '            \'<input type="file" name="image" accept="image/*">\'\n'
                 "            '<button type=\"submit\">Upload</button>'\n"
                 "            '</form>')\n"
             )
@@ -103,8 +103,8 @@ def _inject_root_route(files: list) -> None:
                 "def _brainstormer_home():\n"
                 "    return ('<h1>App is running</h1>'\n"
                 "            '<p>Your app is live. Upload an image below:</p>'\n"
-                "            '<form action=\"/upload\" method=\"POST\" enctype=\"multipart/form-data\">'\n"
-                "            '<input type=\"file\" name=\"image\" accept=\"image/*\">'\n"
+                '            \'<form action="/upload" method="POST" enctype="multipart/form-data">\'\n'
+                '            \'<input type="file" name="image" accept="image/*">\'\n'
                 "            '<button type=\"submit\">Upload</button>'\n"
                 "            '</form>')\n"
             ).format(av=app_var)
@@ -122,7 +122,9 @@ def _ensure_requirements(files: list) -> None:
     import ast
     import sys
 
-    stdlib = set(sys.stdlib_module_names) if hasattr(sys, "stdlib_module_names") else set()
+    stdlib = (
+        set(sys.stdlib_module_names) if hasattr(sys, "stdlib_module_names") else set()
+    )
 
     imported = set()
     for entry in files or []:
@@ -153,12 +155,103 @@ def _ensure_requirements(files: list) -> None:
                 local_modules.add(p.rsplit("/", 1)[-1].replace(".py", ""))
                 if "/" in p:
                     local_modules.add(p.split("/")[0])
-    third_party = imported - stdlib - local_modules - {"os", "sys", "json", "re", "math", "datetime", "typing", "pathlib", "collections", "itertools", "functools", "io", "base64", "hashlib", "uuid", "time", "random", "string", "enum", "dataclasses", "abc", "contextlib", "logging", "warnings", "traceback", "inspect", "textwrap", "shutil", "tempfile", "subprocess", "socket", "http", "urllib", "html", "xml", "csv", "sqlite3", "argparse", "configparser", "secrets", "hmac", "struct", "array", "copy", "pprint", "textwrap", "types", "weakref", "gc", "atexit", "signal", "threading", "multiprocessing", "concurrent", "asyncio", "queue", "heapq", "bisect", "cmath", "decimal", "fractions", "statistics", "numbers", "operator", "pickle", "shelve", "dbm", "gzip", "bz2", "lzma", "zipfile", "tarfile", "csv", "configparser", "netrc", "xdrlib", "plistlib", "hashlib", "hmac", "secrets", "os", "sys"}
+    third_party = (
+        imported
+        - stdlib
+        - local_modules
+        - {
+            "os",
+            "sys",
+            "json",
+            "re",
+            "math",
+            "datetime",
+            "typing",
+            "pathlib",
+            "collections",
+            "itertools",
+            "functools",
+            "io",
+            "base64",
+            "hashlib",
+            "uuid",
+            "time",
+            "random",
+            "string",
+            "enum",
+            "dataclasses",
+            "abc",
+            "contextlib",
+            "logging",
+            "warnings",
+            "traceback",
+            "inspect",
+            "textwrap",
+            "shutil",
+            "tempfile",
+            "subprocess",
+            "socket",
+            "http",
+            "urllib",
+            "html",
+            "xml",
+            "csv",
+            "sqlite3",
+            "argparse",
+            "configparser",
+            "secrets",
+            "hmac",
+            "struct",
+            "array",
+            "copy",
+            "pprint",
+            "textwrap",
+            "types",
+            "weakref",
+            "gc",
+            "atexit",
+            "signal",
+            "threading",
+            "multiprocessing",
+            "concurrent",
+            "asyncio",
+            "queue",
+            "heapq",
+            "bisect",
+            "cmath",
+            "decimal",
+            "fractions",
+            "statistics",
+            "numbers",
+            "operator",
+            "pickle",
+            "shelve",
+            "dbm",
+            "gzip",
+            "bz2",
+            "lzma",
+            "zipfile",
+            "tarfile",
+            "csv",
+            "configparser",
+            "netrc",
+            "xdrlib",
+            "plistlib",
+            "hashlib",
+            "hmac",
+            "secrets",
+            "os",
+            "sys",
+        }
+    )
 
     # Find or create requirements.txt entry.
     req_entry = None
     for entry in files or []:
-        if isinstance(entry, dict) and str(entry.get("path") or "").rsplit("/", 1)[-1] == "requirements.txt":
+        if (
+            isinstance(entry, dict)
+            and str(entry.get("path") or "").rsplit("/", 1)[-1] == "requirements.txt"
+        ):
             req_entry = entry
             break
 
@@ -170,7 +263,15 @@ def _ensure_requirements(files: list) -> None:
         for line in str(req_entry.get("content") or "").splitlines():
             line = line.split("#", 1)[0].strip()
             if line and not line.startswith("-"):
-                name = line.split("==", 1)[0].split(">=", 1)[0].split("<=", 1)[0].split("!=", 1)[0].split("~=", 1)[0].strip().lower()
+                name = (
+                    line.split("==", 1)[0]
+                    .split(">=", 1)[0]
+                    .split("<=", 1)[0]
+                    .split("!=", 1)[0]
+                    .split("~=", 1)[0]
+                    .strip()
+                    .lower()
+                )
                 existing.add(name)
 
     missing = []

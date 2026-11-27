@@ -518,7 +518,9 @@ def update_prompt(user, prompt_id):
     if "is_active" in data:
         # Check max active limit
         if data["is_active"] and not prompt.is_active:
-            scoped = apply_scope(PromptConfig.query, PromptConfig, include_unscoped=False)
+            scoped = apply_scope(
+                PromptConfig.query, PromptConfig, include_unscoped=False
+            )
             active_count = scoped.filter(PromptConfig.is_active == True).count()
             if active_count >= 10:
                 return api_error(
@@ -568,7 +570,11 @@ def run_prompt_now(user, prompt_id):
             job_type="ai",
             provider=prompt.provider,
             model=prompt.model_name,
-            queue="opencode" if (prompt.provider or "").lower() == "opencode" else "ollama",
+            queue=(
+                "opencode"
+                if (prompt.provider or "").lower() == "opencode"
+                else "ollama"
+            ),
         )
         stamp(run)
         db.session.add(run)

@@ -48,11 +48,15 @@ class PasswordResetToken(db.Model):
     def is_valid(self) -> bool:
         from app.models.types import ensure_aware
 
-        return self.used_at is None and ensure_aware(self.expires_at) > datetime.now(timezone.utc)
+        return self.used_at is None and ensure_aware(self.expires_at) > datetime.now(
+            timezone.utc
+        )
 
     def mark_used(self):
         self.used_at = datetime.now(timezone.utc)
         db.session.commit()
 
     def __repr__(self):
-        return f"<PasswordResetToken user={self.user_id} used={self.used_at is not None}>"
+        return (
+            f"<PasswordResetToken user={self.user_id} used={self.used_at is not None}>"
+        )

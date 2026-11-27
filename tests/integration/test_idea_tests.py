@@ -37,7 +37,12 @@ def test_create_and_list_idea_test(app, client):
 
     res = client.post(
         f"/api/v1/ideas/{idea_id}/tests",
-        json={"name": "Login works", "test_type": "e2e", "status": "passed", "coverage_pct": 80},
+        json={
+            "name": "Login works",
+            "test_type": "e2e",
+            "status": "passed",
+            "coverage_pct": 80,
+        },
         headers=headers,
     )
     assert res.status_code == 201, res.get_json()
@@ -91,10 +96,19 @@ def test_delete_idea_test(app, client):
 def test_summary(app, client):
     idea_id, _ = _seed_idea(app)
     headers = _login(client)
-    for name, status, cov in [("a", "passed", 90), ("b", "failed", 60), ("c", "not_run", None)]:
+    for name, status, cov in [
+        ("a", "passed", 90),
+        ("b", "failed", 60),
+        ("c", "not_run", None),
+    ]:
         client.post(
             f"/api/v1/ideas/{idea_id}/tests",
-            json={"name": name, "test_type": "unit", "status": status, "coverage_pct": cov},
+            json={
+                "name": name,
+                "test_type": "unit",
+                "status": status,
+                "coverage_pct": cov,
+            },
             headers=headers,
         )
     res = client.get(f"/api/v1/ideas/{idea_id}/tests/summary", headers=headers)
@@ -110,8 +124,16 @@ def test_summary(app, client):
 def test_filter_by_status(app, client):
     idea_id, _ = _seed_idea(app)
     headers = _login(client)
-    client.post(f"/api/v1/ideas/{idea_id}/tests", json={"name": "p", "test_type": "unit", "status": "passed"}, headers=headers)
-    client.post(f"/api/v1/ideas/{idea_id}/tests", json={"name": "f", "test_type": "unit", "status": "failed"}, headers=headers)
+    client.post(
+        f"/api/v1/ideas/{idea_id}/tests",
+        json={"name": "p", "test_type": "unit", "status": "passed"},
+        headers=headers,
+    )
+    client.post(
+        f"/api/v1/ideas/{idea_id}/tests",
+        json={"name": "f", "test_type": "unit", "status": "failed"},
+        headers=headers,
+    )
     res = client.get(f"/api/v1/ideas/{idea_id}/tests?status=failed", headers=headers)
     tests = res.get_json()["data"]["tests"]
     assert len(tests) == 1

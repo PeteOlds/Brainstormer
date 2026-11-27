@@ -150,9 +150,7 @@ def test_release_card_shows_pipeline_progress(
     assert_no_page_errors(admin_page)
 
 
-def test_run_and_stop_release_from_the_card(
-    admin_page, live_server, live_app, seeded
-):
+def test_run_and_stop_release_from_the_card(admin_page, live_server, live_app, seeded):
     from app.extensions import db
     from app.models import Release
 
@@ -167,8 +165,7 @@ def test_run_and_stop_release_from_the_card(
     confirm.get_by_role("button", name="Run release").click()
 
     assert _wait_for(
-        lambda: "Running · Brief"
-        in detail.inner_text(),
+        lambda: "Running · Brief" in detail.inner_text(),
     ), "release did not show as running after start"
 
     with live_app.app_context():

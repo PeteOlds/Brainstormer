@@ -5,11 +5,11 @@ import socket
 import subprocess
 import tempfile
 import time
+import urllib.request
 import uuid
 from datetime import datetime, timezone
 
 import structlog
-import urllib.request
 
 from app.extensions import db
 from app.models import Idea, IdeaTest, TestStatus
@@ -50,7 +50,9 @@ def _friendly_error(text):
     if "no tests ran" in low:
         return "No automated tests were found in this build. Add tests to the build, or verify manually."
     if "unrecognized arguments" in low or "unrecognized arg" in low:
-        return "Test configuration conflict — Brainstormer will retry with safe settings."
+        return (
+            "Test configuration conflict — Brainstormer will retry with safe settings."
+        )
     if "no module named pytest" in low or "no module named 'pytest'" in low:
         return "The test tool isn't installed. Brainstormer tried to install it; if this persists, check the app's internet/dependency setup."
     if "modulenotfounderror" in low:
@@ -151,14 +153,16 @@ def _http_ok(url, timeout=5):
     time_limit=900,
     soft_time_limit=840,
 )
-def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, run_id: str | None = None):
+def run_idea_tests(
+    self, idea_id: str, selected_test_ids: list | None = None, run_id: str | None = None
+):
     """Execute the build's verification pipeline and record results.
 
     Runs dependency install, generated test suite, npm install, container build,
     and an HTTP smoke (starting the app if needed). Updates each seeded test
     row. Never raises to the caller.
     """
-    from app.models import SecondaryActionResult, InstanceBuildTarget
+    from app.models import InstanceBuildTarget, SecondaryActionResult
     from app.models.idea_test import TestRun, TestRunStatus
     from app.routes.instances import _spec_from_build_version
 
@@ -210,7 +214,9 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
     target = None
     if build.target_id:
         try:
-            target = db.session.get(InstanceBuildTarget, uuid.UUID(str(build.target_id)))
+            target = db.session.get(
+                InstanceBuildTarget, uuid.UUID(str(build.target_id))
+            )
         except (ValueError, TypeError):
             target = None
     spec, _display, err = _spec_from_build_version(build, target, idea.reference_code)
@@ -254,18 +260,30 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         run.progress = 10
         run.message = "Installing dependencies…"
         db.session.commit()
-        setup_cmd = (spec.get("setup_argv") or [])
+        setup_cmd = spec.get("setup_argv") or []
         if not setup_cmd:
             # Fall back to pip install -r requirements.txt
             req = os.path.join(workdir, "requirements.txt")
             if os.path.exists(req):
-                setup_cmd = [venv_python or "python3", "-m", "pip", "install", "-r", "requirements.txt"]
+                setup_cmd = [
+                    venv_python or "python3",
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    "requirements.txt",
+                ]
         output = ""
         ok = True
         if setup_cmd:
             try:
                 proc = subprocess.run(
-                    setup_cmd, cwd=workdir, capture_output=True, text=True, timeout=300, env=env
+                    setup_cmd,
+                    cwd=workdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    env=env,
                 )
                 output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
                 ok = proc.returncode == 0
@@ -285,7 +303,12 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         db.session.commit()
         try:
             proc = subprocess.run(
-                ["npm", "install"], cwd=workdir, capture_output=True, text=True, timeout=300, env=env
+                ["npm", "install"],
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                env=env,
             )
             output = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
             ok = proc.returncode == 0
@@ -334,7 +357,12 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         for attempt in range(2):
             try:
                 proc = subprocess.run(
-                    cmd, cwd=workdir, capture_output=True, text=True, timeout=300, env=env
+                    cmd,
+                    cwd=workdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    env=env,
                 )
                 out = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
                 ok = proc.returncode == 0
@@ -353,7 +381,11 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
             # Auto-retry once for fixable environment issues.
             if attempt == 0 and not has_node:
                 hint = _friendly_error(out) or ""
-                if "test tool isn't installed" in hint or "Missing dependency" in hint or "Test configuration conflict" in hint:
+                if (
+                    "test tool isn't installed" in hint
+                    or "Missing dependency" in hint
+                    or "Test configuration conflict" in hint
+                ):
                     # Try to install pytest or the missing dependency.
                     if "test tool isn't installed" in hint:
                         subprocess.run(
@@ -382,33 +414,66 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                     continue
             break
         # Combine outputs.
-        output = "\n\n=== retry ===\n".join(a[1] for a in attempts) if len(attempts) > 1 else attempts[0][1]
+        output = (
+            "\n\n=== retry ===\n".join(a[1] for a in attempts)
+            if len(attempts) > 1
+            else attempts[0][1]
+        )
         ok = attempts[-1][0]
         # Exit code 5 = no tests collected (not a failure, just nothing to run).
-        if "no tests ran" in (output or "").lower() or "no tests collected" in (output or "").lower():
-            _update_row(suite_row, TestStatus.SKIPPED, "No test files in this build. Add tests to verify.")
+        if (
+            "no tests ran" in (output or "").lower()
+            or "no tests collected" in (output or "").lower()
+        ):
+            _update_row(
+                suite_row,
+                TestStatus.SKIPPED,
+                "No test files in this build. Add tests to verify.",
+            )
             for r in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
                 low = (r.name or "").lower()
-                if "backend test" in low or "frontend test" in low or "run backend" in low or "run frontend" in low or "automated test" in low:
-                    _update_row(r, TestStatus.SKIPPED, "No test files in this build. Add tests to verify.")
+                if (
+                    "backend test" in low
+                    or "frontend test" in low
+                    or "run backend" in low
+                    or "run frontend" in low
+                    or "automated test" in low
+                ):
+                    _update_row(
+                        r,
+                        TestStatus.SKIPPED,
+                        "No test files in this build. Add tests to verify.",
+                    )
         else:
-            _update_row(suite_row, TestStatus.PASSED if ok else TestStatus.FAILED, output)
+            _update_row(
+                suite_row, TestStatus.PASSED if ok else TestStatus.FAILED, output
+            )
             for r in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
                 low = (r.name or "").lower()
-                if "backend test" in low or "frontend test" in low or "run backend" in low or "run frontend" in low or "automated test" in low:
-                    _update_row(r, TestStatus.PASSED if ok else TestStatus.FAILED, output)
+                if (
+                    "backend test" in low
+                    or "frontend test" in low
+                    or "run backend" in low
+                    or "run frontend" in low
+                    or "automated test" in low
+                ):
+                    _update_row(
+                        r, TestStatus.PASSED if ok else TestStatus.FAILED, output
+                    )
 
     # --- 4. Container image builds ---
-    container_row = _find_row(idea, lambda n: "container" in n or "docker" in n or "image build" in n)
+    container_row = _find_row(
+        idea, lambda n: "container" in n or "docker" in n or "image build" in n
+    )
     if container_row is not None and (not selected or container_row in selected):
         run.progress = 55
         run.message = "Building container image…"
         db.session.commit()
         output = ""
         ok = False
-        if os.path.exists(os.path.join(workdir, "docker-compose.yml")) or os.path.exists(
-            os.path.join(workdir, "docker-compose.yaml")
-        ):
+        if os.path.exists(
+            os.path.join(workdir, "docker-compose.yml")
+        ) or os.path.exists(os.path.join(workdir, "docker-compose.yaml")):
             try:
                 proc = subprocess.run(
                     ["docker", "compose", "build"],
@@ -453,7 +518,9 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         else:
             output = "No Dockerfile or compose file found."
             ok = False
-        _update_row(container_row, TestStatus.PASSED if ok else TestStatus.FAILED, output)
+        _update_row(
+            container_row, TestStatus.PASSED if ok else TestStatus.FAILED, output
+        )
 
     # --- 5 & 6. Start app + HTTP smoke for routes and UI ---
     app_proc = None
@@ -492,7 +559,7 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         # source file since the stored health_url may be stale.
         app_port = None
         entry = None
-        for a in (spec.get("run_argv") or []):
+        for a in spec.get("run_argv") or []:
             if isinstance(a, str) and a.endswith(".py"):
                 entry = a
                 break
@@ -514,7 +581,9 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                 pass
         if app_port is None:
             try:
-                app_port = int(str(spec.get("health_url", "")).rsplit(":", 1)[-1].rstrip("/"))
+                app_port = int(
+                    str(spec.get("health_url", "")).rsplit(":", 1)[-1].rstrip("/")
+                )
             except (ValueError, TypeError):
                 app_port = 8000
         health_url = f"http://127.0.0.1:{app_port}"
@@ -536,7 +605,11 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         ui_row = _find_row(idea, lambda n: "responds at" in n or "app responds" in n)
         if ui_row is not None and (not selected or ui_row in selected):
             ok = ready and _http_ok(app_url)
-            _update_row(ui_row, TestStatus.PASSED if ok else TestStatus.FAILED, f"GET {app_url} -> {'ok' if ok else 'failed'}")
+            _update_row(
+                ui_row,
+                TestStatus.PASSED if ok else TestStatus.FAILED,
+                f"GET {app_url} -> {'ok' if ok else 'failed'}",
+            )
 
         # Route checks
         routes = []
@@ -549,7 +622,11 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
         except Exception:  # noqa: BLE001
             routes = []
         for method, path in routes[:6]:
-            row_name = f"{method} {path or '/'} responds" if method == "GET" else f"{method} {path} returns a valid response"
+            row_name = (
+                f"{method} {path or '/'} responds"
+                if method == "GET"
+                else f"{method} {path} returns a valid response"
+            )
             # Match by prefix since generated names vary slightly.
             row = None
             for r in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
@@ -576,13 +653,21 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                     ok = e.code < 500
                 except Exception:
                     ok = False
-            _update_row(row, TestStatus.PASSED if ok else TestStatus.FAILED, f"{method} {path or '/'} -> {'ok' if ok else 'failed'}")
+            _update_row(
+                row,
+                TestStatus.PASSED if ok else TestStatus.FAILED,
+                f"{method} {path or '/'} -> {'ok' if ok else 'failed'}",
+            )
 
         # Main screen UI check (best-effort: pass if app responds).
         ui_main = _find_row(idea, lambda n: "main screen" in n or "app starts" in n)
         if ui_main is not None and (not selected or ui_main in selected):
             ok = ready and _http_ok(app_url)
-            _update_row(ui_main, TestStatus.PASSED if ok else TestStatus.FAILED, f"GET {app_url} -> {'ok' if ok else 'failed'}")
+            _update_row(
+                ui_main,
+                TestStatus.PASSED if ok else TestStatus.FAILED,
+                f"GET {app_url} -> {'ok' if ok else 'failed'}",
+            )
 
         # Auto-verify remaining manual/UI checks when smoke passes.
         if ready:
@@ -590,8 +675,17 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                 if r.status != TestStatus.NOT_RUN:
                     continue
                 low = (r.name or "").lower()
-                if "ui:" in low or "main screen" in low or "app responds at its url" in low or "app starts from" in low:
-                    _update_row(r, TestStatus.PASSED, f"Automated smoke check passed: GET {app_url} responded.")
+                if (
+                    "ui:" in low
+                    or "main screen" in low
+                    or "app responds at its url" in low
+                    or "app starts from" in low
+                ):
+                    _update_row(
+                        r,
+                        TestStatus.PASSED,
+                        f"Automated smoke check passed: GET {app_url} responded.",
+                    )
 
         # Try an actual image upload to verify the upload endpoint.
         upload_row = _find_row(idea, lambda n: "upload" in n)
@@ -611,17 +705,25 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                 if img_bytes:
                     boundary = "----brainstormer-smoke"
                     body = (
-                        f"--{boundary}\r\n"
-                        f'Content-Disposition: form-data; name="image"; filename="smoke.jpg"\r\n'
-                        f"Content-Type: image/jpeg\r\n\r\n"
-                    ).encode() + img_bytes + f"\r\n--{boundary}--\r\n".encode()
+                        (
+                            f"--{boundary}\r\n"
+                            f'Content-Disposition: form-data; name="image"; filename="smoke.jpg"\r\n'
+                            f"Content-Type: image/jpeg\r\n\r\n"
+                        ).encode()
+                        + img_bytes
+                        + f"\r\n--{boundary}--\r\n".encode()
+                    )
                     req = urllib.request.Request(
                         app_url.rstrip("/") + "/upload", data=body, method="POST"
                     )
-                    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+                    req.add_header(
+                        "Content-Type", f"multipart/form-data; boundary={boundary}"
+                    )
                     try:
                         # URL is the supervised app on localhost.
-                        with urllib.request.urlopen(req, timeout=10) as res:  # nosec B310
+                        with urllib.request.urlopen(
+                            req, timeout=10
+                        ) as res:  # nosec B310
                             ok = 200 <= res.status < 300
                     except urllib.error.HTTPError as e:
                         ok = e.code < 500
@@ -661,7 +763,11 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
     for r in IdeaTest.query.filter_by(idea_id=idea.id, source="build").all():
         if r.status != TestStatus.NOT_RUN:
             continue
-        _update_row(r, TestStatus.SKIPPED, "No automated command for this check. Verify manually and mark as passed.")
+        _update_row(
+            r,
+            TestStatus.SKIPPED,
+            "No automated command for this check. Verify manually and mark as passed.",
+        )
     db.session.commit()
 
     run.progress = 100

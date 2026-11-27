@@ -1,7 +1,7 @@
 import os
 
-from celery import Celery, Task
 import structlog
+from celery import Celery, Task
 
 logger = structlog.get_logger()
 
@@ -12,6 +12,7 @@ celery = Celery("brainstormer")
 
 class BaseTask(Task):
     """Base task with Flask app context + structured logging."""
+
     abstract = True
 
     def __call__(self, *args, **kwargs):
@@ -25,11 +26,24 @@ class BaseTask(Task):
             return self.run(*args, **kwargs)
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
-        logger.error("task_failed", task_id=task_id, task_name=self.name, args=args, kwargs=kwargs, exc_info=exc)
+        logger.error(
+            "task_failed",
+            task_id=task_id,
+            task_name=self.name,
+            args=args,
+            kwargs=kwargs,
+            exc_info=exc,
+        )
         super().on_failure(exc, task_id, args, kwargs, einfo)
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
-        logger.warning("task_retry", task_id=task_id, task_name=self.name, attempt=self.request.retries, exc_info=exc)
+        logger.warning(
+            "task_retry",
+            task_id=task_id,
+            task_name=self.name,
+            attempt=self.request.retries,
+            exc_info=exc,
+        )
 
 
 def enqueue_generation(task, args, kwargs, provider):
@@ -119,10 +133,10 @@ def init_celery(app):
     ),
 
     # Import tasks to register them
-    from . import ollama_tasks  # noqa: F401
     from . import maintenance_tasks  # noqa: F401
-    from . import supervision_tasks  # noqa: F401
+    from . import ollama_tasks  # noqa: F401
     from . import release_tasks  # noqa: F401
+    from . import supervision_tasks  # noqa: F401
     from . import test_tasks  # noqa: F401
 
     return celery
@@ -133,6 +147,7 @@ def init_celery(app):
 # leaves workers running with zero registered tasks (see: missing `import os`).
 try:
     from app import create_app
+
     _app = create_app(os.getenv("FLASK_ENV", "development"), init_celery_app=True)
 except Exception as exc:
     logger.warning("celery_auto_init_skipped", error=str(exc))

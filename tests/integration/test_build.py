@@ -991,9 +991,7 @@ class TestBuildPortAllocation:
         assert report == []
 
     def test_allocate_build_port_rewrites_host_side(self):
-        from app.tasks.ollama_tasks import _allocate_build_port
-
-        from app.tasks.ollama_tasks import _host_network_ip
+        from app.tasks.ollama_tasks import _allocate_build_port, _host_network_ip
 
         sock, busy = _hold_port()
         try:
@@ -1032,9 +1030,9 @@ class TestBuildPortAllocation:
             sock.close()
 
     def test_allocate_frontend_port_moves_dashboard(self):
-        from app.tasks.ollama_tasks import _allocate_build_port
-
         import socket
+
+        from app.tasks.ollama_tasks import _allocate_build_port
 
         probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         probe.bind(("127.0.0.1", 0))
@@ -1439,7 +1437,6 @@ class TestManagedApps:
     def test_spec_repairs_old_nested_runbook(self, tmp_path):
         """An old row that cd's to the repo root and runs app.py is fixed."""
         import os
-
         from types import SimpleNamespace
 
         from app.routes.instances import _spec_from_build_version
@@ -1702,9 +1699,9 @@ class TestPortRewriteOnConfirm:
             idea = seed_idea(db, inst.id, email="pr@t.test")
             seed_design(idea)
             target = seed_target(inst.id, path=str(tmp_path))
+            import app.services.build_service as bs
             from app.models import SecondaryActionResult
             from app.tasks.ollama_tasks import _write_confirmed_build
-            import app.services.build_service as bs
 
             monkeypatch.setattr(bs, "port_in_use", lambda p: p == 8000)
 
@@ -1742,6 +1739,7 @@ class TestUploadCreatesIdea:
     def test_upload_valid_md(self, app, client, tmp_path):
         with app.app_context():
             from app.models import User
+
             u = User.query.filter_by(email="admin@test.local").first()
             if u is None:
                 u = User(email="admin@test.local")
@@ -1750,7 +1748,10 @@ class TestUploadCreatesIdea:
                 db.session.add(u)
                 db.session.commit()
         # login
-        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        resp = client.post(
+            "/api/v1/login",
+            json={"email": "admin@test.local", "password": "password123"},
+        )
         assert resp.status_code == 200
         token = resp.get_json()["data"]["access_token"]
         import io
@@ -1770,6 +1771,7 @@ class TestUploadCreatesIdea:
     def test_upload_valid_txt(self, app, client, tmp_path):
         with app.app_context():
             from app.models import User
+
             u = User.query.filter_by(email="admin@test.local").first()
             if u is None:
                 u = User(email="admin@test.local")
@@ -1777,7 +1779,10 @@ class TestUploadCreatesIdea:
                 u.can_create_ideas = True
                 db.session.add(u)
                 db.session.commit()
-        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        resp = client.post(
+            "/api/v1/login",
+            json={"email": "admin@test.local", "password": "password123"},
+        )
         assert resp.status_code == 200
         token = resp.get_json()["data"]["access_token"]
         import io
@@ -1792,11 +1797,14 @@ class TestUploadCreatesIdea:
         assert resp.status_code == 201, resp.get_json()
         body = resp.get_json()["data"]
         assert body["prompt_title"] == "notes"
-        assert "Plain text idea content" in (body.get("content") or body.get("raw_content") or "")
+        assert "Plain text idea content" in (
+            body.get("content") or body.get("raw_content") or ""
+        )
 
     def test_upload_oversized(self, app, client):
         with app.app_context():
             from app.models import User
+
             u = User.query.filter_by(email="admin@test.local").first()
             if u is None:
                 u = User(email="admin@test.local")
@@ -1804,7 +1812,10 @@ class TestUploadCreatesIdea:
                 u.can_create_ideas = True
                 db.session.add(u)
                 db.session.commit()
-        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        resp = client.post(
+            "/api/v1/login",
+            json={"email": "admin@test.local", "password": "password123"},
+        )
         token = resp.get_json()["data"]["access_token"]
         import io
 
@@ -1821,6 +1832,7 @@ class TestUploadCreatesIdea:
     def test_upload_non_md(self, app, client):
         with app.app_context():
             from app.models import User
+
             u = User.query.filter_by(email="admin@test.local").first()
             if u is None:
                 u = User(email="admin@test.local")
@@ -1828,7 +1840,10 @@ class TestUploadCreatesIdea:
                 u.can_create_ideas = True
                 db.session.add(u)
                 db.session.commit()
-        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        resp = client.post(
+            "/api/v1/login",
+            json={"email": "admin@test.local", "password": "password123"},
+        )
         token = resp.get_json()["data"]["access_token"]
         import io
 
@@ -1844,6 +1859,7 @@ class TestUploadCreatesIdea:
     def test_upload_binary(self, app, client):
         with app.app_context():
             from app.models import User
+
             u = User.query.filter_by(email="admin@test.local").first()
             if u is None:
                 u = User(email="admin@test.local")
@@ -1851,7 +1867,10 @@ class TestUploadCreatesIdea:
                 u.can_create_ideas = True
                 db.session.add(u)
                 db.session.commit()
-        resp = client.post("/api/v1/login", json={"email": "admin@test.local", "password": "password123"})
+        resp = client.post(
+            "/api/v1/login",
+            json={"email": "admin@test.local", "password": "password123"},
+        )
         token = resp.get_json()["data"]["access_token"]
         import io
 

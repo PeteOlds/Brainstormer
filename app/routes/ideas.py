@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, g, request
 from flask_jwt_extended import get_jwt_identity
+from flask_limiter.util import get_remote_address
 from sqlalchemy import asc, desc, func, or_
 
 from app.extensions import db, limiter
@@ -23,14 +24,13 @@ from app.models import (
 )
 from app.models.enums import IdeaStatus
 from app.utils.decorators import (
-    admin_required,
     _membership_allows_admin,
+    admin_required,
     require_permission,
     token_required,
 )
 from app.utils.responses import api_accepted, api_created, api_error, api_ok
 from app.utils.tenancy import apply_scope, check_access, current_instance_role, stamp
-from flask_limiter.util import get_remote_address
 
 bp = Blueprint("ideas", __name__)
 
@@ -122,9 +122,7 @@ def list_ideas(user):
         d = idea.to_dict(user_vote=user_vote)
         pending = PromptRun.query.filter(
             PromptRun.idea_id == idea.id,
-            PromptRun.status.in_(
-                [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
-            ),
+            PromptRun.status.in_([PromptRunStatus.PENDING, PromptRunStatus.RUNNING]),
         ).count()
         d["pending_runs"] = pending
         ideas_data.append(d)
@@ -143,8 +141,9 @@ def list_ideas(user):
 @token_required
 def dashboard(user):
     """Summary data for the role-based dashboard."""
-    from app.models import Idea, PromptRun
     from sqlalchemy import func
+
+    from app.models import Idea, PromptRun
 
     iid_scope = None
     from app.utils.tenancy import current_instance_id
@@ -165,9 +164,7 @@ def dashboard(user):
 
     # Most voted (top 5)
     most_voted = (
-        idea_q.order_by(Idea.net_score.desc(), Idea.created_at.desc())
-        .limit(5)
-        .all()
+        idea_q.order_by(Idea.net_score.desc(), Idea.created_at.desc()).limit(5).all()
     )
     most_voted_data = [
         {
@@ -205,18 +202,21 @@ def dashboard(user):
                 "latest_comment": (
                     {
                         "body": latest.body,
-                        "created_at": latest.created_at.isoformat()
-                        if latest.created_at
-                        else None,
-                        "author": latest.user.name
-                        or latest.user.email
-                        if latest.user
-                        else None,
+                        "created_at": (
+                            latest.created_at.isoformat() if latest.created_at else None
+                        ),
+                        "author": (
+                            latest.user.name or latest.user.email
+                            if latest.user
+                            else None
+                        ),
                     }
                     if latest
                     else None
                 ),
-                "status": i.status.value if hasattr(i.status, "value") else str(i.status),
+                "status": (
+                    i.status.value if hasattr(i.status, "value") else str(i.status)
+                ),
             }
         )
 
@@ -224,9 +224,7 @@ def dashboard(user):
     run_q = PromptRun.query
     if iid is not None:
         run_q = run_q.filter(PromptRun.instance_id == iid)
-    recent_runs = (
-        run_q.order_by(PromptRun.created_at.desc()).limit(10).all()
-    )
+    recent_runs = run_q.order_by(PromptRun.created_at.desc()).limit(10).all()
     recent_runs_data = []
     for r in recent_runs:
         idea = r.idea
@@ -234,7 +232,9 @@ def dashboard(user):
         recent_runs_data.append(
             {
                 "id": str(r.id),
-                "status": r.status.value if hasattr(r.status, "value") else str(r.status),
+                "status": (
+                    r.status.value if hasattr(r.status, "value") else str(r.status)
+                ),
                 "action_type": r.action_type,
                 "provider": r.provider,
                 "model": r.model,
@@ -315,7 +315,9 @@ def create_idea(user):
     if parent_idea is not None and not child_kind:
         return api_error("child_kind is required for child ideas.", status_code=400)
     if child_kind and child_kind not in ("enhancement", "bugfix"):
-        return api_error("child_kind must be 'enhancement' or 'bugfix'.", status_code=400)
+        return api_error(
+            "child_kind must be 'enhancement' or 'bugfix'.", status_code=400
+        )
     if child_kind and not parent_idea:
         return api_error("child_kind requires a parent_id.", status_code=400)
 
@@ -415,7 +417,9 @@ def upload_idea_file(user):
 
     filename = file.filename
     if not (filename.lower().endswith(".md") or filename.lower().endswith(".txt")):
-        return api_error("Only .md (Markdown) or .txt (text) files are accepted.", status_code=400)
+        return api_error(
+            "Only .md (Markdown) or .txt (text) files are accepted.", status_code=400
+        )
 
     # Size check (10 MB).
     file.seek(0, 2)
@@ -463,12 +467,15 @@ def upload_idea_file(user):
     db.session.commit()
 
     return api_created(idea.to_dict(include_content=True, user_vote=None))
+
+
 @bp.route("/ideas/<uuid:idea_id>/build/check-overwrite", methods=["POST"])
 @token_required
 def check_build_overwrite(user, idea_id):
     """Report which preview files already exist in the target repo."""
-    from app.models import Idea, InstanceBuildTarget
     import uuid as _uuid
+
+    from app.models import Idea, InstanceBuildTarget
 
     idea = Idea.query.get_or_404(idea_id)
     denied = check_access(idea)
@@ -486,19 +493,22 @@ def check_build_overwrite(user, idea_id):
         except (ValueError, TypeError):
             bt = None
     if bt is None:
-        candidates = InstanceBuildTarget.query.filter_by(instance_id=idea.instance_id).all()
+        candidates = InstanceBuildTarget.query.filter_by(
+            instance_id=idea.instance_id
+        ).all()
         if len(candidates) == 1:
             bt = candidates[0]
     if bt is None:
         return api_error("No build target.", status_code=400)
 
-    from app.services.build_service import resolve_target, join_target_path
+    from app.services.build_service import join_target_path, resolve_target
+
     try:
         root = resolve_target(bt)
     except Exception as exc:
         return api_error(str(exc), status_code=400)
 
-    from app.models import SecondaryActionResult, ActionType
+    from app.models import ActionType, SecondaryActionResult
 
     preview = SecondaryActionResult.query.filter_by(
         idea_id=idea.id, action_type=ActionType.BUILD_CODE, is_current=True
@@ -506,7 +516,7 @@ def check_build_overwrite(user, idea_id):
     if not preview or preview.result_data.get("written"):
         return api_ok({"existing": []})
 
-    files = (preview.result_data.get("files") or [])
+    files = preview.result_data.get("files") or []
     existing = []
     for f in files:
         rel = f.get("path") if isinstance(f, dict) else None
@@ -591,9 +601,7 @@ def get_idea(user, idea_id):
         r.action_type
         for r in PromptRun.query.filter(
             PromptRun.idea_id == idea.id,
-            PromptRun.status.in_(
-                [PromptRunStatus.PENDING, PromptRunStatus.RUNNING]
-            ),
+            PromptRun.status.in_([PromptRunStatus.PENDING, PromptRunStatus.RUNNING]),
         ).all()
         if r.action_type
     ]
@@ -611,7 +619,9 @@ def get_idea(user, idea_id):
     ]
 
     payload = {
-        "idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id), include_content=True),
+        "idea": idea.to_dict(
+            user_vote=_get_user_vote(user.id, idea.id), include_content=True
+        ),
         "actions": actions,
         "running_actions": running,
         "parent": parent_context_data,
@@ -693,9 +703,7 @@ def _maybe_push_on_scale(idea):
 
     from app.models import InstanceGitHubConfig
 
-    config = (
-        InstanceGitHubConfig.query.filter_by(instance_id=idea.instance_id).first()
-    )
+    config = InstanceGitHubConfig.query.filter_by(instance_id=idea.instance_id).first()
     if not config or not config.pat:
         return
 
@@ -919,7 +927,9 @@ def vote_idea(user, idea_id):
     data = request.get_json() or {}
     direction = data.get("direction")
     if direction not in (1, -1):
-        return api_error("direction must be 1 (upvote) or -1 (downvote).", status_code=400)
+        return api_error(
+            "direction must be 1 (upvote) or -1 (downvote).", status_code=400
+        )
 
     idea = Idea.query.get_or_404(idea_id)
     denied = check_access(idea)
@@ -934,7 +944,16 @@ def vote_idea(user, idea_id):
             db.session.flush()
             idea.update_vote_counts()
             db.session.commit()
-            return api_ok({"message": "Vote removed.", "user_vote": 0, "current_user_vote": 0, "net_votes": idea.net_score, "upvotes_count": idea.upvotes_count, "downvotes_count": idea.downvotes_count})
+            return api_ok(
+                {
+                    "message": "Vote removed.",
+                    "user_vote": 0,
+                    "current_user_vote": 0,
+                    "net_votes": idea.net_score,
+                    "upvotes_count": idea.upvotes_count,
+                    "downvotes_count": idea.downvotes_count,
+                }
+            )
         else:
             # Switching direction
             existing.value = direction
@@ -1011,7 +1030,7 @@ def _check_action_allowed(idea, action_type):
 
     st = idea.status
     # Handle both enum members and string values from SQLAlchemy
-    st_str = st.value if hasattr(st, 'value') else str(st)
+    st_str = st.value if hasattr(st, "value") else str(st)
     # Only PRD_DOC, DESIGN_DOC, BUILD_CODE have stage gates.
     # Everything else (REFINE, COMPETITORS, etc.) is always allowed.
     if action_type == "PRD_DOC":
@@ -1025,10 +1044,9 @@ def _check_action_allowed(idea, action_type):
 
 def _enqueue_action(idea, action_type, extra=None):
     """Enqueue a secondary action task."""
-    from app.tasks.ollama_tasks import run_secondary_action
-
     from app.models import PromptRun, PromptRunStatus
     from app.services.action_context import build_idea_context
+    from app.tasks.ollama_tasks import run_secondary_action
 
     context = build_idea_context(idea)
     extra = dict(extra or {})
@@ -1062,11 +1080,7 @@ def _enqueue_action(idea, action_type, extra=None):
                 )
             model_override = extra.get("model_override")
             allowlist = (config.model_allowlist if config else None) or []
-            if (
-                allowlist
-                and model_override
-                and model_override not in allowlist
-            ):
+            if allowlist and model_override and model_override not in allowlist:
                 return (
                     None,
                     None,
@@ -1121,7 +1135,9 @@ def _enqueue_action(idea, action_type, extra=None):
         status=PromptRunStatus.PENDING,
         job_type="ai",
         provider=provider,
-        model=extra.get("model_override") or merged.get("model_name") or merged.get("model"),
+        model=extra.get("model_override")
+        or merged.get("model_name")
+        or merged.get("model"),
         queue="opencode" if provider == "opencode" else "ollama",
     )
     db.session.add(run)
@@ -1231,9 +1247,7 @@ def pipeline_status(user):
 
     release_rows = (
         apply_scope(
-            Release.query.filter(
-                Release.pipeline_status.in_(["running", "stopping"])
-            ),
+            Release.query.filter(Release.pipeline_status.in_(["running", "stopping"])),
             Release,
         )
         .order_by(Release.pipeline_started_at.desc())
@@ -1288,7 +1302,9 @@ def run_action(user, idea_id):
     try:
         ActionRequest.model_validate(data)
     except ValidationError as exc:
-        return api_error("Invalid action payload.", status_code=400, errors=exc.errors())
+        return api_error(
+            "Invalid action payload.", status_code=400, errors=exc.errors()
+        )
 
     if action_type == "PRD_DOC":
         from app.models import IdeaStatus
@@ -1384,7 +1400,9 @@ def run_action(user, idea_id):
     # queue a Build on a Spark idea, or a Build without a Design doc.
     if not _check_action_allowed(idea, action_type):
         labels = {"PRD_DOC": "Scope", "DESIGN_DOC": "Map", "BUILD_CODE": "Ship"}
-        status = idea.status.value if hasattr(idea.status, "value") else str(idea.status)
+        status = (
+            idea.status.value if hasattr(idea.status, "value") else str(idea.status)
+        )
         return api_error(
             f"{action_type} needs the idea at {labels[action_type]} or later "
             f"(it is in {status.title()}).",
@@ -1418,7 +1436,9 @@ def run_action(user, idea_id):
     if error:
         return api_error(error, status_code=400)
 
-    return api_accepted({"task_id": task_id, "run_id": run_id, "action_type": action_type})
+    return api_accepted(
+        {"task_id": task_id, "run_id": run_id, "action_type": action_type}
+    )
 
 
 @bp.route("/ideas/<uuid:idea_id>/actions", methods=["GET"])
@@ -1455,13 +1475,15 @@ def action_run_status(user, idea_id, run_id):
     denied = check_access(idea)
     if denied is not None:
         return denied
-    return api_ok({
-        "status": run.status.value,
-        "started_at": run.started_at.isoformat() if run.started_at else None,
-        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
-        "error": run.error,
-        "action_type": run.action_type,
-    })
+    return api_ok(
+        {
+            "status": run.status.value,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+            "error": run.error,
+            "action_type": run.action_type,
+        }
+    )
 
 
 @bp.route("/actions/<uuid:result_id>/comments", methods=["GET"])
@@ -1479,9 +1501,7 @@ def list_doc_comments(user, result_id):
     from app.models import Comment
 
     query = (
-        Comment.query.filter_by(
-            idea_id=result.idea_id, action_result_id=result.id
-        )
+        Comment.query.filter_by(idea_id=result.idea_id, action_result_id=result.id)
         .filter_by(parent_id=None)
         .order_by(Comment.created_at.asc())
     )
@@ -1503,7 +1523,9 @@ def list_doc_comments(user, result_id):
                 "is_deleted": c.is_deleted,
                 "parent_id": str(c.parent_id) if c.parent_id else None,
                 "depth": c.depth,
-                "action_result_id": str(c.action_result_id) if c.action_result_id else None,
+                "action_result_id": (
+                    str(c.action_result_id) if c.action_result_id else None
+                ),
             }
         )
 
@@ -1542,7 +1564,9 @@ def create_doc_comment(user, result_id):
         try:
             parent_comment = Comment.query.get(uuid.UUID(str(parent_id)))
             if parent_comment is None or parent_comment.idea_id != idea_id:
-                return api_error("Parent comment must belong to the same idea.", status_code=400)
+                return api_error(
+                    "Parent comment must belong to the same idea.", status_code=400
+                )
         except (ValueError, TypeError):
             return api_error("Invalid parent_id.", status_code=400)
 
@@ -1568,9 +1592,10 @@ def list_idea_comments(user, idea_id):
     if denied is not None:
         return denied
 
-    is_admin = getattr(user, "is_site_admin", False) or getattr(
-        user, "role", None
-    ) in ("ADMIN", "admin")
+    is_admin = getattr(user, "is_site_admin", False) or getattr(user, "role", None) in (
+        "ADMIN",
+        "admin",
+    )
 
     from app.models import Comment, IdeaStatus
 
@@ -1597,8 +1622,19 @@ def list_idea_comments(user, idea_id):
                 continue
             if r.action_result_id is not None:
                 continue
-            replies.append(r.to_dict(include_flag=is_admin, author_name=r.user.email if r.user else None))
-        comments.append(c.to_dict(include_flag=is_admin, children=replies, author_name=c.user.email if c.user else None, action_result_id=c.action_result_id))
+            replies.append(
+                r.to_dict(
+                    include_flag=is_admin, author_name=r.user.email if r.user else None
+                )
+            )
+        comments.append(
+            c.to_dict(
+                include_flag=is_admin,
+                children=replies,
+                author_name=c.user.email if c.user else None,
+                action_result_id=c.action_result_id,
+            )
+        )
 
     return api_ok({"comments": comments, "total": pagination.total})
 
@@ -1629,7 +1665,9 @@ def create_comment(user, idea_id):
         try:
             parent_comment = Comment.query.get(uuid.UUID(str(parent_id)))
             if parent_comment is None or parent_comment.idea_id != idea.id:
-                return api_error("Parent comment must belong to the same idea.", status_code=400)
+                return api_error(
+                    "Parent comment must belong to the same idea.", status_code=400
+                )
         except (ValueError, TypeError):
             return api_error("Invalid parent_id.", status_code=400)
 
@@ -1718,7 +1756,10 @@ def _chat_gate(idea):
         count = int(current)
         limit = 3
         if count >= limit:
-            return False, "Rate limit exceeded. Please wait before sending another message."
+            return (
+                False,
+                "Rate limit exceeded. Please wait before sending another message.",
+            )
     return True, None
 
 
@@ -1806,14 +1847,7 @@ def list_chat_sessions(user, idea_id):
         .all()
     )
 
-    return api_ok(
-        {
-            "sessions": [
-                s.to_dict(include_turns=True)
-                for s in sessions
-            ]
-        }
-    )
+    return api_ok({"sessions": [s.to_dict(include_turns=True) for s in sessions]})
 
 
 def _chat_enabled_for(instance_id):
@@ -1856,14 +1890,20 @@ def chat_iterate(user, idea_id):
         return api_error("Only admins can choose a chat model.", status_code=403)
     try:
         _session, turn = iterate_idea(
-            idea, user, content, message=message, model_override=model_override,
+            idea,
+            user,
+            content,
+            message=message,
+            model_override=model_override,
         )
     except ChatError as exc:
         return api_error(str(exc), status_code=400)
 
     return api_ok(
         {
-            "idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id), include_content=True),
+            "idea": idea.to_dict(
+                user_vote=_get_user_vote(user.id, idea.id), include_content=True
+            ),
             "turn": turn.to_dict(),
         }
     )
@@ -1904,7 +1944,9 @@ def chat_rollback(user, idea_id):
 
     return api_ok(
         {
-            "idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id), include_content=True),
+            "idea": idea.to_dict(
+                user_vote=_get_user_vote(user.id, idea.id), include_content=True
+            ),
             "turn": turn.to_dict(),
         }
     )
@@ -1981,14 +2023,32 @@ def update_idea_content(user, idea_id):
         if len(title) > 200:
             return api_error("Title must be 200 characters or fewer.", status_code=400)
         if title != idea.prompt_title:
-            edits.append(IdeaEdit(idea_id=idea.id, editor_id=user.id, instance_id=idea.instance_id, field="prompt_title", old_value=idea.prompt_title, new_value=title))
+            edits.append(
+                IdeaEdit(
+                    idea_id=idea.id,
+                    editor_id=user.id,
+                    instance_id=idea.instance_id,
+                    field="prompt_title",
+                    old_value=idea.prompt_title,
+                    new_value=title,
+                )
+            )
             idea.prompt_title = title
     if content is not None:
         content = content.strip()
         if not content:
             return api_error("Content cannot be empty.", status_code=400)
         if content != idea.raw_content:
-            edits.append(IdeaEdit(idea_id=idea.id, editor_id=user.id, instance_id=idea.instance_id, field="raw_content", old_value=idea.raw_content, new_value=content))
+            edits.append(
+                IdeaEdit(
+                    idea_id=idea.id,
+                    editor_id=user.id,
+                    instance_id=idea.instance_id,
+                    field="raw_content",
+                    old_value=idea.raw_content,
+                    new_value=content,
+                )
+            )
             idea.raw_content = content
     if structured is not None:
         if not isinstance(structured, dict):
@@ -1997,15 +2057,32 @@ def update_idea_content(user, idea_id):
             return api_error("structured_content cannot be empty.", status_code=400)
         old = idea.structured_content or {}
         for key, val in structured.items():
-            if key not in ("elevator_pitch", "target_audience", "value_proposition", "key_features", "monetization"):
+            if key not in (
+                "elevator_pitch",
+                "target_audience",
+                "value_proposition",
+                "key_features",
+                "monetization",
+            ):
                 return api_error(f"Unknown structured field '{key}'.", status_code=400)
             if not isinstance(val, str) or not val.strip():
                 return api_error(f"{key} must be a non-empty string.", status_code=400)
             if len(val.strip()) > 500:
-                return api_error(f"{key} must be 500 characters or fewer.", status_code=400)
+                return api_error(
+                    f"{key} must be 500 characters or fewer.", status_code=400
+                )
             if old.get(key) == val:
                 continue
-            edits.append(IdeaEdit(idea_id=idea.id, editor_id=user.id, instance_id=idea.instance_id, field=f"structured_content.{key}", old_value=old.get(key), new_value=val))
+            edits.append(
+                IdeaEdit(
+                    idea_id=idea.id,
+                    editor_id=user.id,
+                    instance_id=idea.instance_id,
+                    field=f"structured_content.{key}",
+                    old_value=old.get(key),
+                    new_value=val,
+                )
+            )
         idea.structured_content = {**old, **structured}
         if "elevator_pitch" in structured:
             idea.raw_content = structured["elevator_pitch"]
@@ -2014,7 +2091,12 @@ def update_idea_content(user, idea_id):
     idea.updated_at = datetime.now(timezone.utc)
     db.session.commit()
 
-    return api_ok({"idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)), "edit_history": [e.to_dict() for e in edits]})
+    return api_ok(
+        {
+            "idea": idea.to_dict(user_vote=_get_user_vote(user.id, idea.id)),
+            "edit_history": [e.to_dict() for e in edits],
+        }
+    )
 
 
 @bp.route("/actions/<uuid:result_id>", methods=["PATCH"])
@@ -2039,11 +2121,16 @@ def edit_action_result(user, result_id):
         return api_error("result_data is required.", status_code=400)
 
     if result_data is not None:
-        from app.models import ActionType
-        from app.schemas.ollama_schemas import _ACTION_SCHEMAS
         from pydantic import ValidationError
 
-        schema = _ACTION_SCHEMAS.get(result.action_type.value if hasattr(result.action_type, "value") else str(result.action_type))
+        from app.models import ActionType
+        from app.schemas.ollama_schemas import _ACTION_SCHEMAS
+
+        schema = _ACTION_SCHEMAS.get(
+            result.action_type.value
+            if hasattr(result.action_type, "value")
+            else str(result.action_type)
+        )
         if schema is not None:
             try:
                 schema.model_validate(result_data)
@@ -2079,6 +2166,7 @@ def edit_action_result(user, result_id):
 # ---------------------------------------------------------------------------
 # Idea tests: manual + imported test cases tracked against a built idea.
 # ---------------------------------------------------------------------------
+
 
 @bp.route("/ideas/<uuid:idea_id>/tests", methods=["GET"])
 @token_required
@@ -2122,9 +2210,14 @@ def run_idea_tests_endpoint(user, idea_id):
     if not isinstance(selected, list):
         selected = []
     selected = [str(x) for x in selected]
-    async_result = run_idea_tests.apply_async(args=[str(idea.id), selected], queue="default")
+    async_result = run_idea_tests.apply_async(
+        args=[str(idea.id), selected], queue="default"
+    )
     return api_ok(
-        {"message": "Tests started; refresh to see results.", "run_id": async_result.id},
+        {
+            "message": "Tests started; refresh to see results.",
+            "run_id": async_result.id,
+        },
         202,
     )
 
@@ -2146,6 +2239,8 @@ def idea_tests_run_status(user, idea_id):
     if row is None:
         return api_ok({"run": None})
     return api_ok({"run": row.to_dict()})
+
+
 @bp.route("/ideas/<uuid:idea_id>/tests", methods=["POST"])
 @token_required
 def create_idea_test(user, idea_id):
@@ -2285,28 +2380,33 @@ def idea_tests_summary(user, idea_id):
             "total": len(rows),
             "counts": counts,
             "coverage_pct": (sum(coverages) / len(coverages)) if coverages else None,
-            "last_run_at": max(
-                (r.last_run_at for r in rows if r.last_run_at), default=None
-            ).isoformat()
-            if any(r.last_run_at for r in rows)
-            else None,
+            "last_run_at": (
+                max(
+                    (r.last_run_at for r in rows if r.last_run_at), default=None
+                ).isoformat()
+                if any(r.last_run_at for r in rows)
+                else None
+            ),
         }
     )
+
 
 @bp.route("/ideas/<uuid:idea_id>/tests/diagnose", methods=["POST"])
 @token_required
 def diagnose_idea_tests(user, idea_id):
     """Ask the local LLM to diagnose failing tests for an idea."""
-    from app.models import Idea, IdeaTest, TestStatus, ManagedApp
+    from app.models import Idea, IdeaTest, ManagedApp, TestStatus
 
     idea = Idea.query.get_or_404(idea_id)
     denied = check_access(idea)
     if denied is not None:
         return denied
 
-    failed = IdeaTest.query.filter_by(idea_id=idea.id).filter(
-        IdeaTest.status == TestStatus.FAILED
-    ).all()
+    failed = (
+        IdeaTest.query.filter_by(idea_id=idea.id)
+        .filter(IdeaTest.status == TestStatus.FAILED)
+        .all()
+    )
     failed_names = [r.name for r in failed]
     log_text = ""
     ma = ManagedApp.query.filter_by(idea_id=idea.id).first()
@@ -2329,7 +2429,9 @@ def diagnose_idea_tests(user, idea_id):
         from app.services.ollama_client import OllamaClient
 
         client = OllamaClient(timeout=60.0)
-        r = client.generate_sync(prompt=prompt, model="llama3:8b", format=None, options={"temperature": 0.2})
+        r = client.generate_sync(
+            prompt=prompt, model="llama3:8b", format=None, options={"temperature": 0.2}
+        )
         diagnosis = r.get("response", "") if isinstance(r, dict) else str(r)
         if not diagnosis or diagnosis.strip() in ("{}", "{  }"):
             diagnosis = "The AI could not produce a diagnosis. Check the app log and the failing test names above."

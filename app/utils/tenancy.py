@@ -10,10 +10,10 @@ Server-side scoping here is the enforcement layer. Postgres RLS policies
 """
 
 import uuid
-from sqlalchemy import or_
 from typing import Any
 
 from flask import g
+from sqlalchemy import or_
 
 # Write paths that stay open on expired instances (auth flows, own
 # settings, social login). Everything else mutating is gated.

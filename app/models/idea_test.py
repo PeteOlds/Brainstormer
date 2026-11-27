@@ -56,7 +56,9 @@ class TestRun(db.Model):
         return {
             "id": str(self.id),
             "idea_id": str(self.idea_id),
-            "status": self.status.value if hasattr(self.status, "value") else str(self.status),
+            "status": (
+                self.status.value if hasattr(self.status, "value") else str(self.status)
+            ),
             "progress": self.progress or 0,
             "message": self.message,
             "selected_ids": self.selected_ids or [],

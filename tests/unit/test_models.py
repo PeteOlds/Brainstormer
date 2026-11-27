@@ -1,17 +1,18 @@
-import pytest
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
+import pytest
 
 from app.models import (
-    User,
-    UserRole,
-    PromptConfig,
+    ActionType,
     Idea,
     IdeaStatus,
-    Vote,
-    SecondaryActionResult,
-    ActionType,
     IdeaStatusHistory,
+    PromptConfig,
+    SecondaryActionResult,
+    User,
+    UserRole,
+    Vote,
 )
 
 
@@ -68,8 +69,8 @@ class TestUserModel:
 class TestPromptConfigModel:
     def test_create_prompt_config(self, app):
         with app.app_context():
-            from app.models import User
             from app.extensions import db
+            from app.models import User
 
             admin = User(email="admin@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -95,8 +96,8 @@ class TestPromptConfigModel:
 
     def test_prompt_body_encryption(self, app):
         with app.app_context():
-            from app.models import User
             from app.extensions import db
+            from app.models import User
 
             admin = User(email="admin@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -119,8 +120,8 @@ class TestPromptConfigModel:
 
     def test_prompt_to_dict(self, app):
         with app.app_context():
-            from app.models import User
             from app.extensions import db
+            from app.models import User
 
             admin = User(email="admin@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -148,8 +149,8 @@ class TestPromptConfigModel:
 class TestIdeaModel:
     def test_create_idea(self, app):
         with app.app_context():
-            from app.models import PromptConfig, User
             from app.extensions import db
+            from app.models import PromptConfig, User
 
             admin = User(email="admin@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -185,8 +186,8 @@ class TestIdeaModel:
 
     def test_idea_to_dict(self, app):
         with app.app_context():
-            from app.models import PromptConfig, User
             from app.extensions import db
+            from app.models import PromptConfig, User
 
             admin = User(email="admin@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -219,8 +220,8 @@ class TestIdeaModel:
 
     def test_update_vote_counts(self, app):
         with app.app_context():
-            from app.models import PromptConfig, User, Vote
             from app.extensions import db
+            from app.models import PromptConfig, User, Vote
 
             admin = User(email="admin@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -267,8 +268,8 @@ class TestIdeaModel:
 class TestVoteModel:
     def test_vote_unique_constraint(self, app):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User, Vote
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User, Vote
 
             admin = User(email="admin@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -314,8 +315,8 @@ class TestVoteModel:
 class TestSecondaryActionResultModel:
     def test_create_action_result(self, app):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User(email="admin@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -356,8 +357,8 @@ class TestSecondaryActionResultModel:
 class TestIdeaStatusHistoryModel:
     def test_create_status_history(self, app):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User, IdeaStatusHistory
             from app.extensions import db
+            from app.models import Idea, IdeaStatusHistory, PromptConfig, User
 
             admin = User(email="admin@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")

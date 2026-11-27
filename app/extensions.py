@@ -20,10 +20,10 @@ def init_extensions(app):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    
+
     # Initialize limiter with app config
     limiter.init_app(app)
-    
+
     redis_client = redis.from_url(app.config["REDIS_URL"], decode_responses=True)
     app.extensions["redis_client"] = redis_client
 
@@ -51,9 +51,7 @@ def init_extensions(app):
         content_security_policy_nonce_in=["script-src"],
         force_https=app.config.get("FORCE_HTTPS", False),
         strict_transport_security=app.config.get("FORCE_HTTPS", False),
-        strict_transport_security_max_age=int(
-            app.config.get("HSTS_MAX_AGE", 31536000)
-        ),
+        strict_transport_security_max_age=int(app.config.get("HSTS_MAX_AGE", 31536000)),
         strict_transport_security_include_subdomains=True,
         session_cookie_secure=app.config.get("FORCE_HTTPS", False),
     )

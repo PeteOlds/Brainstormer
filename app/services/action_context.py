@@ -7,9 +7,10 @@ prior secondary action results, votes. Truncated to fit token budget.
 import json
 from typing import Any
 
+from sqlalchemy import func
+
 from app.extensions import db
 from app.models import Comment, Idea, SecondaryActionResult, Vote
-from sqlalchemy import func
 
 
 def parent_context(child: Idea, max_chars: int = 2000) -> str:

@@ -1,15 +1,11 @@
 from .ai_config import (
-    AISpendLedger,
     CUTOFF_BEHAVIOURS,
     OPENCODE_WORKSPACES,
     PROVIDERS,
+    AISpendLedger,
     InstanceAIConfig,
 )
 from .build_target import InstanceBuildTarget
-from .release import CHILD_KINDS, RELEASE_STATUSES, Release
-from .release_config import ReleaseAIConfig, resolve_release
-from .github_config import InstanceGitHubConfig
-from .managed_app import ManagedApp
 from .chat import CHAT_KINDS, CHAT_ROLES, ChatSession, ChatTurn, content_hash
 from .comment import Comment
 from .entitlement import (
@@ -21,9 +17,10 @@ from .entitlement import (
     require_entitlement,
     resolve_entitlements,
 )
-from .oauth import OAUTH_PROVIDERS, OAuthIdentity, TenantOAuthConfig
+from .github_config import InstanceGitHubConfig
 from .idea import Idea, IdeaStatus
 from .idea_edit import IdeaEdit
+from .idea_test import IdeaTest, TestRun, TestRunStatus, TestStatus, TestType
 from .instance import (
     ROLE_INSTANCE_ADMIN,
     ROLE_SITE_ADMIN,
@@ -31,9 +28,15 @@ from .instance import (
     Instance,
     Membership,
 )
+from .managed_app import ManagedApp
+from .message import Message
+from .oauth import OAUTH_PROVIDERS, OAuthIdentity, TenantOAuthConfig
+from .password_reset import PasswordResetToken
 from .prompt_config import PromptConfig
 from .prompt_run import PromptRun, PromptRunStatus
 from .refresh_token import RefreshToken
+from .release import CHILD_KINDS, RELEASE_STATUSES, Release
+from .release_config import ReleaseAIConfig, resolve_release
 from .roles import (
     ASSIGNABLE_ROLES,
     ROLE_PERMISSIONS,
@@ -43,13 +46,10 @@ from .roles import (
     role_permissions,
 )
 from .secondary_action import ActionType, SecondaryActionResult
-from .idea_test import IdeaTest, TestRun, TestRunStatus, TestStatus, TestType
-from .password_reset import PasswordResetToken
 from .slack import SlackEvent, SlackPost
-from .message import Message
 from .stage_config import STAGES, StageAIConfig, resolve_stage
-from .stripe_event import StripeEvent, mark_stripe_event_seen
 from .status_history import IdeaStatusHistory
+from .stripe_event import StripeEvent, mark_stripe_event_seen
 from .system_settings import SystemSettings
 from .types import GUID
 from .user import User, UserRole

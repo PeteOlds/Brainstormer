@@ -55,9 +55,7 @@ def _target_by_id(instance_id, raw):
         key = uuid.UUID(str(raw))
     except (ValueError, TypeError, AttributeError):
         return None
-    return InstanceBuildTarget.query.filter_by(
-        id=key, instance_id=instance_id
-    ).first()
+    return InstanceBuildTarget.query.filter_by(id=key, instance_id=instance_id).first()
 
 
 def _target_by_name(instance_id, name):
@@ -66,13 +64,10 @@ def _target_by_name(instance_id, name):
     clean = (name or "").strip()
     if not clean or instance_id is None:
         return None
-    return (
-        InstanceBuildTarget.query.filter(
-            InstanceBuildTarget.instance_id == instance_id,
-            db.func.lower(InstanceBuildTarget.name) == clean.lower(),
-        )
-        .first()
-    )
+    return InstanceBuildTarget.query.filter(
+        InstanceBuildTarget.instance_id == instance_id,
+        db.func.lower(InstanceBuildTarget.name) == clean.lower(),
+    ).first()
 
 
 def _last_build_target(idea_id, instance_id):
@@ -81,9 +76,7 @@ def _last_build_target(idea_id, instance_id):
     if idea_id is None:
         return None
     row = (
-        SecondaryActionResult.query.filter_by(
-            idea_id=idea_id, action_type="BUILD_CODE"
-        )
+        SecondaryActionResult.query.filter_by(idea_id=idea_id, action_type="BUILD_CODE")
         .filter(SecondaryActionResult.target_id.isnot(None))
         .order_by(SecondaryActionResult.executed_at.desc())
         .first()
@@ -252,9 +245,7 @@ def resolve_build_target(
             return target, None
 
     for candidate in (idea, root):
-        target = _last_build_target(
-            getattr(candidate, "id", None), instance_id
-        )
+        target = _last_build_target(getattr(candidate, "id", None), instance_id)
         if target is not None:
             return target, None
 

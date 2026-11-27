@@ -1,10 +1,11 @@
-import pytest
 import json
-from unittest.mock import patch, Mock
-from datetime import datetime, timezone, timedelta
 import uuid
+from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock, patch
 
-from app.models import User, UserRole, PromptConfig, Idea, Vote, SecondaryActionResult
+import pytest
+
+from app.models import Idea, PromptConfig, SecondaryActionResult, User, UserRole, Vote
 
 
 class TestAuthEndpoints:
@@ -191,8 +192,8 @@ class TestPromptEndpoints:
 
     def test_create_prompt_max_active(self, admin_client, app, admin_user):
         with app.app_context():
-            from app.models import PromptConfig, User
             from app.extensions import db
+            from app.models import PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             for i in range(10):
@@ -228,8 +229,8 @@ class TestPromptEndpoints:
 
     def test_get_prompt_admin(self, admin_client, app, admin_user):
         with app.app_context():
-            from app.models import PromptConfig, User
             from app.extensions import db
+            from app.models import PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig(
@@ -250,8 +251,8 @@ class TestPromptEndpoints:
 
     def test_update_prompt_admin(self, admin_client, app, admin_user):
         with app.app_context():
-            from app.models import PromptConfig, User
             from app.extensions import db
+            from app.models import PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig(
@@ -276,8 +277,8 @@ class TestPromptEndpoints:
 
     def test_run_prompt_now(self, admin_client, app, admin_user):
         with app.app_context():
-            from app.models import PromptConfig, User
             from app.extensions import db
+            from app.models import PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig(
@@ -300,8 +301,8 @@ class TestPromptEndpoints:
 
     def test_run_prompt_burst(self, admin_client, app, admin_user):
         with app.app_context():
-            from app.models import PromptConfig, PromptRun, User
             from app.extensions import db
+            from app.models import PromptConfig, PromptRun, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig(
@@ -340,8 +341,8 @@ class TestPromptEndpoints:
 
     def test_delete_prompt(self, admin_client, app, admin_user):
         with app.app_context():
-            from app.models import PromptConfig, User
             from app.extensions import db
+            from app.models import PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig(
@@ -401,8 +402,8 @@ class TestIdeaEndpoints:
         """?model= must filter server-side (client only sees one page)."""
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig(
@@ -446,8 +447,8 @@ class TestIdeaEndpoints:
     ):
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -482,8 +483,8 @@ class TestIdeaEndpoints:
         """Filter must work for HOLD/DESIGN/BUILD/COMPLETE (UI regression)."""
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -542,8 +543,8 @@ class TestIdeaEndpoints:
         """MAP status filters and updates end to end."""
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -577,8 +578,8 @@ class TestIdeaEndpoints:
         """?search= must filter server-side (ref, title, content)."""
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -630,8 +631,8 @@ class TestIdeaEndpoints:
         """?sort_by=-created_at must return oldest first."""
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -669,8 +670,8 @@ class TestIdeaEndpoints:
         slices rows while total/pages describe the full filtered set."""
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -714,8 +715,8 @@ class TestIdeaEndpoints:
         (UI regression: columns rendered empty when the field was missing)."""
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -758,14 +759,14 @@ class TestIdeaEndpoints:
         chips only showed the five hardcoded actions)."""
         _email, token = auth_user
         with app.app_context():
+            from app.extensions import db
             from app.models import (
+                ActionType,
                 Idea,
                 PromptConfig,
                 SecondaryActionResult,
-                ActionType,
                 User,
             )
-            from app.extensions import db
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -816,8 +817,8 @@ class TestIdeaEndpoints:
         )
         token = reg.get_json()["data"]["access_token"]
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -866,8 +867,8 @@ class TestIdeaEndpoints:
         """Bulk status change to a new-enum value must succeed end to end
         (UI regression: 'Failed to bulk update status')."""
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -920,8 +921,8 @@ class TestIdeaEndpoints:
     def test_get_idea_detail(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -963,8 +964,8 @@ class TestIdeaEndpoints:
         self, admin_client, app, admin_user, admin_prompt
     ):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -991,8 +992,8 @@ class TestIdeaEndpoints:
     ):
         """The V2 pipeline walks end to end: SPARK → SCOPE → MAP → SHIP → SCALE → ARCHIVE."""
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1021,8 +1022,8 @@ class TestIdeaEndpoints:
         """DEVELOPMENT was retired from the pipeline: single + bulk updates
         must reject it as invalid."""
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1054,8 +1055,8 @@ class TestIdeaEndpoints:
     ):
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1081,8 +1082,8 @@ class TestIdeaEndpoints:
     def test_vote_idea(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1134,8 +1135,8 @@ class TestIdeaEndpoints:
         breakdown without reload (UI regression: stale counts)."""
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1178,15 +1179,17 @@ class TestIdeaEndpoints:
         assert data["downvotes_count"] == 1
         assert data["net_votes"] == 0
 
-    def test_vote_persists_and_toggles(self, client, auth_user, app, admin_user, admin_prompt):
+    def test_vote_persists_and_toggles(
+        self, client, auth_user, app, admin_user, admin_prompt
+    ):
         """TEST.019: Vote buttons must persist color and count across multiple
         votes. Upvote/downvote/toggle-off must all update net_votes and
         current_user_vote correctly, without the count resetting on the
         second vote."""
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1211,7 +1214,9 @@ class TestIdeaEndpoints:
         assert resp.status_code == 200, resp.get_json()
         data = resp.get_json()["data"]
         assert data["net_votes"] == 1, f"Expected net_votes=1, got {data}"
-        assert data["current_user_vote"] == 1, f"Expected current_user_vote=1, got {data}"
+        assert (
+            data["current_user_vote"] == 1
+        ), f"Expected current_user_vote=1, got {data}"
         assert data["upvotes_count"] == 1
         assert data["downvotes_count"] == 0
 
@@ -1224,7 +1229,9 @@ class TestIdeaEndpoints:
         assert resp.status_code == 200, resp.get_json()
         data = resp.get_json()["data"]
         assert data["net_votes"] == -1, f"Expected net_votes=-1, got {data}"
-        assert data["current_user_vote"] == -1, f"Expected current_user_vote=-1, got {data}"
+        assert (
+            data["current_user_vote"] == -1
+        ), f"Expected current_user_vote=-1, got {data}"
         assert data["upvotes_count"] == 0
         assert data["downvotes_count"] == 1
 
@@ -1237,7 +1244,9 @@ class TestIdeaEndpoints:
         assert resp.status_code == 200, resp.get_json()
         data = resp.get_json()["data"]
         assert data["net_votes"] == 0, f"Expected net_votes=0, got {data}"
-        assert data["current_user_vote"] == 0, f"Expected current_user_vote=0, got {data}"
+        assert (
+            data["current_user_vote"] == 0
+        ), f"Expected current_user_vote=0, got {data}"
         assert data["upvotes_count"] == 0
         assert data["downvotes_count"] == 0
 
@@ -1249,8 +1258,12 @@ class TestIdeaEndpoints:
         )
         assert resp.status_code == 200, resp.get_json()
         data = resp.get_json()["data"]
-        assert data["net_votes"] == 1, f"Expected net_votes=1 on second upvote, got {data}"
-        assert data["current_user_vote"] == 1, f"Expected current_user_vote=1 on second upvote, got {data}"
+        assert (
+            data["net_votes"] == 1
+        ), f"Expected net_votes=1 on second upvote, got {data}"
+        assert (
+            data["current_user_vote"] == 1
+        ), f"Expected current_user_vote=1 on second upvote, got {data}"
         assert data["upvotes_count"] == 1
         assert data["downvotes_count"] == 0
 
@@ -1268,7 +1281,9 @@ class TestIdeaEndpoints:
         assert resp.status_code == 200, resp.get_json()
         data = resp.get_json()["data"]
         # User1 upvote (+1) + User2 downvote (-1) = net 0
-        assert data["net_votes"] == 0, f"Expected net_votes=0 with two voters, got {data}"
+        assert (
+            data["net_votes"] == 0
+        ), f"Expected net_votes=0 with two voters, got {data}"
         assert data["upvotes_count"] == 1
         assert data["downvotes_count"] == 1
 
@@ -1277,8 +1292,8 @@ class TestIdeaEndpoints:
     ):
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1305,8 +1320,8 @@ class TestIdeaEndpoints:
 class TestActionEndpoints:
     def test_run_action_admin(self, admin_client, app, admin_user, admin_prompt):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1333,8 +1348,8 @@ class TestActionEndpoints:
 
     def test_run_action_five_forces(self, admin_client, app, admin_user, admin_prompt):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1360,8 +1375,8 @@ class TestActionEndpoints:
 
     def test_run_action_pestel(self, admin_client, app, admin_user, admin_prompt):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1389,8 +1404,8 @@ class TestActionEndpoints:
         self, admin_client, app, admin_user, admin_prompt
     ):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1426,14 +1441,14 @@ class TestActionEndpoints:
         """PRD reruns no longer delete history: the route enqueues and the
         task appends a new version (superseding, not replacing)."""
         with app.app_context():
+            from app.extensions import db
             from app.models import (
+                ActionType,
                 Idea,
                 PromptConfig,
                 SecondaryActionResult,
-                ActionType,
                 User,
             )
-            from app.extensions import db
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1484,8 +1499,8 @@ class TestActionEndpoints:
         self, admin_client, app, admin_user, admin_prompt
     ):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1518,8 +1533,8 @@ class TestActionEndpoints:
     ):
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1547,8 +1562,8 @@ class TestActionEndpoints:
     ):
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1574,14 +1589,14 @@ class TestActionEndpoints:
     def test_get_actions(self, client, auth_user, app, admin_user, admin_prompt):
         _email, token = auth_user
         with app.app_context():
+            from app.extensions import db
             from app.models import (
+                ActionType,
                 Idea,
                 PromptConfig,
-                User,
                 SecondaryActionResult,
-                ActionType,
+                User,
             )
-            from app.extensions import db
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1614,8 +1629,8 @@ class TestActionEndpoints:
         assert len(resp.get_json()["data"]["results"]) == 1
 
     def _make_design_idea(self, app, ref="IDEA-DOC1", status="MAP"):
-        from app.models import Idea, PromptConfig, User
         from app.extensions import db
+        from app.models import Idea, PromptConfig, User
 
         admin = User.query.filter_by(email="admin@test.com").first()
         prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1632,7 +1647,8 @@ class TestActionEndpoints:
 
     def test_doc_action_gating(self, admin_client, app, admin_user, admin_prompt):
         """V2 stage gates: PRD needs Scope+, DESIGN_DOC needs Map + a PRD."""
-        from unittest.mock import MagicMock, patch as _patch
+        from unittest.mock import MagicMock
+        from unittest.mock import patch as _patch
 
         with app.app_context():
             new_id = self._make_design_idea(app, ref="IDEA-G1", status="SPARK")
@@ -1663,9 +1679,11 @@ class TestActionEndpoints:
     def test_design_doc_allowed_with_prd(
         self, admin_client, app, admin_user, admin_prompt
     ):
-        from unittest.mock import MagicMock, patch as _patch
-        from app.models import SecondaryActionResult, ActionType
+        from unittest.mock import MagicMock
+        from unittest.mock import patch as _patch
+
         from app.extensions import db
+        from app.models import ActionType, SecondaryActionResult
 
         with app.app_context():
             design_id = self._make_design_idea(app, ref="IDEA-G3", status="MAP")
@@ -1700,8 +1718,8 @@ class TestActionEndpoints:
                 json={"email": "docuser@test.com", "password": "password123"},
             )
             token = reg.get_json()["data"]["access_token"]
-        from app.models import SecondaryActionResult, ActionType
         from app.extensions import db
+        from app.models import ActionType, SecondaryActionResult
 
         with app.app_context():
             design_id = self._make_design_idea(app, ref="IDEA-G4", status="MAP")
@@ -1740,8 +1758,8 @@ class TestActionEndpoints:
         self, admin_client, app, admin_user, admin_prompt
     ):
         """Manual edit stores a new version; history preserved."""
-        from app.models import SecondaryActionResult, ActionType
         from app.extensions import db
+        from app.models import ActionType, SecondaryActionResult
 
         with app.app_context():
             design_id = self._make_design_idea(app, ref="IDEA-G5", status="MAP")
@@ -1802,8 +1820,8 @@ class TestAdminEndpoints:
 
     def test_prompts_health_flags(self, admin_client, app, admin_user):
         with app.app_context():
-            from app.models import Idea, IdeaStatus, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, IdeaStatus, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             bad = PromptConfig(
@@ -1890,8 +1908,8 @@ class TestAdminEndpoints:
         """Activity stats must load when runs reference ideas (UI regression:
         'Couldn't load activity data' — full-row idea fetch failed)."""
         with app.app_context():
-            from app.models import Idea, PromptConfig, PromptRun, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, PromptRun, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1926,8 +1944,8 @@ class TestAdminEndpoints:
     ):
         """Per-prompt success/failed run counts for the green/red UI."""
         with app.app_context():
-            from app.models import Idea, PromptConfig, PromptRun, PromptRunStatus, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, PromptRun, PromptRunStatus, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -1975,8 +1993,8 @@ class TestAdminEndpoints:
     ):
         """Server pagination contract the activity UI relies on."""
         with app.app_context():
-            from app.models import PromptConfig, PromptRun, User
             from app.extensions import db
+            from app.models import PromptConfig, PromptRun, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -2090,9 +2108,7 @@ class TestAdminEndpoints:
             db.session.commit()
             prompt_id = str(prompt.id)
 
-        resp = admin_client.get(
-            f"/api/v1/admin/activity/stats?prompt_id={prompt_id}"
-        )
+        resp = admin_client.get(f"/api/v1/admin/activity/stats?prompt_id={prompt_id}")
         assert resp.status_code == 200
         runs = resp.get_json()["data"]["recent_runs"]
         assert len(runs) == 1
@@ -2164,8 +2180,8 @@ class TestHealthEndpoints:
 
 class TestCommentEndpoints:
     def _make_idea(self, app, ref="IDEA-C1"):
-        from app.models import Idea, PromptConfig, User
         from app.extensions import db
+        from app.models import Idea, PromptConfig, User
 
         admin = User.query.filter_by(email="admin@test.com").first()
         prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -2336,8 +2352,8 @@ class TestCommentEndpoints:
 
 class TestIdeaEditEndpoints:
     def _make_idea(self, app, ref="IDEA-E1"):
-        from app.models import Idea, PromptConfig, User
         from app.extensions import db
+        from app.models import Idea, PromptConfig, User
 
         admin = User.query.filter_by(email="admin@test.com").first()
         prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -2426,8 +2442,8 @@ class TestIdeaEditEndpoints:
         self, admin_client, app, admin_user, admin_prompt
     ):
         with app.app_context():
-            from app.models import Idea, PromptConfig, User
             from app.extensions import db
+            from app.models import Idea, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()
@@ -2511,8 +2527,8 @@ class TestIdeaEditEndpoints:
     ):
         _email, token = auth_user
         with app.app_context():
-            from app.models import Idea, PromptConfig, User, IdeaStatus
             from app.extensions import db
+            from app.models import Idea, IdeaStatus, PromptConfig, User
 
             admin = User.query.filter_by(email="admin@test.com").first()
             prompt = PromptConfig.query.filter_by(created_by_id=admin.id).first()

@@ -3,7 +3,7 @@ from flask import Blueprint, current_app
 from sqlalchemy import text
 
 from app.extensions import db
-from app.utils.responses import api_ok, api_error
+from app.utils.responses import api_error, api_ok
 
 bp = Blueprint("health", __name__)
 
@@ -12,7 +12,9 @@ async def check_ollama() -> bool:
     """Check if Ollama is reachable."""
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{current_app.config['OLLAMA_BASE_URL']}/api/tags")
+            response = await client.get(
+                f"{current_app.config['OLLAMA_BASE_URL']}/api/tags"
+            )
             return response.status_code == 200
     except Exception:
         return False
@@ -33,6 +35,7 @@ def check_scheduler() -> bool:
     """Check beat liveness via its heartbeat key (see maintenance_tasks)."""
     try:
         from app.tasks.maintenance_tasks import check_beat_heartbeat
+
         redis_client = current_app.extensions.get("redis_client")
         if redis_client is None:
             return False
@@ -75,22 +78,24 @@ def health():
 def ready():
     """Readiness check - includes Ollama and queue depths."""
     import httpx
-    
+
     def check_ollama_sync() -> bool:
         """Check if Ollama is reachable."""
         try:
             with httpx.Client(timeout=5.0) as client:
-                response = client.get(f"{current_app.config['OLLAMA_BASE_URL']}/api/tags")
+                response = client.get(
+                    f"{current_app.config['OLLAMA_BASE_URL']}/api/tags"
+                )
                 return response.status_code == 200
         except Exception:
             return False
-    
+
     checks = {
         "database": check_database(),
         "redis": check_redis(),
         "ollama": check_ollama_sync(),
     }
-    
+
     # Get queue depths from Celery
     queue_depth_ollama = 0
     queue_depth_opencode = 0
@@ -106,9 +111,7 @@ def ready():
         import redis as _redis
         from flask import current_app as _app
 
-        broker = _redis.from_url(
-            _app.config["CELERY_BROKER_URL"], socket_timeout=2
-        )
+        broker = _redis.from_url(_app.config["CELERY_BROKER_URL"], socket_timeout=2)
         queue_depth_ollama += int(broker.llen("ollama") or 0)
         queue_depth_opencode += int(broker.llen("opencode") or 0)
         queue_depth_default += int(broker.llen("default") or 0)
@@ -117,6 +120,7 @@ def ready():
 
     try:
         from app.tasks import celery
+
         inspect = celery.control.inspect()
         active = inspect.active() or {}
         reserved = inspect.reserved() or {}
@@ -146,23 +150,26 @@ def ready():
     status = "ready" if all(checks.values()) else "not ready"
     code = 200 if status == "ready" else 503
 
-    return api_ok({
-        "status": status,
-        "checks": checks,
-        "queue_depth_ollama": queue_depth_ollama,
-        "queue_depth_opencode": queue_depth_opencode,
-        "queue_depth_default": queue_depth_default,
-        "workers_ollama": workers_ollama,
-        "workers_opencode": workers_opencode,
-        "workers_default": workers_default,
-        "warnings": _queue_warnings(
-            {
-                "ollama": (queue_depth_ollama, workers_ollama),
-                "opencode": (queue_depth_opencode, workers_opencode),
-                "default": (queue_depth_default, workers_default),
-            }
-        ),
-    }, status_code=code)
+    return api_ok(
+        {
+            "status": status,
+            "checks": checks,
+            "queue_depth_ollama": queue_depth_ollama,
+            "queue_depth_opencode": queue_depth_opencode,
+            "queue_depth_default": queue_depth_default,
+            "workers_ollama": workers_ollama,
+            "workers_opencode": workers_opencode,
+            "workers_default": workers_default,
+            "warnings": _queue_warnings(
+                {
+                    "ollama": (queue_depth_ollama, workers_ollama),
+                    "opencode": (queue_depth_opencode, workers_opencode),
+                    "default": (queue_depth_default, workers_default),
+                }
+            ),
+        },
+        status_code=code,
+    )
 
 
 def _queue_warnings(queues):
