@@ -392,10 +392,13 @@ class TestBuildTask:
             ).one()
             assert row.version == 1 and row.is_current is True
             assert row.result_data["written"] is False
-            assert [f["path"] for f in row.result_data["files"]] == [
-                "src/app.py",
-                "tests/test_app.py",
-            ]
+            paths = [f["path"] for f in row.result_data["files"]]
+            assert paths == ["src/app.py", "tests/test_app.py", "AGENTS.md"]
+            agents = next(
+                f for f in row.result_data["files"] if f["path"] == "AGENTS.md"
+            )
+            assert "# AGENTS.md" in agents["content"]
+            assert "src/app.py" in agents["content"]
             assert row.target_id is not None and row.target_name == "repo"
             assert row.result_data.get("target_path") == str(tmp_path)
             db.session.expire_all()

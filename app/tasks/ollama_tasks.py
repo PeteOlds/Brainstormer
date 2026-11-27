@@ -683,6 +683,26 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
     except BuildError as exc:
         _record_failure(run_id, str(exc))
         return
+    # Re-check the final file set (including port/root-route rewrites that
+    # happen later) and make sure older stored previews gain an AGENTS.md.
+    from app.services.build_agents import render_agents_md
+    from app.services.build_manifest_checks import (
+        BuildManifestError,
+        ensure_manifest_files,
+    )
+
+    if not any(f.get("path") == "AGENTS.md" for f in manifest_files):
+        manifest_files.append(
+            {
+                "path": "AGENTS.md",
+                "content": render_agents_md(manifest_files, build_target.name),
+            }
+        )
+    try:
+        ensure_manifest_files(manifest_files, require_agents_md=True)
+    except BuildManifestError as exc:
+        _record_failure(run_id, f"Build rejected: {exc}")
+        return
     # Derive the runbook BEFORE writing: a build with no runnable command
     # is not runnable, so it must fail here rather than write files, report
     # success, and only refuse later at one-click run time.
@@ -1359,6 +1379,38 @@ def run_secondary_action(
                 + "\nOutput ONLY valid JSON matching the schema. No prose, no markdown fences."
             )
             validated = _call_and_validate(strict_prompt)
+
+        # BUILD_CODE gets a deterministic contract before a preview is stored:
+        # a server-authored AGENTS.md plus mechanical lint. A model-produced
+        # AGENTS.md is never trusted — it is replaced with the derived one.
+        if action_type == "BUILD_CODE":
+            from app.schemas.ollama_schemas import BuildFile
+            from app.services.build_agents import render_agents_md
+            from app.services.build_manifest_checks import (
+                BuildManifestError,
+                ensure_manifest_files,
+            )
+
+            draft_files = [f.model_dump() for f in validated.files]
+            validated.files = [
+                f for f in validated.files if f.path != "AGENTS.md"
+            ] + [
+                BuildFile(
+                    path="AGENTS.md",
+                    content=render_agents_md(
+                        draft_files,
+                        build_target.name if build_target is not None else None,
+                    ),
+                )
+            ]
+            try:
+                ensure_manifest_files(
+                    [f.model_dump() for f in validated.files],
+                    require_agents_md=True,
+                )
+            except BuildManifestError as exc:
+                _record_failure(run_id, f"Build preview rejected: {exc}")
+                return
 
         # Drop re-asked questions: anything already answered on a prior
         # version must not come back (models repeat them despite prompt

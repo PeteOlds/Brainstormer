@@ -13,6 +13,14 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.103.0 — 2026-11-27
+
+### Features
+- RM-053: build previews are now rejected by deterministic checks for unsafe paths, source files over 300 lines, and TODO/FIXME/placeholder stubs; the same checks run again before files are written.
+- RM-054: every generated build now ships a server-authored `AGENTS.md` describing stack, layout, commands and editing rules. It replaces any model-generated version and is added to older stored previews at write time.
+
+---
+
 ## v0.102.0 — 2026-11-27
 
 ### Features
