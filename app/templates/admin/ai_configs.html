@@ -184,6 +184,10 @@
                     <input x-model="stageDraft.num_predict" type="number" min="1" max="4096" class="block w-full px-3 py-2 min-h-[36px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                 </div>
                 <div>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Context size (num_ctx)</label>
+                    <input x-model="stageDraft.num_ctx" type="number" min="512" max="131072" step="512" placeholder="Ollama default" class="block w-full px-3 py-2 min-h-[36px] text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                </div>
+                <div>
                     {{ ai_multiselect("Skills", "discoverySkills", "stageDraft.skills", "stageAiOpen.skills", "s.description", "inherit", "md", "None available.", "stage-ai-skills") }}
                 </div>
                 <div>
@@ -253,7 +257,7 @@ function aiSettingsApp() {
         stageConfigs: [],
         editingStage: null,
         editingStageStageLabel: '',
-        stageDraft: { provider: '', model_name: '', temperature: '', top_p: '', num_predict: '', skills: [], guidelines: [] },
+        stageDraft: { provider: '', model_name: '', temperature: '', top_p: '', num_predict: '', num_ctx: '', skills: [], guidelines: [] },
         stageSaving: false,
         stageMsg: '',
         stageErr: '',
@@ -525,7 +529,7 @@ function aiSettingsApp() {
             const s = this.stageConfigs.find((s) => s && String(s.stage) === String(stageId));
             // A stage counts as configured only when it has at least one
             // non-default value set; a bare {"stage": "SPARK"} means "inherits".
-            return !!s && (s.provider || s.model_name || s.temperature !== undefined || s.top_p !== undefined || s.num_predict !== undefined || (s.skills || []).length || (s.guidelines || []).length);
+            return !!s && (s.provider || s.model_name || s.temperature !== undefined || s.top_p !== undefined || s.num_predict !== undefined || s.num_ctx !== undefined || (s.skills || []).length || (s.guidelines || []).length);
         },
 
         stageFor(stageId) {
@@ -577,6 +581,7 @@ function aiSettingsApp() {
                 temperature: cur.temperature != null ? String(cur.temperature) : '',
                 top_p: cur.top_p != null ? String(cur.top_p) : '',
                 num_predict: cur.num_predict != null ? String(cur.num_predict) : '',
+                num_ctx: cur.num_ctx != null ? String(cur.num_ctx) : '',
                 skills: Array.isArray(cur.skills) ? cur.skills : [],
                 guidelines: Array.isArray(cur.guidelines) ? cur.guidelines : [],
             };
@@ -598,6 +603,7 @@ function aiSettingsApp() {
                 if (this.stageDraft.temperature) body.temperature = parseFloat(this.stageDraft.temperature);
                 if (this.stageDraft.top_p) body.top_p = parseFloat(this.stageDraft.top_p);
                 if (this.stageDraft.num_predict) body.num_predict = parseInt(this.stageDraft.num_predict, 10);
+                if (this.stageDraft.num_ctx) body.num_ctx = parseInt(this.stageDraft.num_ctx, 10);
                 if (this.stageDraft.skills && this.stageDraft.skills.length) body.skills = this.stageDraft.skills;
                 if (this.stageDraft.guidelines && this.stageDraft.guidelines.length) body.guidelines = this.stageDraft.guidelines;
                 const res = await authFetch(`/api/v1/instances/${this.instanceId}/stage-config`, {
@@ -608,7 +614,7 @@ function aiSettingsApp() {
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((data && (data.message || data.msg)) || 'Save failed');
                 this.editingStage = null;
-                this.stageDraft = { provider: '', model_name: '', temperature: '', top_p: '', num_predict: '', skills: [], guidelines: [] };
+                this.stageDraft = { provider: '', model_name: '', temperature: '', top_p: '', num_predict: '', num_ctx: '', skills: [], guidelines: [] };
                 this.stageCustomModel = false;
                 this.stageMsg = 'Saved.';
                 setTimeout(() => { this.stageMsg = ''; }, 3000);

@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.103.1 — 2026-11-27
+
+### Features
+- RM-056: `num_ctx` is now configurable on stage and release AI settings (512–131072; unset keeps Ollama's default), forwarded to Ollama generation, and expressed in a throwaway config for local OpenCode sandbox runs. Added migration `nn4e5f6a7b8c` (apply with `flask db upgrade`) and documented context-versus-VRAM trade-offs.
+
+---
+
 ## v0.103.0 — 2026-11-27
 
 ### Features

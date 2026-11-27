@@ -47,6 +47,35 @@ class TestGenerationOptions:
         }
         assert "seed" not in opts
 
+    def test_num_ctx_is_opt_in_from_stage_config(self, celery_app):
+        from types import SimpleNamespace
+        from app.tasks.ollama_tasks import _generation_options
+
+        cfg = SimpleNamespace(
+            temperature=0.7,
+            top_p=0.9,
+            repeat_penalty=1.1,
+            num_predict=1000,
+            seed=None,
+        )
+        assert "num_ctx" not in _generation_options(cfg)
+        opts = _generation_options(cfg, {"num_ctx": 8192})
+        assert opts["num_ctx"] == 8192
+
+    def test_num_ctx_from_prompt_config_is_respected(self, celery_app):
+        from types import SimpleNamespace
+        from app.tasks.ollama_tasks import _generation_options
+
+        cfg = SimpleNamespace(
+            temperature=0.7,
+            top_p=0.9,
+            repeat_penalty=1.1,
+            num_predict=1000,
+            seed=None,
+            num_ctx=4096,
+        )
+        assert _generation_options(cfg)["num_ctx"] == 4096
+
 
 class TestPromptMemory:
     def _seed_prompt(self, db, admin_email="admin_mem@test.com"):

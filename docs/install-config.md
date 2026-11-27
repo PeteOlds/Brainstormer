@@ -290,6 +290,24 @@ Resolution everywhere: explicit run arguments > stage row > prompt
 values > hardcoded defaults. Unset rows change nothing; chat follows
 the stage model unless an admin overrides it.
 
+Release AI settings accept the same keys, including `num_ctx`, and win
+over stage settings for ideas in that release.
+
+### Context size (`num_ctx`) and VRAM
+
+`num_ctx` is optional (512–131072). Leave it unset to keep Ollama's own
+default. Larger contexts let a local model hold a bigger design document
+and repo snapshot, but the KV cache consumes VRAM roughly in proportion to
+context length × concurrent runs. On an 8 GB GPU, 4096–8192 is usually a
+safe ceiling for an 8B model; 16k+ can spill into slow system memory and
+make tool-call loops much slower. Prefer a smaller model with a moderate
+context over a large model with a huge context.
+
+The value is passed to Ollama as a generation option. For local OpenCode
+sandbox runs it is written into a throwaway `opencode.json`; attached and
+repo workspaces leave context control to the remote server or the
+project's own configuration.
+
 ## Social login (Phase 5)
 
 Per-instance OAuth credentials (instance admin), global identity links:

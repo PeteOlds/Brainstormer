@@ -487,6 +487,14 @@ def update_release_ai_config(user, release_id):
                 return api_error("num_predict must be between 1 and 4096.", status_code=400)
         except (TypeError, ValueError):
             return api_error("num_predict must be an integer.", status_code=400)
+    num_ctx = data.get("num_ctx")
+    if num_ctx is not None:
+        try:
+            num_ctx = int(num_ctx)
+            if not 512 <= num_ctx <= 131072:
+                return api_error("num_ctx must be between 512 and 131072.", status_code=400)
+        except (TypeError, ValueError):
+            return api_error("num_ctx must be an integer.", status_code=400)
     skills = data.get("skills")
     if skills is not None:
         if not isinstance(skills, list) or not all(isinstance(v, str) for v in skills):
@@ -509,6 +517,8 @@ def update_release_ai_config(user, release_id):
         row.top_p = top_p
     if num_predict is not None:
         row.num_predict = num_predict
+    if num_ctx is not None:
+        row.num_ctx = num_ctx
     if skills is not None:
         row.skills = skills
     if guidelines is not None:
