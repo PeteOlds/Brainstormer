@@ -2184,22 +2184,31 @@ def diagnose_idea_tests(user, idea_id):
     failed_names = [r.name for r in failed]
     log_text = ""
     ma = ManagedApp.query.filter_by(idea_id=idea.id).first()
-    if ma and (ma.spec or {}).get("log_path"):
-        lp = (ma.spec or {}).get("log_path")
-        if os.path.exists(lp):
-            try:
-                with open(lp, "r", errors="replace") as fh:
-                    log_text = "".join(fh.readlines()[-20:])[:500]
-            except OSError:
-                log_text = ""
+    # Older rows can hold a JSON string rather than a dict; never let a
+    # malformed spec turn a diagnosis into a 500.
+    raw_spec = getattr(ma, "spec", None) if ma is not None else None
+    spec = raw_spec if isinstance(raw_spec, dict) else {}
+    if isinstance(raw_spec, str):
+        try:
+            parsed = json.loads(raw_spec)
+            spec = parsed if isinstance(parsed, dict) else {}
+        except (ValueError, TypeError):
+            spec = {}
+    lp = spec.get("log_path")
+    if isinstance(lp, str) and lp and os.path.exists(lp):
+        try:
+            with open(lp, "r", errors="replace") as fh:
+                log_text = "".join(fh.readlines()[-20:])[:500]
+        except OSError:
+            log_text = ""
 
-    prompt = (
-        "A generated app has failing tests. "
-        f"Failed tests: {', '.join(failed_names) or 'none'}. "
-        "Log tail: " + (log_text or "n/a") + ". "
-        "In 3-5 sentences, explain the likely root cause and concrete fix steps for a non-technical user."
-    )
     try:
+        prompt = (
+            "A generated app has failing tests. "
+            f"Failed tests: {', '.join(str(n) for n in failed_names) or 'none'}. "
+            "Log tail: " + (log_text or "n/a") + ". "
+            "In 3-5 sentences, explain the likely root cause and concrete fix steps for a non-technical user."
+        )
         from app.services.ollama_client import OllamaClient
 
         client = OllamaClient(timeout=60.0)
@@ -2210,5 +2219,6 @@ def diagnose_idea_tests(user, idea_id):
         if not diagnosis or diagnosis.strip() in ("{}", "{  }"):
             diagnosis = "The AI could not produce a diagnosis. Check the app log and the failing test names above."
     except Exception as exc:
+        # Diagnosis is advisory: a failure here must never become a 500.
         return api_ok({"diagnosis": f"Diagnosis failed: {exc}"})
     return api_ok({"diagnosis": diagnosis})

@@ -57,6 +57,10 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 | BUG.010  |                    | HOLD<br>If AI Provider Spend tab is different from AI Providers / Configure / Monthly budgets, then remove the duplication                                                                                                                                  |
 | BUG.069  |                    | Debugging a failed job (Design Doc on IDEA-9263) gave the following error message<br><br>Failed to load: ApiException(0): Network error: ClientException: Failed to fetch, uri=/api/v1/ideas/f588be63-71bf-442f-8ba1-6a75e335a9ba                           |
 | BUG.070  |                    | HOLD<br>On the Admin Panel, update the System settings tile to read "System Settings Platform, location, build location" (old BUG.001 was reused for a different fix)                                                                                       |
+| REQ.040  |                    | On Build tab, add "Copy logs" and "Clear logs" Issue: #56 |
+| BUG.072  |                    | The Diagnose Failures (or similar) button is missing from the Build tab (for when the application fails to start) Issue: #55 |
+| BUG.073  |                    | REQ.032 added a message for "Run full pipeline" status - but it disappears after a few seconds so the user still can't see the status (and could click the "Run full pipeline" again) Issue: #57 |
+| BUG.074  |                    | After kicking off "Run full pipeline" for IDEA-6031, the Admin page is giving "Failed to load: ApiException(200): Unexpected response (200)" Issue: #54 |
 
 ---
 
@@ -149,6 +153,11 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **BUG.068** — The Ideas list uses a backend-computed `analysis_count`, matching the detail view's Analysis tabs instead of counting Brief, Design and Build. *(v0.109.3)*
 - **BUG.069** — Debugging a failed job (Design Doc on IDEA-9263) gave the following error message<br><br>Failed to load: ApiException(0): Network error: ClientException: Failed to fetch, uri=/api/v1/ideas/f588be63-71bf-442f-8ba1-6a75e335a9ba. *(outstanding)*
 - **BUG.070** — Bookkeeping: the live Stripe roadmap item is now RM-051, avoiding a clash with the shipped Guides request, and the old System settings tile wording request is recorded as BUG.070. *(v0.101.0)*
+- **BUG.071** — Diagnose Failures now returns a safe diagnosis on every failure path, including malformed managed-app specs; regression tests added. Issue: #53 *(v0.109.8)*
+- **BUG.072** — Build tab needs a Diagnose failures button for apps that fail to start. Issue: #55 *(outstanding)*
+- **BUG.073** — Run full pipeline status disappears after a few seconds; status must persist and prevent re-clicking. Issue: #57 *(outstanding)*
+- **BUG.074** — Admin Activity returns ApiException(200) Unexpected response after a full run. Issue: #54 *(outstanding)*
+- **REQ.040** — Build tab needs Copy logs and Clear logs buttons. Issue: #56 *(outstanding)*
 - **REQ.001** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*
 - **REQ.002** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*
 - **REQ.003** — REQ.003-REQ.008: Product Manager role, password reset, Prompts visibility gating, test user. *(v0.96.3)*
