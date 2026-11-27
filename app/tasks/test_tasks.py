@@ -34,7 +34,7 @@ def _build_env(venv_python):
         + os.pathsep
         + env.get("PATH", "")
     )
-    env.setdefault("CI", "1")
+    env["CI"] = "1"
     return env
 
 
@@ -136,7 +136,8 @@ def _free_port():
 def _http_ok(url, timeout=5):
     try:
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=timeout) as res:
+        # URL is the supervised app on localhost, never tenant-supplied.
+        with urllib.request.urlopen(req, timeout=timeout) as res:  # nosec B310
             return 200 <= res.status < 400
     except Exception:
         return False
@@ -568,7 +569,8 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                 try:
                     req = urllib.request.Request(url, method="POST", data=b"{}")
                     req.add_header("Content-Type", "application/json")
-                    with urllib.request.urlopen(req, timeout=5) as res:
+                    # URL is the supervised app on localhost.
+                    with urllib.request.urlopen(req, timeout=5) as res:  # nosec B310
                         ok = res.status < 500
                 except urllib.error.HTTPError as e:
                     ok = e.code < 500
@@ -618,7 +620,8 @@ def run_idea_tests(self, idea_id: str, selected_test_ids: list | None = None, ru
                     )
                     req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
                     try:
-                        with urllib.request.urlopen(req, timeout=10) as res:
+                        # URL is the supervised app on localhost.
+                        with urllib.request.urlopen(req, timeout=10) as res:  # nosec B310
                             ok = 200 <= res.status < 300
                     except urllib.error.HTTPError as e:
                         ok = e.code < 500

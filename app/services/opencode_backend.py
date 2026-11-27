@@ -185,7 +185,8 @@ def _run_dir(workspace: str, attach_url: str = "") -> Iterator[tuple[str, str | 
         # "Location not found". File-context actions must attach files via
         # --file instead of relying on cwd; text actions (PRD, design,
         # analysis) work fine from /tmp.
-        yield "/tmp", None
+        # /tmp exists on both worker and attached server.
+        yield "/tmp", None  # nosec B108
         return
     tmp = tempfile.mkdtemp(prefix="brainstormer-opencode-")
     try:

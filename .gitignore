@@ -54,3 +54,6 @@ backups/
 
 # Build workspaces (created under the repo by target registration)
 projects/
+
+# Local TLS material — generate with scripts/gen_certs.sh, never commit
+certs/

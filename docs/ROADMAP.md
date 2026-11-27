@@ -20,7 +20,7 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | --- | --- | --- | --- |
 | RM-001 | blocked | **Device CI maiden run (Chrome)** | Workflow now builds with `./scripts/build_web.sh`; a confirmed green GitHub Actions run is still required. |
 | RM-002 | in-progress | **Coverage ratchet to 85%** | Gate restored to 75% with tests for release and supervision wrappers; the ratchet to 85% remains. |
-| RM-003 | blocked | **GitHub flow CI coverage** | Mocked push-flow tests always run; the optional `GITHUB_TEST_PAT` secret enables the CI-secret leg. Configure the repository secret to unblock. |
+| RM-003 | blocked | **GitHub flow CI coverage** | Mocked push-flow tests always run; the optional Actions secret `CI_TEST_PAT` (exposed to tests as `GITHUB_TEST_PAT`) enables the CI-secret leg. The secret is now configured; live GitHub-flow coverage still needs test work. |
 | RM-005 | planned | **Housekeeping: untracked/stale artefacts** | Partly done in v0.99.2 (v0.26.9 doc archived); duplicate `Guides/` and `guidelines/` guide files still remain. |
 
 ## R2 — User-visible bug sweep
@@ -50,6 +50,27 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | RM-013 | planned | **Remove legacy Jinja templates** | After the Flutter cutover has been monitored with no P1 regressions, delete the retired Jinja templates/routes and related assets to end dual maintenance.                                                                        |
 | RM-051 | planned | **Live Stripe billing loop**      | Operational setup: configure real Stripe plans mapped to entitlement keys and verify the test/staging grant → gate → revoke loop. Primarily admin/configuration work; track any small code fixes discovered as separate RM items. |
 
+## R5 — Agentic-ready code (OpenCode + Ollama)
+
+Applies to two targets: apps **generated** by brainstormer, and the brainstormer repo itself. See *Agentic-readiness design notes* below for the principles these items implement.
+
+| ID | Status | Item | Notes / acceptance |
+| --- | --- | --- | --- |
+| RM-052 | planned | **Typed design contract for codegen** | `DesignDocOutput` is currently all plain strings, so the BUILD_CODE turn must hold unstructured prose in an ~8k-char context. Add typed `screens`, `entities`, `endpoints` (and keep the existing string fields for stored manifests), update `design_doc.txt` and `build_code.txt` to consume them. Acceptance: existing manifests still validate; schema tests cover both shapes. |
+| RM-053 | planned | **Deterministic build manifest lint** | Before confirm, reject manifests with unsafe/absolute paths, per-file line count over ~300, TODO/placeholder stubs, or missing runbook. Follow the `scripts/check_no_external_calls.py` pattern; give actionable errors. Model-described checks (`BuildTest`) are not a gate. |
+| RM-054 | planned | **Server-authored `AGENTS.md` in generated builds** | Emit a concise AGENTS.md (stack, layout, naming, test/run commands) into the manifest from server-side code, never model prose. Include it in incremental "EXISTING PROJECT FILES" builds so later agentic fixes stay within contract. |
+| RM-055 | planned | **Vertical BUILD_CODE checkpoints** | Replace the single 25-file/60k-char turn with staged slices — schema + data + happy-path test, then UI/routes, then polish — reusing the parent/child idea flow. Keep a single-shot path for small builds. Acceptance: each checkpoint verifies before the next starts. |
+| RM-056 | planned | **Local context / VRAM tuning** | `_generation_options` sets temperature/top_p/repeat_penalty/num_predict only. Make `num_ctx` configurable per provider/stage, forward it through Ollama options and OpenCode, and document context-versus-VRAM trade-offs. No silent huge-context runs on small models. |
+| RM-057 | planned | **Documented OpenCode + GitHub workflow for brainstormer** | Record: read-only planning → fresh session per task → short-lived branch or worktree → thin end-to-end slice → fast checks → atomic semantic commit at each verified checkpoint → PR → squash merge. Project `AGENTS.md` "no pushes to `main`" overrides the global default; say so explicitly. Keep root `AGENTS.md` concise; put detail in a dedicated doc rather than inflating agent context. |
+| RM-058 | planned | **Decompose oversized brainstormer modules** | `ideas.py` (2,311), `instances.py` (1,698), `ollama_tasks.py` (1,546), `build_runtime.py` (1,396). Extract cohesive helpers incrementally, target ~150–300 lines per module, URLs and behaviour unchanged. Keep the layer-based layout; do not restructure to feature-first (see `Guide_ProjectOverview.md`). |
+| RM-059 | planned | **API boundary schemas** | Add Pydantic request/response schemas for key endpoints and extend `scripts/check_api_contract.py`. Preserve the `{success, data}` envelope; never mutate JSON columns in place. |
+| RM-060 | planned | **Guide deduplication** | Follow up on RM-005: `Guides/` and `guidelines/` overlap. Keep one source of truth so agents and humans do not read conflicting instructions. |
+| RM-061 | planned | **Fast lint/typecheck feedback in CI** | `guardrails.yml` runs pytest, guardrail scripts and UI gates, but not black/isort/mypy. Add quick format/type checks so agentic edits fail fast before the slow suite. Complements RM-002. |
+| RM-062 | planned | **Protect `main`** | Enable branch protection on GitHub: require a PR before merge and require the `guardrails` status checks to pass; no direct pushes. Both workflows already trigger on `pull_request` and all branch pushes, so enforcement is the only missing piece. Needs repo admin access. |
+| RM-063 | planned | **Worktree isolation for agent sessions** | Document `git worktree add ../brainstormer-<RM-id> -b feat/RM-052 main`, moving the OpenCode session into that directory with `session_move`, testing there, and removing the worktree after merge. Keeps the primary checkout, dev servers, DB and venv untouched; avoids the broken `git stash`. |
+| RM-064 | planned | **Issue-driven slices and small PRs** | One GitHub issue per RM item with acceptance criteria; reference the issue in the Stage 1 plan prompt and close it with `Closes #N` in the PR. Keep diffs under ~400–500 lines, squash-merge, delete the branch, and tag `vX.Y.Z-stable` before risky refactors or dependency upgrades. |
+| RM-068 | planned | **Restore a working dependency audit** | `safety check` is deprecated, crashes on a clean runner (`httpx.Timeout` TypeError with httpx 0.28.1) and reports 46 known vulnerabilities locally. Triage and upgrade affected dependencies, choose a maintained audit tool, then restore it as a required CI check. Removed from the gate in v0.101.1 so bandit and the guardrail scripts can block merges. |
+
 ## Release Unassigned — no phase
 
 | ID       | Item               | Notes / acceptance                                                                                                                                                                                                                                          |
@@ -58,9 +79,26 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | RM050    | Updated README     | HOLD                                                                                                                                                                                                                                                        |
 | BUG.010  |                    | HOLD<br>If AI Provider Spend tab is different from AI Providers / Configure / Monthly budgets, then remove the duplication                                                                                                                                  |
 | BUG.069  |                    | Debugging a failed job (Design Doc on IDEA-9263) gave the following error message<br><br>Failed to load: ApiException(0): Network error: ClientException: Failed to fetch, uri=/api/v1/ideas/f588be63-71bf-442f-8ba1-6a75e335a9ba                           |
-| BUG.070  |                    | HOLD<br>On the Admin Panel, update the System settings tile to read "System Settings Platform, location, build location" (old BUG.001 was reused for a different fix)                                                                                    |
+| BUG.070  |                    | HOLD<br>On the Admin Panel, update the System settings tile to read "System Settings Platform, location, build location" (old BUG.001 was reused for a different fix)                                                                                       |
 
 ---
+
+## Agentic-readiness design notes
+
+Guidance applied to both generated apps and brainstormer itself. These are standing principles, not work items; the work is tracked as RM-052–RM-068.
+
+- **Small, single-purpose files** — roughly 150–300 lines where practical, with clear entry and exit points.
+- **Organise by feature/domain slice** for generated apps; keep brainstormer's existing layer layout (see RM-058).
+- **Typed contracts at boundaries** — schemas for LLM output, API payloads, DB records and UI props; derived run instructions, never model prose.
+- **Pure logic separate from side effects** — network, file I/O, DB and global state stay at the edges.
+- **Fast automated checks** — lint, typecheck, unit tests, manifest lint; quick feedback lets the model self-correct.
+- **Concise `AGENTS.md`** in both targets; no repetition of conventions in every prompt.
+- **Plan separately from implementation** — read-only planning first, fresh sessions per task, small commits on a branch.
+- **Right-size context** — match context window and model to hardware; scope prompts to one slice, name target files, state inputs/outputs/invariants, anchor on an existing pattern, and require a plan before multi-file edits.
+- **`main` is an always-working sanctuary** — no direct commits or pushes; every change arrives through a PR with passing checks.
+- **One slice = one branch** — short-lived `feat/`, `fix/` or `agent/` branches, atomic commits at verified checkpoints, squash merge on green CI.
+- **Isolate agent work with worktrees** — one directory per task, primary checkout stays stable for dev servers, DB and venv.
+- **Drive sessions from GitHub Issues** — acceptance criteria in the issue, `Closes #N` in the PR, small diffs, stable tags before risky work.
 
 ## Decisions
 
@@ -74,3 +112,6 @@ Standing decisions that constrain delivery (do not relitigate without cause). Hi
 - **D-06 Backups:** backup before upgrades and prove by restore; no silent auto-pruning without an explicit, tested retention policy.
 - **D-07 UI strategy:** retire legacy Jinja once Flutter parity is proven; avoid long-lived dual maintenance.
 - **D-08 Integrations:** GitHub uses a per-instance PAT with direct push; Slack messaging is two-way.
+- **D-09 Agentic builds:** generated apps ship a server-authored `AGENTS.md`, pass manifest lint, and derive run instructions in code; model prose never defines how to run a build.
+- **D-10 Refactor strategy:** keep brainstormer's layer-based Flask layout; decompose oversized modules incrementally, never reorganise into feature folders.
+- **D-11 GitHub flow:** `main` is protected and PR-only; work happens on short-lived issue-scoped branches in worktrees and lands via squash merge. The project Git rules override the global agent defaults.

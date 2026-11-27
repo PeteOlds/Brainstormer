@@ -89,7 +89,8 @@ Enum values (`ideastatus`, `actiontype`) need `ALTER TYPE ... ADD VALUE` via psq
 
 ## Git
 
-- No pushes to `main`.
+- `main` is protected: no direct commits or pushes. These project rules override the global agent defaults.
+- Work on short-lived, issue-scoped branches (`feat/`, `fix/`, `agent/`) in a `git worktree`; one slice per branch, atomic commits at verified checkpoints, squash merge via PR. Tag a stable point before risky refactors.
 - Semantic commit prefixes.
 - Commit code, tests, migrations, `VERSION`, and release records: include `ReleaseNotes.md` (and `docs/ROADMAP.md` when outstanding work changes) in the release commit. Keep `CHANGELOG.md` working-tree only unless a release explicitly requires it. Never commit `.env`, secrets, or private keys (e.g. `certs/`).
 - Bump `VERSION` for every build: patch, minor, or major.

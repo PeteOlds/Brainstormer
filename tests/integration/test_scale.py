@@ -645,7 +645,9 @@ class TestBulkRunAction:
         assert extra["target_id"] == str(tid)
         assert extra["target_name"] == "repo"
 
-    def test_bulk_build_skips_when_target_ambiguous(self, admin_client, app):
+    def test_bulk_build_skips_when_target_ambiguous(self, admin_client, app, monkeypatch):
+        # Do not let ambient build roots auto-create a target in CI.
+        monkeypatch.setitem(app.config, "OPENCODE_BUILD_ROOTS", "")
         from unittest.mock import patch as _patch
 
         from app.models import Instance, InstanceBuildTarget
