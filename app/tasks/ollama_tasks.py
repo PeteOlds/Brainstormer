@@ -2,6 +2,7 @@ import json
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import structlog
 from celery.exceptions import Retry, SoftTimeLimitExceeded
@@ -46,6 +47,37 @@ SECONDARY_TIME_LIMIT = int(os.environ.get("SECONDARY_TIME_LIMIT", "1860"))
 
 class _AbortAction(Exception):
     """Run already marked failed inside; unwind without Celery retry."""
+
+
+# BUILD_CODE can be delivered as vertical checkpoints. Each run still
+# produces a complete manifest; the instruction narrows what the model
+# should implement *now*, and "EXISTING PROJECT FILES" carries prior work.
+BUILD_STAGE_INSTRUCTIONS = {
+    1: (
+        "CHECKPOINT 1 of 3 — data and happy path. Implement the schema/data "
+        "layer, core service logic and one end-to-end happy-path check. Do "
+        "not spend effort on visual polish; keep the file list minimal."
+    ),
+    2: (
+        "CHECKPOINT 2 of 3 — screens and routes. Keep every existing route "
+        "and behaviour intact; add the screens/endpoints the design calls "
+        "for and wire them to the data layer built earlier."
+    ),
+    3: (
+        "CHECKPOINT 3 of 3 — hardening. Preserve the existing app and add "
+        "edge cases, empty/error states and the remaining checks. Return "
+        "only the files you add or change, with complete contents."
+    ),
+}
+
+
+def build_stage_instruction(stage: Any) -> str:
+    """Instruction text for a checkpoint number (1–3, default 1)."""
+    try:
+        value = int(stage)
+    except (TypeError, ValueError):
+        value = 1
+    return BUILD_STAGE_INSTRUCTIONS.get(value, BUILD_STAGE_INSTRUCTIONS[1])
 
 
 def _generate_reference_code() -> str:
@@ -1257,6 +1289,11 @@ def run_secondary_action(
         user_prompt = prompt_template.render(
             ORIGINAL_IDEA_CONTENT=idea.raw_content,
             SUPPORTING_MATERIAL=supporting_material,
+            BUILD_STAGE_INSTRUCTION=(
+                build_stage_instruction((extra_context or {}).get("build_stage"))
+                if action_type == "BUILD_CODE"
+                else ""
+            ),
         )
         # Rerun answers (PRD_DOC open questions): appended verbatim so the
         # model regenerates with the human's input. Ignored if empty.
@@ -1397,6 +1434,12 @@ def run_secondary_action(
             )
 
             draft_files = [f.model_dump() for f in validated.files]
+            try:
+                validated.build_stage = int(
+                    (extra_context or {}).get("build_stage") or 1
+                )
+            except (TypeError, ValueError):
+                validated.build_stage = 1
             validated.files = [
                 f for f in validated.files if f.path != "AGENTS.md"
             ] + [

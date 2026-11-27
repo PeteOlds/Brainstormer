@@ -10,6 +10,10 @@ ${SUPPORTING_MATERIAL}
 If a "### Design contract" section is present, its named screens, entities and endpoints are the authoritative build contract. Implement those names and shapes exactly; treat any prose elsewhere as explanatory only.
 
 ---
+### CURRENT CHECKPOINT:
+${BUILD_STAGE_INSTRUCTION}
+
+---
 ### INSTRUCTIONS:
 1. Implement exactly what the Design Document specifies: architecture, screens/components, data model, API contracts. Do not invent features the design does not describe; if the design is missing something essential, implement the smallest reasonable choice and say so in the summary.
 2. Keep it small and runnable: prefer a minimal working slice over scaffolding sprawl. Favour plain, dependency-light code in the stack the design names.

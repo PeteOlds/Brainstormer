@@ -1349,6 +1349,7 @@ def run_action(user, idea_id):
         "guidelines",
         "answers",
         "confirm_build",
+        "build_stage",
     ):
         if key in data and key not in extra:
             extra[key] = data[key]
@@ -1386,6 +1387,15 @@ def run_action(user, idea_id):
                 "A Build needs a current Design doc first. Run Design on this idea.",
                 status_code=400,
             )
+
+    if action_type == "BUILD_CODE":
+        try:
+            build_stage = int(extra.get("build_stage") or 1)
+        except (TypeError, ValueError):
+            return api_error("build_stage must be 1, 2 or 3.", status_code=400)
+        if build_stage not in (1, 2, 3):
+            return api_error("build_stage must be 1, 2 or 3.", status_code=400)
+        extra["build_stage"] = build_stage
 
     task_id, run_id, error = _enqueue_action(idea, action_type, extra)
     if error:

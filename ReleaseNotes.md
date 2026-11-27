@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.104.0 — 2026-11-27
+
+### Features
+- RM-055: BUILD_CODE runs now have three selectable vertical checkpoints (data layer and happy path → screens and routes → hardening). Each checkpoint narrows the prompt, records its stage in the preview, and extends the existing repo snapshot rather than rewriting it.
+
+---
+
 ## v0.103.1 — 2026-11-27
 
 ### Features
