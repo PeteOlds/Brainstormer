@@ -160,7 +160,10 @@ class TestBuildGates:
         assert res.status_code == 400
         assert "Design" in res.get_json()["message"]
 
-    def test_build_requires_target(self, app, client):
+    def test_build_requires_target(self, app, client, monkeypatch):
+        # Ambient build roots differ between CI and local checkouts; force
+        # none so this gate test does not auto-create a target repo.
+        monkeypatch.setitem(app.config, "OPENCODE_BUILD_ROOTS", "")
         with app.app_context():
             inst = make_instance(82, "BG3")
             idea = seed_idea(db, inst.id, email="build3@t.test")

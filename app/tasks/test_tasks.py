@@ -34,7 +34,7 @@ def _build_env(venv_python):
         + os.pathsep
         + env.get("PATH", "")
     )
-    env.setdefault("CI", "1")
+    env["CI"] = "1"
     return env
 
 
