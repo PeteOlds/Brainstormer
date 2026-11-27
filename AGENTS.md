@@ -94,6 +94,7 @@ Enum values (`ideastatus`, `actiontype`) need `ALTER TYPE ... ADD VALUE` via psq
 - Semantic commit prefixes.
 - Commit code, tests, migrations, `VERSION`, and release records: include `ReleaseNotes.md` (and `docs/ROADMAP.md` when outstanding work changes) in the release commit. Keep `CHANGELOG.md` working-tree only unless a release explicitly requires it. Never commit `.env`, secrets, or private keys (e.g. `certs/`).
 - Bump `VERSION` for every build: patch, minor, or major.
+- Full session/branch/PR workflow: `docs/opencode-workflow.md`.
 
 ## Verification
 

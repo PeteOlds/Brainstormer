@@ -13,6 +13,16 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.101.2 — 2026-11-27
+
+### Features
+- RM-057, RM-063: added `docs/opencode-workflow.md` covering read-only planning, worktree isolation, checkpoint commits, fast checks, PR review, squash merge and cleanup; linked from `AGENTS.md`.
+- RM-064: one GitHub issue per outstanding R5 item, linked from its roadmap row, plus a PR template that requires `Closes #N`, scope checks, verification commands and release bookkeeping.
+- RM-062: `main` is now protected — PRs required, with `guardrails` and `drill` as required status checks.
+- Added an ID index to `docs/ROADMAP.md` mapping every shipped and outstanding abbreviation to its full description, plus an additional-comments section recording workflow decisions.
+
+---
+
 ## v0.101.1 — 2026-11-26
 
 ### Bug fixes
