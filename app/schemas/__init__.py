@@ -1,3 +1,4 @@
+from .api_schemas import ActionRequest, IdeaCreateRequest
 from .ollama_schemas import (
     RefineOutput,
     Competitor,
@@ -8,6 +9,8 @@ from .ollama_schemas import (
 )
 
 __all__ = [
+    "ActionRequest",
+    "IdeaCreateRequest",
     "RefineOutput",
     "Competitor",
     "CompetitorsOutput",

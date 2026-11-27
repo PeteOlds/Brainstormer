@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.105.0 — 2026-11-27
+
+### Features
+- RM-059: added Pydantic request contracts (`IdeaCreateRequest`, `ActionRequest`) at the idea-creation and action-run boundaries, with early 400s for malformed payloads. `check_api_contract.py` now verifies both request schemas as well as response keys.
+
+---
+
 ## v0.104.1 — 2026-11-27
 
 ### Features
