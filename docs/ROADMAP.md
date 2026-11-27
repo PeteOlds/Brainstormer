@@ -222,6 +222,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **RM-069** — `fast-checks` is required: black/isort clean across `app` and `tests`, and mypy gated by a reviewed baseline that fails only on new errors. *(v0.107.0)*
 - **RM-070** — Upgraded the 12 flagged packages plus boto3/botocore; `pip-audit` now reports zero advisories and the reviewed baseline is empty. *(v0.106.0)*
 - **RM-071** — Automatic post-build release review with structured suggestions, shown in the Build tab; analysis only. *(v0.109.0)*
+- **RM-072** — Required CI guardrail ensuring Flutter's `kAppVersion` matches the backend `VERSION` file. *(v0.109.2)*
 - **RM042** — RM042: full run from Spark to Build preview (instance admin only). *(v0.96.7)*
 - **RM050** — HOLD. *(outstanding)*
 

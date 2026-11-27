@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.2 — 2026-11-27
+
+### Bug fixes
+- RM-072: added a required CI guardrail that fails when `kAppVersion` in `flutter/lib/core/theme/tokens.dart` differs from the backend `VERSION` file, so a stale footer build number can no longer ship.
+
+---
+
 ## v0.109.1 — 2026-11-27
 
 ### Bug fixes
