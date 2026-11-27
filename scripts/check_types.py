@@ -50,9 +50,9 @@ def main() -> int:
             continue
         if entry.get("severity") != "error":
             continue
-        signature = "|".join(
-            str(entry.get(key) or "") for key in ("file", "code", "message")
-        )
+        # File + code is stable across mypy/SQLAlchemy versions; full messages
+        # vary between environments and made the baseline too brittle.
+        signature = "|".join(str(entry.get(key) or "") for key in ("file", "code"))
         current[signature] += 1
 
     baseline = load_baseline()

@@ -30,7 +30,7 @@ def _setup(tmp_path, monkeypatch, entries, baseline):
 
 
 def test_known_errors_pass(tmp_path, monkeypatch, capsys):
-    sig = "app/a.py|no-untyped-def|missing annotation"
+    sig = "app/a.py|no-untyped-def"
     _setup(
         tmp_path,
         monkeypatch,
@@ -42,7 +42,7 @@ def test_known_errors_pass(tmp_path, monkeypatch, capsys):
 
 
 def test_new_error_fails(tmp_path, monkeypatch, capsys):
-    sig = "app/a.py|no-untyped-def|missing annotation"
+    sig = "app/a.py|no-untyped-def"
     _setup(
         tmp_path,
         monkeypatch,
