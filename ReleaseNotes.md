@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.105.4 — 2026-11-27
+
+### Bug fixes
+- Bookkeeping: linked roadmap items RM-069 and RM-070 to their GitHub issues (#28 and #29) so every outstanding item is issue-driven.
+
+---
+
 ## v0.105.3 — 2026-11-27
 
 ### Bug fixes
