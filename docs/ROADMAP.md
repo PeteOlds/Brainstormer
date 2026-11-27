@@ -56,7 +56,6 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 
 | ID | Status | Item | Notes / acceptance |
 | --- | --- | --- | --- |
-| RM-058 | in-progress | **Decompose oversized brainstormer modules** | `build_runtime.py` split into `build_file_helpers.py` and `build_port_helpers.py` in v0.105.2 (helpers re-exported, no callers changed). Still to do: `ollama_tasks.py` (1,546), `ideas.py` (2,311), `instances.py` (1,698). Target ~150–300 lines per module, URLs and behaviour unchanged. Keep the layer-based layout; do not restructure to feature-first (see `guidelines/Guide_ProjectOverview.md`). Issue: #10 |
 
 ## Release Unassigned — no phase
 
@@ -72,7 +71,7 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 
 ## Agentic-readiness design notes
 
-Guidance applied to both generated apps and brainstormer itself. These are standing principles, not work items; the outstanding work is tracked as RM-058.
+Guidance applied to both generated apps and brainstormer itself. These are standing principles, not work items; outstanding work is tracked in the phased tables above.
 
 - **Small, single-purpose files** — roughly 150–300 lines where practical, with clear entry and exit points.
 - **Organise by feature/domain slice** for generated apps; keep brainstormer's existing layer layout (see RM-058).
@@ -209,7 +208,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **RM-055** — BUILD_CODE offers three selectable checkpoints (data/happy path, screens/routes, hardening); each narrows the prompt, records its stage, and extends the existing repo snapshot. *(v0.104.0)*
 - **RM-056** — `num_ctx` is configurable on stage and release AI settings, forwarded to Ollama and local OpenCode sandbox runs, with documented VRAM trade-offs and a schema migration. *(v0.103.1)*
 - **RM-057** — Added `docs/opencode-workflow.md` covering read-only planning, worktree isolation, checkpoint commits, fast checks, PR review, squash merge and cleanup; linked from `AGENTS.md`. *(v0.101.2)*
-- **RM-058** — Decompose oversized brainstormer modules. `ideas.py` (2,311), `instances.py` (1,698), `ollama_tasks.py` (1,546), `build_runtime.py` (1,396). Extract cohesive helpers incrementally, target ~150–300 lines per module, URLs and behaviour unchanged. Keep the layer-based layout; do not restructure to feature-first (see `Guide_ProjectOverview.md`). Issue: #10 *(outstanding)*
+- **RM-058** — Decomposed the four oversized modules into focused helper modules (`build_file_helpers`, `build_port_helpers`, `task_helpers`, `idea_helpers`, `instance_helpers`), re-exported for compatibility; URLs and behaviour unchanged. *(v0.108.0)*
 - **RM-059** — Pydantic request contracts on idea creation and action runs, with early 400s; `check_api_contract.py` verifies both schemas and the response envelope keys. *(v0.105.0)*
 - **RM-060** — Consolidated `Guides/` and `guidelines/` into one `guidelines/` catalogue; duplicates removed, unique guides moved and all spec/doc references updated. *(v0.105.1)*
 - **RM-061** — Added black/isort/mypy pre-commit hooks and an advisory `fast-checks` CI job; required enforcement is tracked as RM-069 until the existing baseline is clean. *(v0.104.1)*

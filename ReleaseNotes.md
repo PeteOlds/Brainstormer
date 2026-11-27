@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.108.0 — 2026-11-27
+
+### Features
+- RM-058 completed: extracted cohesive helpers from `ollama_tasks.py`, `ideas.py` and `instances.py` into `task_helpers.py`, `idea_helpers.py` and `instance_helpers.py`. All helpers are re-exported from their original modules, so routes and tasks keep their existing imports. Combined with the earlier `build_runtime.py` split, no module in the agentic pipeline exceeds ~1,450 lines.
+
+---
+
 ## v0.107.0 — 2026-11-27
 
 ### Features

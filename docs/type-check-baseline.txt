@@ -1,6 +1,6 @@
 # Reviewed mypy errors accepted for this release.
-# Generated 2026-11-27 after black/isort baseline formatting.
 # Format: count<TAB>file|code. New counts fail CI.
+# Refreshed after the RM-058 helper moves; total error count unchanged (280).
 1	app/__init__.py|method-assign
 1	app/__init__.py|no-untyped-def
 12	app/cli.py|no-untyped-def
@@ -51,9 +51,9 @@
 2	app/routes/ideas.py|arg-type
 1	app/routes/ideas.py|attr-defined
 1	app/routes/ideas.py|name-defined
-2	app/routes/ideas.py|union-attr
+1	app/routes/ideas.py|union-attr
 1	app/routes/ideas.py|var-annotated
-4	app/routes/instances.py|arg-type
+2	app/routes/instances.py|arg-type
 10	app/routes/instances.py|assignment
 3	app/routes/instances.py|attr-defined
 1	app/routes/instances.py|unused-coroutine
@@ -86,6 +86,8 @@
 1	app/services/embedding_service.py|name-defined
 2	app/services/embedding_service.py|no-any-return
 4	app/services/embedding_service.py|no-untyped-def
+1	app/services/idea_helpers.py|union-attr
+2	app/services/instance_helpers.py|arg-type
 1	app/services/llm_backends.py|call-overload
 1	app/services/message_slack.py|list-item
 5	app/services/ollama_client.py|no-any-return
@@ -100,13 +102,14 @@
 1	app/services/runner.py|name-defined
 1	app/services/runner.py|union-attr
 1	app/services/slack_service.py|call-arg
+2	app/services/task_helpers.py|no-untyped-def
 2	app/tasks/github_tasks.py|no-untyped-def
 3	app/tasks/github_tasks.py|union-attr
 3	app/tasks/maintenance_tasks.py|index
 5	app/tasks/maintenance_tasks.py|no-untyped-def
 1	app/tasks/ollama_tasks.py|arg-type
 2	app/tasks/ollama_tasks.py|assignment
-10	app/tasks/ollama_tasks.py|no-untyped-def
+8	app/tasks/ollama_tasks.py|no-untyped-def
 1	app/tasks/ollama_tasks.py|union-attr
 2	app/tasks/ollama_tasks.py|unused-coroutine
 5	app/tasks/supervision_tasks.py|no-untyped-def
