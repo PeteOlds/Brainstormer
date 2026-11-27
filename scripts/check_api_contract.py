@@ -13,6 +13,7 @@ from app import create_app
 from app.config import TestingConfig
 from app.extensions import db
 from app.models import Idea
+from app.schemas.api_schemas import ActionRequest, IdeaCreateRequest
 
 app = create_app(TestingConfig, init_celery_app=False)
 with app.app_context():
@@ -43,4 +44,12 @@ if missing:
         print("  -", k)
     print("API keys:", sorted(sample.keys()))
     sys.exit(1)
-print("API contract OK:", len(expected), "keys checked")
+# Request contracts for the two highest-traffic POST endpoints.
+IdeaCreateRequest.model_validate({"prompt_title": "t", "raw_content": "c"})
+ActionRequest.model_validate({"action_type": "BUILD_CODE", "build_stage": 2})
+
+print(
+    "API contract OK:",
+    len(expected),
+    "response keys and 2 request schemas checked",
+)

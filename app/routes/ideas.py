@@ -273,6 +273,15 @@ def create_idea(user):
 
     data = request.get_json() or {}
 
+    from pydantic import ValidationError
+
+    from app.schemas.api_schemas import IdeaCreateRequest
+
+    try:
+        IdeaCreateRequest.model_validate(data)
+    except ValidationError as exc:
+        return api_error("Invalid idea payload.", status_code=400, errors=exc.errors())
+
     prompt_title = (data.get("prompt_title") or "").strip()
     raw_content = (data.get("raw_content") or "").strip()
     structured_content = data.get("structured_content")
@@ -1272,6 +1281,14 @@ def run_action(user, idea_id):
             "Unknown action type.",
             status_code=400,
         )
+    from pydantic import ValidationError
+
+    from app.schemas.api_schemas import ActionRequest
+
+    try:
+        ActionRequest.model_validate(data)
+    except ValidationError as exc:
+        return api_error("Invalid action payload.", status_code=400, errors=exc.errors())
 
     if action_type == "PRD_DOC":
         from app.models import IdeaStatus
