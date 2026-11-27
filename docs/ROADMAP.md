@@ -59,7 +59,7 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 | RM-058 | planned | **Decompose oversized brainstormer modules** | `ideas.py` (2,311), `instances.py` (1,698), `ollama_tasks.py` (1,546), `build_runtime.py` (1,396). Extract cohesive helpers incrementally, target ~150–300 lines per module, URLs and behaviour unchanged. Keep the layer-based layout; do not restructure to feature-first (see `Guide_ProjectOverview.md`). Issue: #10 |
 | RM-059 | planned | **API boundary schemas** | Add Pydantic request/response schemas for key endpoints and extend `scripts/check_api_contract.py`. Preserve the `{success, data}` envelope; never mutate JSON columns in place. Issue: #11 |
 | RM-060 | planned | **Guide deduplication** | Follow up on RM-005: `Guides/` and `guidelines/` overlap. Keep one source of truth so agents and humans do not read conflicting instructions. Issue: #12 |
-| RM-061 | planned | **Fast lint/typecheck feedback in CI** | `guardrails.yml` runs pytest, guardrail scripts and UI gates, but not black/isort/mypy. Add quick format/type checks so agentic edits fail fast before the slow suite. Complements RM-002. Issue: #13 |
+| RM-069 | planned | **Make fast checks required** | `fast-checks.yml` is advisory until the existing baseline is clean: black would reformat 85 files, isort reports many files, and mypy reports ~280 errors. Fix the baseline in small slices, then remove `continue-on-error` and add `fast-checks` to branch protection. |
 | RM-068 | planned | **Restore a working dependency audit** | `safety check` is deprecated, crashes on a clean runner (`httpx.Timeout` TypeError with httpx 0.28.1) and reports 46 known vulnerabilities locally. Triage and upgrade affected dependencies, choose a maintained audit tool, then restore it as a required CI check. Removed from the gate in v0.101.1 so bandit and the guardrail scripts can block merges. Issue: #14 |
 
 ## Release Unassigned — no phase
@@ -76,7 +76,7 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 
 ## Agentic-readiness design notes
 
-Guidance applied to both generated apps and brainstormer itself. These are standing principles, not work items; the outstanding work is tracked as RM-058–RM-068.
+Guidance applied to both generated apps and brainstormer itself. These are standing principles, not work items; the outstanding work is tracked as RM-058–RM-069.
 
 - **Small, single-purpose files** — roughly 150–300 lines where practical, with clear entry and exit points.
 - **Organise by feature/domain slice** for generated apps; keep brainstormer's existing layer layout (see RM-058).
@@ -216,7 +216,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **RM-058** — Decompose oversized brainstormer modules. `ideas.py` (2,311), `instances.py` (1,698), `ollama_tasks.py` (1,546), `build_runtime.py` (1,396). Extract cohesive helpers incrementally, target ~150–300 lines per module, URLs and behaviour unchanged. Keep the layer-based layout; do not restructure to feature-first (see `Guide_ProjectOverview.md`). Issue: #10 *(outstanding)*
 - **RM-059** — API boundary schemas. Add Pydantic request/response schemas for key endpoints and extend `scripts/check_api_contract.py`. Preserve the `{success, data}` envelope; never mutate JSON columns in place. Issue: #11 *(outstanding)*
 - **RM-060** — Guide deduplication. Follow up on RM-005: `Guides/` and `guidelines/` overlap. Keep one source of truth so agents and humans do not read conflicting instructions. Issue: #12 *(outstanding)*
-- **RM-061** — Fast lint/typecheck feedback in CI. `guardrails.yml` runs pytest, guardrail scripts and UI gates, but not black/isort/mypy. Add quick format/type checks so agentic edits fail fast before the slow suite. Complements RM-002. Issue: #13 *(outstanding)*
+- **RM-061** — Added black/isort/mypy pre-commit hooks and an advisory `fast-checks` CI job; required enforcement is tracked as RM-069 until the existing baseline is clean. *(v0.104.1)*
 - **RM-062** — `main` is protected: PRs required, with `guardrails` and `drill` as required status checks. *(v0.101.2)*
 - **RM-063** — Documented worktree isolation and `session_move` for agent sessions; the primary checkout, dev servers, DB and venv stay untouched. *(v0.101.2)*
 - **RM-064** — One GitHub issue per outstanding R5 item, linked from its roadmap row, plus a PR template requiring `Closes #N`, scope checks, verification commands and release bookkeeping. *(v0.101.2)*

@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.104.1 — 2026-11-27
+
+### Features
+- RM-061: added black, isort and mypy pre-commit hooks for fast local feedback, plus an advisory `fast-checks` CI job covering `app` and `tests`. It is not a required check yet: the existing baseline has 85 files needing reformatting and ~280 type errors, tracked as RM-069.
+
+---
+
 ## v0.104.0 — 2026-11-27
 
 ### Features

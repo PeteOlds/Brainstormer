@@ -22,6 +22,24 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: black
+        name: format Python with black
+        entry: black
+        language: system
+        types: [python]
+
+      - id: isort
+        name: sort imports with isort
+        entry: isort
+        language: system
+        types: [python]
+
+      - id: mypy-changed
+        name: typecheck changed Python files
+        entry: mypy --ignore-missing-imports
+        language: system
+        types: [python]
+
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.4
     hooks:
