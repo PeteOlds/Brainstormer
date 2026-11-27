@@ -1257,6 +1257,18 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
                   onPressed: () => _loadLogs(instanceId, app['id'].toString()),
                   child: const Text('Refresh logs'),
                 ),
+                OutlinedButton(
+                  onPressed: () => _copyText(context, _appLogs ?? '', 'Logs'),
+                  child: const Text('Copy logs'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _clearLogs(instanceId, app['id'].toString()),
+                  child: const Text('Clear logs'),
+                ),
+                OutlinedButton(
+                  onPressed: () => _diagnoseApp(instanceId, app['id'].toString()),
+                  child: const Text('Diagnose failures'),
+                ),
               ]),
               if (_appLogs != null) ...[
                 const SizedBox(height: AppSpacing.xs),
@@ -1285,6 +1297,41 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
       if (mounted) setState(() => _appLogs = logsFromPayload(data));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+    }
+  }
+
+  Future<void> _clearLogs(String instanceId, String appId) async {
+    try {
+      final data = await ref.read(apiClientProvider).post(
+          '/api/v1/instances/$instanceId/managed-apps/$appId/logs/clear');
+      final cleared = data is Map ? data['cleared'] == true : false;
+      if (mounted) {
+        setState(() => _appLogs = cleared ? 'No output yet.' : 'No log file to clear.');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(cleared ? 'Logs cleared' : 'No log file to clear')),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  Future<void> _diagnoseApp(String instanceId, String appId) async {
+    try {
+      final data = await ref.read(apiClientProvider).post(
+          '/api/v1/instances/$instanceId/managed-apps/$appId/diagnose');
+      final diagnosis = (data is Map ? data['diagnosis'] : null)?.toString() ?? 'No diagnosis returned.';
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Startup diagnosis'),
+          content: SizedBox(width: 500, child: SelectableText(diagnosis)),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+        ),
+      );
+    } on ApiException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 

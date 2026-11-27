@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.10 — 2026-11-28
+
+### Features
+- BUG.072 (#55) / REQ.040 (#56): the Build tab now offers Diagnose failures for apps that fail to start, plus Copy logs and Clear logs. The clear endpoint truncates the log in place and is admin-only; log paths are parsed defensively.
+
+---
+
 ## v0.109.9 — 2026-11-28
 
 ### Bug fixes
