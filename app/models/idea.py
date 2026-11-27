@@ -169,6 +169,13 @@ class Idea(db.Model):
         data["created_at"] = self.created_at.isoformat() if self.created_at else None
         data["updated_at"] = self.updated_at.isoformat() if self.updated_at else None
         data["actions_run"] = [a.action_type for a in self.actions]
+        # Brief, Design, Build and full-pipeline runs have their own tabs;
+        # the Analysis count must match the Analysis chips in the UI.
+        lifecycle = {"PRD_DOC", "DESIGN_DOC", "BUILD_CODE", "FULL_PIPELINE"}
+        actions = getattr(self, "actions") or []
+        data["analysis_count"] = len(
+            {a.action_type for a in actions if a.action_type not in lifecycle}
+        )
         if user_vote is not None:
             data["user_vote"] = user_vote
         data["comments_count"] = self.comments_count

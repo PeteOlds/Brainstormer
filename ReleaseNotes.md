@@ -13,6 +13,14 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.3 — 2026-11-27
+
+### Bug fixes
+- BUG.068 (#41): the Ideas list now shows an API-provided `analysis_count`, matching the Analysis tabs on the detail view instead of counting Brief, Design and Build actions.
+- RM-005 (#46): closed housekeeping — the duplicate guide tree was already removed by RM-060 and no stale tracked artefacts remain.
+
+---
+
 ## v0.109.2 — 2026-11-27
 
 ### Bug fixes

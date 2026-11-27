@@ -37,6 +37,7 @@ mixin _$IdeaSummary {
   int? get userVote => throw _privateConstructorUsedError;
   String? get createdAt => throw _privateConstructorUsedError;
   List<String> get actionsRun => throw _privateConstructorUsedError;
+  int get analysisCount => throw _privateConstructorUsedError;
   int get pendingRuns => throw _privateConstructorUsedError;
 
   /// Serializes this IdeaSummary to a JSON map.
@@ -73,6 +74,7 @@ abstract class $IdeaSummaryCopyWith<$Res> {
     int? userVote,
     String? createdAt,
     List<String> actionsRun,
+    int analysisCount,
     int pendingRuns,
   });
 }
@@ -108,6 +110,7 @@ class _$IdeaSummaryCopyWithImpl<$Res, $Val extends IdeaSummary>
     Object? userVote = freezed,
     Object? createdAt = freezed,
     Object? actionsRun = null,
+    Object? analysisCount = null,
     Object? pendingRuns = null,
   }) {
     return _then(
@@ -176,6 +179,10 @@ class _$IdeaSummaryCopyWithImpl<$Res, $Val extends IdeaSummary>
                 ? _value.actionsRun
                 : actionsRun // ignore: cast_nullable_to_non_nullable
                       as List<String>,
+            analysisCount: null == analysisCount
+                ? _value.analysisCount
+                : analysisCount // ignore: cast_nullable_to_non_nullable
+                      as int,
             pendingRuns: null == pendingRuns
                 ? _value.pendingRuns
                 : pendingRuns // ignore: cast_nullable_to_non_nullable
@@ -212,6 +219,7 @@ abstract class _$$IdeaSummaryImplCopyWith<$Res>
     int? userVote,
     String? createdAt,
     List<String> actionsRun,
+    int analysisCount,
     int pendingRuns,
   });
 }
@@ -246,6 +254,7 @@ class __$$IdeaSummaryImplCopyWithImpl<$Res>
     Object? userVote = freezed,
     Object? createdAt = freezed,
     Object? actionsRun = null,
+    Object? analysisCount = null,
     Object? pendingRuns = null,
   }) {
     return _then(
@@ -314,6 +323,10 @@ class __$$IdeaSummaryImplCopyWithImpl<$Res>
             ? _value._actionsRun
             : actionsRun // ignore: cast_nullable_to_non_nullable
                   as List<String>,
+        analysisCount: null == analysisCount
+            ? _value.analysisCount
+            : analysisCount // ignore: cast_nullable_to_non_nullable
+                  as int,
         pendingRuns: null == pendingRuns
             ? _value.pendingRuns
             : pendingRuns // ignore: cast_nullable_to_non_nullable
@@ -343,6 +356,7 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
     this.userVote,
     this.createdAt,
     final List<String> actionsRun = const [],
+    this.analysisCount = 0,
     this.pendingRuns = 0,
   }) : _actionsRun = actionsRun;
 
@@ -394,11 +408,14 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
 
   @override
   @JsonKey()
+  final int analysisCount;
+  @override
+  @JsonKey()
   final int pendingRuns;
 
   @override
   String toString() {
-    return 'IdeaSummary(id: $id, referenceCode: $referenceCode, promptTitle: $promptTitle, summary: $summary, status: $status, promptConfigId: $promptConfigId, createdById: $createdById, instanceId: $instanceId, parentId: $parentId, commentCount: $commentCount, upvotes: $upvotes, downvotes: $downvotes, netScore: $netScore, userVote: $userVote, createdAt: $createdAt, actionsRun: $actionsRun, pendingRuns: $pendingRuns)';
+    return 'IdeaSummary(id: $id, referenceCode: $referenceCode, promptTitle: $promptTitle, summary: $summary, status: $status, promptConfigId: $promptConfigId, createdById: $createdById, instanceId: $instanceId, parentId: $parentId, commentCount: $commentCount, upvotes: $upvotes, downvotes: $downvotes, netScore: $netScore, userVote: $userVote, createdAt: $createdAt, actionsRun: $actionsRun, analysisCount: $analysisCount, pendingRuns: $pendingRuns)';
   }
 
   @override
@@ -436,6 +453,8 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
               other._actionsRun,
               _actionsRun,
             ) &&
+            (identical(other.analysisCount, analysisCount) ||
+                other.analysisCount == analysisCount) &&
             (identical(other.pendingRuns, pendingRuns) ||
                 other.pendingRuns == pendingRuns));
   }
@@ -460,6 +479,7 @@ class _$IdeaSummaryImpl implements _IdeaSummary {
     userVote,
     createdAt,
     const DeepCollectionEquality().hash(_actionsRun),
+    analysisCount,
     pendingRuns,
   );
 
@@ -495,6 +515,7 @@ abstract class _IdeaSummary implements IdeaSummary {
     final int? userVote,
     final String? createdAt,
     final List<String> actionsRun,
+    final int analysisCount,
     final int pendingRuns,
   }) = _$IdeaSummaryImpl;
 
@@ -533,6 +554,8 @@ abstract class _IdeaSummary implements IdeaSummary {
   String? get createdAt;
   @override
   List<String> get actionsRun;
+  @override
+  int get analysisCount;
   @override
   int get pendingRuns;
 

@@ -31,7 +31,7 @@ expected = {
     "id", "reference_code", "prompt_title", "summary", "status",
     "prompt_config_id", "created_by_id", "instance_id", "parent_id",
     "comments_count", "upvotes_count", "downvotes_count", "net_votes",
-    "user_vote", "created_at", "actions_run",
+    "user_vote", "created_at", "actions_run", "analysis_count",
 }
 # Optional keys that may be absent without include_content/instance scoping.
 optional = {"structured_content", "excerpt", "pending_runs", "net_score"}

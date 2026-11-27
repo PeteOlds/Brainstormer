@@ -39,6 +39,7 @@ class IdeaSummary with _$IdeaSummary {
     int? userVote,
     String? createdAt,
     @Default([]) List<String> actionsRun,
+    @Default(0) int analysisCount,
     @Default(0) int pendingRuns,
   }) = _IdeaSummary;
 
@@ -62,6 +63,7 @@ class IdeaSummary with _$IdeaSummary {
     userVote: _asInt(json['user_vote']),
     createdAt: json['created_at']?.toString(),
     actionsRun: [for (final a in _asList(json['actions_run'])) a.toString()],
+    analysisCount: _asIntOr(json['analysis_count'], 0),
     pendingRuns: _asIntOr(json['pending_runs'], 0),
   );
 

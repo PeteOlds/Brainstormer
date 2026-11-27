@@ -28,6 +28,7 @@ _$IdeaSummaryImpl _$$IdeaSummaryImplFromJson(Map<String, dynamic> json) =>
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      analysisCount: (json['analysisCount'] as num?)?.toInt() ?? 0,
       pendingRuns: (json['pendingRuns'] as num?)?.toInt() ?? 0,
     );
 
@@ -49,6 +50,7 @@ Map<String, dynamic> _$$IdeaSummaryImplToJson(_$IdeaSummaryImpl instance) =>
       'userVote': instance.userVote,
       'createdAt': instance.createdAt,
       'actionsRun': instance.actionsRun,
+      'analysisCount': instance.analysisCount,
       'pendingRuns': instance.pendingRuns,
     };
 
