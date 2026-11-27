@@ -27,9 +27,6 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | ID | Status | Item | Notes / acceptance |
 | --- | --- | --- | --- |
 | BUG.063 | planned | **Full pipeline continues past Design** | On "Run full pipeline" for IDEA-10802,the pipeline stopped at Design Issue: #42 |
-| BUG.065 | planned | **Create Idea upload button works on web** | The Create Idea / Upload .md/.txt button doesn't open an upload box Issue: #43 |
-| BUG.066 | planned | **Copy Open App URL or command** | On Build tab, Open App should allow copy to clipboard.  Note that Open App may be either a URL or a command line Issue: #44 |
-| BUG.067 | planned | **Build logs display** | On the Build tab, check that logs are working properly - they keep showing as blank Issue: #45 |
 
 ## R3 — Features
 
@@ -148,9 +145,9 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **BUG.062** — Brief documents now render as labelled sections and bullets in Flutter; raw JSON stays available via View details. *(v0.109.4)*
 - **BUG.063** — Full pipeline continues past Design. On "Run full pipeline" for IDEA-10802,the pipeline stopped at Design *(outstanding)*
 - **BUG.064** — Design documents now render as labelled sections and bullets, including typed screen/entity/endpoint specs. *(v0.109.4)*
-- **BUG.065** — Create Idea upload button works on web. The Create Idea / Upload .md/.txt button doesn't open an upload box *(outstanding)*
-- **BUG.066** — Copy Open App URL or command. On Build tab, Open App should allow copy to clipboard.  Note that Open App may be either a URL or a command line *(outstanding)*
-- **BUG.067** — Build logs display. On the Build tab, check that logs are working properly - they keep showing as blank *(outstanding)*
+- **BUG.065** — Browser-native upload fallback makes Create Idea .md/.txt upload work on Flutter web. *(v0.109.5)*
+- **BUG.066** — Build tab can copy runbook commands and the Open App URL. *(v0.109.5)*
+- **BUG.067** — Build logs read the `lines` array from the API envelope with a friendly empty state. *(v0.109.5)*
 - **BUG.068** — The Ideas list uses a backend-computed `analysis_count`, matching the detail view's Analysis tabs instead of counting Brief, Design and Build. *(v0.109.3)*
 - **BUG.069** — Debugging a failed job (Design Doc on IDEA-9263) gave the following error message<br><br>Failed to load: ApiException(0): Network error: ClientException: Failed to fetch, uri=/api/v1/ideas/f588be63-71bf-442f-8ba1-6a75e335a9ba. *(outstanding)*
 - **BUG.070** — Bookkeeping: the live Stripe roadmap item is now RM-051, avoiding a clash with the shipped Guides request, and the old System settings tile wording request is recorded as BUG.070. *(v0.101.0)*

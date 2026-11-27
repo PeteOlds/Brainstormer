@@ -1,12 +1,14 @@
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/app_shell.dart';
 import 'ideas_controller.dart';
+import 'upload_picker_stub.dart' if (dart.library.html) 'upload_picker_web.dart';
 
 /// Create a new idea manually (title + content) or by uploading a
 /// markdown/text file.  BUG.034 / BUG.035.
@@ -49,16 +51,26 @@ class _CreateIdeaPageState extends ConsumerState<CreateIdeaPage> {
   }
 
   Future<void> _uploadFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['md', 'txt'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty || result.files.first.bytes == null) {
-      return;
+    List<int>? bytes;
+    String? name;
+    if (kIsWeb) {
+      // file_picker can return null bytes on Flutter web; use the native
+      // input so the upload button actually loads the chosen file.
+      final picked = await pickTextFile();
+      bytes = picked?.bytes;
+      name = picked?.name;
+    } else {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['md', 'txt'],
+        withData: true,
+      );
+      final file = result == null || result.files.isEmpty ? null : result.files.first;
+      bytes = file?.bytes;
+      name = file?.name;
     }
-    final file = result.files.first;
-    if (file.size > 10 * 1024 * 1024) {
+    if (bytes == null) return;
+    if (bytes.length > 10 * 1024 * 1024) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('File too large (max 10 MB)')),
@@ -66,11 +78,8 @@ class _CreateIdeaPageState extends ConsumerState<CreateIdeaPage> {
       }
       return;
     }
-    final content = utf8.decode(file.bytes!);
-    _contentCtrl.text = content;
-    if (_titleCtrl.text.isEmpty) {
-      // Derive a title from the filename
-      final name = file.name;
+    _contentCtrl.text = utf8.decode(bytes);
+    if (_titleCtrl.text.isEmpty && name != null) {
       final base = name.contains('.') ? name.substring(0, name.lastIndexOf('.')) : name;
       _titleCtrl.text = base;
     }

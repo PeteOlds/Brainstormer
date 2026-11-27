@@ -13,6 +13,15 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.5 — 2026-11-27
+
+### Bug fixes
+- BUG.065 (#43): the Create Idea upload button now uses a browser-native file input on Flutter web, so .md/.txt files load reliably.
+- BUG.066 (#44): the Build tab has copy buttons for setup/run/workdir/port commands and for the Open App URL, with a dialog fallback.
+- BUG.067 (#45): build logs now read the `lines` array from the API envelope and show a friendly empty state.
+
+---
+
 ## v0.109.4 — 2026-11-27
 
 ### Bug fixes

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth_helpers.dart';
@@ -12,6 +13,7 @@ import '../../core/network/api_client.dart';
 import '../../core/pipeline/pipeline_status_provider.dart';
 import '../../core/providers.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/utils/log_parser.dart';
 import '../../core/utils/result_markdown.dart';
 import '../chat/chat_repository.dart';
 import 'idea_models.dart';
@@ -520,10 +522,12 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
           const SizedBox(height: AppSpacing.md),
           Text('How to run', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: AppSpacing.xs),
-          Text('Setup: ${(runbook['setup_argv'] as List?)?.join(' ') ?? '—'}'),
-          Text('Run: ${(runbook['run_argv'] as List?)?.join(' ') ?? '—'}'),
-          Text('Workdir: ${runbook['workdir'] ?? '—'}'),
-          Text('Port: ${runbook['port'] ?? '—'}'),
+          _copyableLine(context, 'Setup',
+              (runbook['setup_argv'] as List?)?.join(' ') ?? ''),
+          _copyableLine(context, 'Run',
+              (runbook['run_argv'] as List?)?.join(' ') ?? ''),
+          _copyableLine(context, 'Workdir', runbook['workdir']?.toString() ?? ''),
+          _copyableLine(context, 'Port', runbook['port']?.toString() ?? ''),
         ],
         const SizedBox(height: AppSpacing.md),
         _managedAppSection(context, detail),
@@ -1234,7 +1238,13 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
                       showDialog<void>(context: context, builder: (ctx) => AlertDialog(
                         title: const Text('App URL'),
                         content: SelectableText(url),
-                        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+                        actions: [
+                          TextButton(
+                            onPressed: () => _copyText(context, url, 'App URL'),
+                            child: const Text('Copy'),
+                          ),
+                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+                        ],
                       ));
                     },
                     child: const Text('Open app'),
@@ -1272,8 +1282,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   Future<void> _loadLogs(String instanceId, String appId) async {
     try {
       final data = await ref.read(apiClientProvider).get('/api/v1/instances/$instanceId/managed-apps/$appId/logs');
-      final logs = (data is Map ? (data['logs'] ?? data['data']) : data)?.toString() ?? '';
-      if (mounted) setState(() => _appLogs = logs);
+      if (mounted) setState(() => _appLogs = logsFromPayload(data));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
     }
@@ -1624,6 +1633,43 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
         actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close'))],
       ),
     );
+  }
+
+  Widget _copyableLine(BuildContext context, String label, String value) {
+    final shown = value.isEmpty ? '—' : value;
+    return Row(
+      children: [
+        Expanded(child: Text('$label: $shown')),
+        if (value.isNotEmpty)
+          IconButton(
+            tooltip: 'Copy $label',
+            icon: const Icon(Icons.copy_all, size: 16),
+            onPressed: () => _copyText(context, value, label),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _copyText(BuildContext context, String value, String label) async {
+    if (value.trim().isEmpty) return;
+    try {
+      await Clipboard.setData(ClipboardData(text: value));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$label copied')),
+        );
+      }
+    } catch (_) {
+      if (!context.mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(label),
+          content: SizedBox(width: 500, child: SelectableText(value)),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+        ),
+      );
+    }
   }
 
   Widget _commentsList() {
