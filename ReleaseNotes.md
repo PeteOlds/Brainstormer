@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.106.0 — 2026-11-27
+
+### Features
+- RM-070 / RM-068: upgraded the 12 flagged dependencies (plus boto3/botocore for litellm compatibility) and removed the now-unused `safety` requirement. `pip-audit` reports zero advisories; the reviewed baseline is empty and remains a required CI gate.
+
+---
+
 ## v0.105.4 — 2026-11-27
 
 ### Bug fixes
