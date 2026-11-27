@@ -302,6 +302,7 @@ class BuildCodeOutput(BaseModel):
     # manifests without the key still validate.
     tests: List[BuildTest] = Field(default_factory=list, max_length=BUILD_MAX_TESTS)
     written: bool = False
+    build_stage: int | None = None
     target_name: str | None = None
     # Absolute server-side target root, set by the task (not the model) so
     # run instructions can ship copy/pasteable `cd "<path>" && ...` commands.

@@ -384,7 +384,7 @@ class TestBuildTask:
                 run_secondary_action(
                     str(idea_id),
                     "BUILD_CODE",
-                    extra_context={"target_id": str(tid)},
+                    extra_context={"target_id": str(tid), "build_stage": 2},
                     run_id=str(rid),
                 )
             row = SecondaryActionResult.query.filter_by(
@@ -392,6 +392,7 @@ class TestBuildTask:
             ).one()
             assert row.version == 1 and row.is_current is True
             assert row.result_data["written"] is False
+            assert row.result_data["build_stage"] == 2
             paths = [f["path"] for f in row.result_data["files"]]
             assert paths == ["src/app.py", "tests/test_app.py", "AGENTS.md"]
             agents = next(

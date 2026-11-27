@@ -77,6 +77,24 @@ class TestGenerationOptions:
         assert _generation_options(cfg)["num_ctx"] == 4096
 
 
+class TestBuildCheckpoints:
+    def test_stage_instructions_are_distinct(self):
+        from app.tasks.ollama_tasks import build_stage_instruction
+
+        first = build_stage_instruction(1)
+        second = build_stage_instruction(2)
+        third = build_stage_instruction(3)
+        assert "CHECKPOINT 1" in first
+        assert "CHECKPOINT 2" in second
+        assert "CHECKPOINT 3" in third
+        assert len({first, second, third}) == 3
+
+    def test_unknown_stage_defaults_to_first(self):
+        from app.tasks.ollama_tasks import build_stage_instruction
+
+        assert build_stage_instruction(9) == build_stage_instruction(1)
+
+
 class TestPromptMemory:
     def _seed_prompt(self, db, admin_email="admin_mem@test.com"):
         from app.models import User, PromptConfig, UserRole

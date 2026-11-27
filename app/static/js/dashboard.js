@@ -169,6 +169,7 @@ function ideasApp() {
         runDialogCustom: false,
         runAiOpen: {},
         runDialogTarget: '',
+        runDialogBuildStage: 1,
         runDialogTargets: [],
         runDialogTargetDefaults: {},
         runDialogIdeaRef: '',
@@ -2217,6 +2218,7 @@ function ideasApp() {
             this.runDialogNewRepoPath = '';
             this.creatingRepo = false;
             this.runDialogAdvanced = false;
+            this.runDialogBuildStage = 1;
             this.runDialogOpen = true;
             const dialogLoads = [this.loadRunDialogModels(false), this.loadDiscovery()];
             if (actionType === 'BUILD_CODE' && idea && idea.instance_id) {
@@ -2436,6 +2438,7 @@ function ideasApp() {
                     return;
                 }
                 extra.target_id = this.runDialogTarget;
+                extra.build_stage = this.runDialogBuildStage || 1;
             }
             this.closeRunDialog();
             await this.runAction(ideaId, actionType, extra);
