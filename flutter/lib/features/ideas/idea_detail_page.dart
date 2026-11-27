@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +12,7 @@ import '../../core/network/api_client.dart';
 import '../../core/pipeline/pipeline_status_provider.dart';
 import '../../core/providers.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/utils/result_markdown.dart';
 import '../chat/chat_repository.dart';
 import 'idea_models.dart';
 import 'ideas_controller.dart';
@@ -1669,11 +1669,8 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
     return '';
   }
 
-  String _analysisToMarkdown(Map<String, dynamic>? output) {
-    if (output == null) return '';
-    const encoder = JsonEncoder.withIndent('  ');
-    return encoder.convert(output);
-  }
+  String _analysisToMarkdown(Map<String, dynamic>? output) =>
+      resultToMarkdown(output);
 }
 
 const allowedTransitions = <String, List<String>>{
