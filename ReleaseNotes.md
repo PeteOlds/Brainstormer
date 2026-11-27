@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.8 — 2026-11-28
+
+### Bug fixes
+- BUG.071 (#53): Diagnose Failures no longer returns a 500 when a managed-app spec is a JSON string, malformed, or missing. All failures now return a friendly diagnosis, with regression tests for the route.
+
+---
+
 ## v0.109.7 — 2026-11-28
 
 ### Features
