@@ -422,14 +422,14 @@ class _IdeaCard extends ConsumerWidget {
             ),
             StatusPill(status: idea.status),
             Text('💬 ${idea.commentCount}'),
-            if (idea.actionsRun.isNotEmpty)
+            if (idea.analysisCount > 0)
               const SizedBox(
                 width: 14,
                 height: 14,
                 child: Icon(Icons.analytics, size: 14),
               ),
-            if (idea.actionsRun.isNotEmpty)
-              Text('Analysis (${idea.actionsRun.length})',
+            if (idea.analysisCount > 0)
+              Text('Analysis (${idea.analysisCount})',
                   style: Theme.of(context).textTheme.bodySmall),
             if (idea.pendingRuns > 0)
               const SizedBox(
