@@ -177,6 +177,23 @@ class DesignDocOutput(BaseModel):
         return self
 
 
+class BuildReviewOutput(BaseModel):
+    """Post-build review: what shipped, gaps and what to do next.
+
+    Flat lists of short strings suit local models better than nested objects.
+    Each entry should read "Short title — one-line rationale".
+    """
+
+    summary: str = Field(..., min_length=20)
+    scope: str = Field(default="")
+    strengths: List[str] = Field(default_factory=list, max_length=10)
+    gaps: List[str] = Field(default_factory=list, max_length=10)
+    suggested_features: List[str] = Field(default_factory=list, max_length=10)
+    approach_suggestions: List[str] = Field(default_factory=list, max_length=10)
+    risks: List[str] = Field(default_factory=list, max_length=10)
+    open_questions: List[str] = Field(default_factory=list, max_length=5)
+
+
 class VrioOutput(BaseModel):
     """VRIO Framework — 4 criteria + 5-tier classification + recommendations."""
 
@@ -383,6 +400,7 @@ _ACTION_SCHEMAS = {
     "HYPOTHESIS_TEST": HypothesisTestOutput,
     "GTM_STRATEGY": GtmStrategyOutput,
     "BUILD_CODE": BuildCodeOutput,
+    "BUILD_REVIEW": BuildReviewOutput,
 }
 
 

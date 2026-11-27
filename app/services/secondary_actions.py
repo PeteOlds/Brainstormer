@@ -22,6 +22,14 @@ against it — so the new action works end to end with no UI changes.
 
 ACTION_REGISTRY = [
     {
+        "key": "BUILD_REVIEW",
+        "label": "Review build",
+        "description": "Automatic post-write review of the built app or release, with suggestions for features and approach. Analysis only; writes no files.",
+        "template": "build_review",
+        "category": "analysis",
+        "done_label": "Reviewed",
+    },
+    {
         "key": "REFINE",
         "label": "Refine Idea",
         "description": "Distill the concept into a 1-paragraph elevator pitch, core target audience, and primary revenue model.",

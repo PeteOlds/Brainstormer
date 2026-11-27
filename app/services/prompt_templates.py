@@ -55,6 +55,7 @@ def get_prompt_template(action_type: str) -> PromptTemplate:
         "HYPOTHESIS_TEST": "hypothesis_test",
         "GTM_STRATEGY": "gtm_strategy",
         "BUILD_CODE": "build_code",
+        "BUILD_REVIEW": "build_review",
     }
     template_name = mapping.get(action_type)
     if not template_name:

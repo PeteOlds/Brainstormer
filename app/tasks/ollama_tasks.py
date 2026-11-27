@@ -600,6 +600,25 @@ def _write_confirmed_build(idea, build_target, build_root, run_id):
         target=build_target.name,
         files=len(written),
     )
+    # Every write triggers a release-wide review. Queue it as a normal
+    # secondary action so it appears in Activity and uses the right queue.
+    # A review failure must never roll back a successful write.
+    try:
+        from flask import current_app
+
+        if not current_app.config.get("AUTO_BUILD_REVIEW", True):
+            raise RuntimeError("auto review disabled")
+        from app.services.idea_helpers import _enqueue_action
+
+        _enqueue_action(
+            idea,
+            "BUILD_REVIEW",
+            {"target_id": str(build_target.id), "auto": True},
+            triggered_by="auto",
+        )
+        logger.info("build_review_queued", idea_id=str(idea.id))
+    except Exception:
+        logger.exception("build_review_enqueue_failed", idea_id=str(idea.id))
     run = None
     if run_id:
         from app.models import PromptRun
@@ -1019,10 +1038,42 @@ def run_secondary_action(
                 _write_confirmed_build(idea, build_target, build_root, run_id)
                 return
 
+        # A review reads the already-written repo, if we can resolve its target.
+        # Failure here must not fail the review — the manifest alone is enough.
+        if action_type == "BUILD_REVIEW":
+            import uuid as uuid_mod
+
+            from app.models import (
+                InstanceBuildTarget,
+            )
+            from app.models import SecondaryActionResult as _ReviewResult
+            from app.services.build_service import resolve_target
+
+            preview = _ReviewResult.query.filter_by(
+                idea_id=idea.id, action_type="BUILD_CODE", is_current=True
+            ).first()
+            target_id = (extra_context or {}).get("target_id") or (
+                preview.target_id if preview is not None else None
+            )
+            if target_id is not None:
+                try:
+                    target = InstanceBuildTarget.query.filter_by(
+                        id=uuid_mod.UUID(str(target_id)),
+                        instance_id=idea.instance_id,
+                    ).first()
+                    if target is not None:
+                        build_root = resolve_target(target)
+                except Exception:
+                    build_root = None
+
         # Build supporting material for all secondary actions (they all now use it)
         from app.services.action_context import build_idea_context
 
         supporting_material = build_idea_context(idea)
+        if action_type == "BUILD_REVIEW":
+            from app.services.build_review_context import build_review_context
+
+            supporting_material = build_review_context(idea, build_root)
         if action_type == "BUILD_CODE":
             # Release children build into the app's existing repo. Without
             # its files the model writes a standalone app and overwrites
