@@ -1,6 +1,8 @@
 # Guides Index
 
-This directory holds the shared guides and patterns used by **Brainstormer (BS)** and maintained as a **reusable template library** for future projects and the planned replatforming. The guides are deliberately generalised — **not every guide applies to every project**.
+This directory is the **single source of truth** for shared guides used by **Brainstormer (BS)** and by the run dialog's guideline injection (`guidelines/*.md`). It is also a reusable template library for future projects and the planned replatforming. Guides are deliberately generalised — **not every guide applies to every project**.
+
+There is no second `Guides/` copy: reference paths in specs and docs use `guidelines/`.
 
 ## Key terms
 
@@ -31,6 +33,9 @@ Each guide carries a status header:
 | `Guide_UITesting.md` | Adopted | Yes — pytest owns API behaviour; widget/golden/integration in `flutter/test/` |
 | `Guide_SocialLogin.md` | Adopted-for-V2 (Template otherwise) | V2 only — social login + multi-tenancy per `PRD_V2.md` §4; no social login in V1 |
 | `Guide_MultiTenantAIConnectivity.md` | Adopted-for-V2 (Template otherwise) | V2 only — proxy, virtual keys, budgets per `PRD_V2.md` §7; V1 calls local Ollama directly |
+| `Guide_SecuringWithSSL.md` | Adopted | Yes — local self-signed TLS and production certificate guidance |
+| `Guide_FullStack.md` | Template | Reusable full-stack pattern; not an as-built Brainstormer description |
+| `Guide_FullStack2.md` | Template | Alternative full-stack pattern; not an as-built Brainstormer description |
 
 ## Conventions used across guides
 

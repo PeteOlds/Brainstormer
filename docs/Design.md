@@ -7,7 +7,7 @@ defence-in-depth Postgres RLS · Docker volume / filesystem backups ·
 fresh mermaid diagrams (this document replaces the missing status image).
 **Baseline:** v0.27.1. Related: `PRD_V2.md`, `docs/architecture.md` (V1, stale),
 `docs/erd.md` (V1, stale — §4 supersedes it for V2), `Guardrail.md`,
-`Guides/` (SocialLogin + MultiTenantAIConnectivity Adopted-for-V2).
+`guidelines/` (SocialLogin + MultiTenantAIConnectivity Adopted-for-V2).
 
 > Conventions (from `AGENTS.md`, non-negotiable in build): GUID PKs
 > (`app/models/types.py`), `ensure_aware()` for all datetime maths, whole-document
@@ -291,7 +291,7 @@ Rate limits (extends Guardrail §5): login/social-start 5/min/IP, run-now
 - Reverse-proxy deployments leave the TLS vars empty and set
   `TRUST_PROXY_HEADERS=True` (ProxyFix, one trusted hop).
 - Cert provisioning documented in `docs/getting-started.md` §10 and
-  `Guides/Guide_SecuringWithSSL.md` (self-signed for dev, Let's Encrypt for prod).
+  `guidelines/Guide_SecuringWithSSL.md` (self-signed for dev, Let's Encrypt for prod).
 - Minimal host config: only a cert/key volume mount.
 - Tests: `tests/unit/test_tls_config.py` (defaults stay HTTP, TLS implies
   redirect/HSTS/Secure cookies, ProxyFix is opt-in, entrypoint passthrough).

@@ -5,8 +5,8 @@
 **Current baseline:** v0.27.0 (historical snapshot in `docs/archive/APPLICATION_DOCUMENTATION-0.26.9.md`). This file, `docs/Design.md` and `Guardrail.md` are the current spec.
 **Related:** `docs/architecture.md`, `docs/erd.md`, `Guardrail.md`, `AGENTS.md`.
 **Design:** `docs/Design.md` (whole-V2 system design implementing this PRD).
-**Guides baseline:** `Guides/` catalogue — `Guide_SocialLogin.md` and
-`Guide_MultiTenantAIConnectivity.md` are Adopted-for-V2 (see `Guides/README.md`).
+**Guides baseline:** `guidelines/` catalogue — `Guide_SocialLogin.md` and
+`Guide_MultiTenantAIConnectivity.md` are Adopted-for-V2 (see `guidelines/README.md`).
 On any conflict, `AGENTS.md`/`Guardrail.md` win.
 
 > Terminology (locked): **Site** = the whole system across all tenants.
@@ -99,7 +99,7 @@ semantics of Start/End/Free dates, retention policies (explicitly not required).
 - **Future roles** (Developer, Deployment, BA, …) are deferred — schema must
   allow new enum values without migration pain (string-backed role on the
   membership, not a Postgres enum append).
-- **Social login:** Google, Apple, Microsoft, per `Guides/Guide_SocialLogin.md`
+- **Social login:** Google, Apple, Microsoft, per `guidelines/Guide_SocialLogin.md`
   (Adopted-for-V2). Schema: `tenants` registry; `tenant_oauth_configs`
   (`tenant_id`, `provider_name`, `encrypted_secret`, unique
   `(tenant_id, provider_name)`) for per-tenant OAuth credentials (AES-256-GCM
@@ -207,7 +207,7 @@ ambiguous values default to Scope (per prior agreement), never to Archive.
   The composite (not single-column) form is deliberate: the phase filter is
   always evaluated within one idea of one instance, so the leftmost-column
   query plan applies — the required-by-filter exception to the
-  no-speculative-indexes rule (`Guides/Guide_Database.md` §4); all other new
+  no-speculative-indexes rule (`guidelines/Guide_Database.md` §4); all other new
   indexes stay single-column on FKs/unique columns.
 - **Migration:** all existing comments backfill `phase = Scope`.
 - **UI:** phase filter on the idea thread; default shows all phases with phase
@@ -226,7 +226,7 @@ ambiguous values default to Scope (per prior agreement), never to Archive.
   Instance Admins in a per-instance settings screen. Keys are Fernet-encrypted
   at rest (same pattern as prompt bodies), never logged, never returned to
   non-admins, never copied from Instance 1.
-- **Abstraction (per `Guides/Guide_MultiTenantAIConnectivity.md`,
+- **Abstraction (per `guidelines/Guide_MultiTenantAIConnectivity.md`,
   Adopted-for-V2):** a central LLM proxy interface fronts all providers, with
   the existing `OllamaClient` kept as one first-class provider implementation
   behind it (local Ollama remains a route, not a special case) — LiteLLM or
@@ -337,7 +337,7 @@ ambiguous values default to Scope (per prior agreement), never to Archive.
 
 ---
 
-## 12. Privacy release gate (per `Guides/Policy_Privacy.md`)
+## 12. Privacy release gate (per `guidelines/Policy_Privacy.md`)
 
 The privacy policy is a **template placeholder** — it must be tailored to the
 actual deployment and legally reviewed before any release relies on it, and in
@@ -397,8 +397,8 @@ particular **before any hosted-AI-provider or social-login rollout**:
 > phase; the local-only egress exception (§7) is the only rule change, and it
 > is per-instance opt-in.
 >
-> Migration discipline (per `Guides/Guide_Database.md` §3 and
-> `Guides/Guide_Upgrades.md` §4–§5): **expand-and-contract** for any
+> Migration discipline (per `guidelines/Guide_Database.md` §3 and
+> `guidelines/Guide_Upgrades.md` §4–§5): **expand-and-contract** for any
 > destructive or reshaping change on populated tables (additive nullable
 > columns, new tables and single-column FK/unique indexes ship as one
 > migration); destructive steps are isolated and need human sign-off; new
@@ -479,8 +479,8 @@ particular **before any hosted-AI-provider or social-login rollout**:
 
 - API-only backend; Flutter app (auth, ideas, prompts, admin, chat, footer
   build number, deep links); Jinja removal; `index.html` deletion.
-- Flutter standards (per `Guides/Guide_Flutter.md` and
-  `Guides/Guide_UITesting.md`, Aspirational → applicable here): feature-first
+- Flutter standards (per `guidelines/Guide_Flutter.md` and
+  `guidelines/Guide_UITesting.md`, Aspirational → applicable here): feature-first
   `lib/features/` structure — the Flask app is **not** restructured to match;
   dumb widgets with logic in controllers (Riverpod/Bloc/Signals),
   ≤ 150-line widget files, `const` constructors, design tokens (no hardcoded
