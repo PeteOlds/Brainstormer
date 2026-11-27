@@ -24,9 +24,7 @@ def _seed_release(live_app, name="Release 1.0"):
 
     with live_app.app_context():
         parent = Idea.query.filter_by(reference_code=SCALE_REF).first()
-        release = Release.query.filter_by(
-            parent_idea_id=parent.id, name=name
-        ).first()
+        release = Release.query.filter_by(parent_idea_id=parent.id, name=name).first()
         if release is None:
             release = Release(
                 parent_idea_id=parent.id,

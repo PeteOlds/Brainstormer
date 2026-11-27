@@ -24,9 +24,7 @@ def _open_first_card(page):
 
 def test_checkbox_does_not_open_idea(admin_page):
     admin_page.wait_for_selector("[data-testid='idea-card']", timeout=15000)
-    box = admin_page.locator(
-        'input[type="checkbox"][aria-label="Select idea"]'
-    ).first
+    box = admin_page.locator('input[type="checkbox"][aria-label="Select idea"]').first
     box.click()
     admin_page.wait_for_timeout(500)
     assert admin_page.locator(DETAIL).is_visible() is False
@@ -62,9 +60,7 @@ def test_bulk_status_change(admin_page):
     assert cards.count() >= 2
     references = [cards.nth(i).inner_text().split()[0] for i in range(2)]
 
-    boxes = admin_page.locator(
-        'input[type="checkbox"][aria-label="Select idea"]'
-    )
+    boxes = admin_page.locator('input[type="checkbox"][aria-label="Select idea"]')
     boxes.nth(0).click()
     boxes.nth(1).click()
     admin_page.wait_for_timeout(500)
@@ -105,14 +101,23 @@ def test_upload_txt_file_succeeds(admin_page):
     """Regression: .txt uploads must not be rejected by the client-side check."""
     admin_page.wait_for_selector("[data-testid='idea-card']", timeout=15000)
     statuses = []
-    admin_page.on("response", lambda r: statuses.append((r.url, r.status)) if "/ideas/upload" in r.url else None)
+    admin_page.on(
+        "response",
+        lambda r: (
+            statuses.append((r.url, r.status)) if "/ideas/upload" in r.url else None
+        ),
+    )
     file_input = admin_page.locator('input[x-ref="mdFileInput"]')
-    file_input.set_input_files({
-        "name": "Software Library Tracker.txt",
-        "mimeType": "text/plain",
-        "buffer": b"Plain text idea content",
-    })
+    file_input.set_input_files(
+        {
+            "name": "Software Library Tracker.txt",
+            "mimeType": "text/plain",
+            "buffer": b"Plain text idea content",
+        }
+    )
     admin_page.wait_for_timeout(3000)
     assert_no_page_errors(admin_page)
     upload_statuses = [s for (u, s) in statuses if "/ideas/upload" in u]
-    assert upload_statuses and upload_statuses[-1] == 201, f"upload status: {upload_statuses}"
+    assert (
+        upload_statuses and upload_statuses[-1] == 201
+    ), f"upload status: {upload_statuses}"

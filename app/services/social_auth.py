@@ -10,7 +10,6 @@ import base64
 import hashlib
 import json
 import secrets
-import structlog
 from dataclasses import dataclass
 from typing import Any
 

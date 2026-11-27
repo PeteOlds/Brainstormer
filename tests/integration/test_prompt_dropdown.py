@@ -97,7 +97,7 @@ def test_prompts_rbac_user_forbidden(client, app):
 
 def test_ollama_models_admin(logged_in_client):
     """Test admin can list Ollama models."""
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
 
     client, headers = logged_in_client
     # No live Ollama in the test env; stub the client at the route boundary.
@@ -151,7 +151,7 @@ def test_run_now_creates_pending_run(logged_in_client, app):
 
 def test_generation_seconds_admin_only(logged_in_client, app, client):
     """Test per-idea generation time is admin-only."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
 
     admin_client, headers = logged_in_client
     with app.app_context():
@@ -273,7 +273,7 @@ def test_secondary_action_creates_pending_run(logged_in_client, app):
 
 def test_check_due_fails_stale_orphans(logged_in_client, app):
     """Scheduler fails PENDING/RUNNING runs older than 45 min (orphans)."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
     from unittest.mock import patch
 
     client, headers = logged_in_client
@@ -462,7 +462,7 @@ def test_activity_stats_run_filters(logged_in_client, app):
 
 def test_check_due_skips_live_runs(logged_in_client, app):
     """Scheduler must not re-enqueue prompts that already have a live run."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
     from unittest.mock import patch
 
     client, headers = logged_in_client

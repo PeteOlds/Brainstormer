@@ -74,10 +74,11 @@ def list_admins(user):
         memberships = Membership.query.filter_by(instance_id=instance_id).all()
     # Batch-load users to avoid an N+1 per membership row.
     member_user_ids = {m.user_id for m in memberships}
-    member_users = {
-        u.id: u
-        for u in User.query.filter(User.id.in_(member_user_ids)).all()
-    } if member_user_ids else {}
+    member_users = (
+        {u.id: u for u in User.query.filter(User.id.in_(member_user_ids)).all()}
+        if member_user_ids
+        else {}
+    )
     site_admins = User.query.filter_by(role="ADMIN", is_active=True).all()
 
     if caller_is_admin:
@@ -274,8 +275,9 @@ def mark_read(user, message_id):
 @token_required
 def delete_message(user, message_id):
     """Delete own sent message, or any message as an admin."""
-    from app.models import has_permission
     from flask import g
+
+    from app.models import has_permission
 
     msg = Message.query.get_or_404(message_id)
     denied = check_access(msg)

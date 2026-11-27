@@ -137,9 +137,7 @@ def _seed(app, tmp_path, statuses=("SPARK", "SPARK"), name="Release 1.1"):
         inst = Instance(number=int(suffix[:4], 16) % 9000 + 1000, name=f"Rel {suffix}")
         db.session.add(inst)
         db.session.flush()
-        owner = User(
-            email=f"owner-{suffix.lower()}@example.com", role=UserRole.ADMIN
-        )
+        owner = User(email=f"owner-{suffix.lower()}@example.com", role=UserRole.ADMIN)
         owner.set_password("secret123")
         db.session.add(owner)
         db.session.flush()
@@ -165,9 +163,7 @@ def _seed(app, tmp_path, statuses=("SPARK", "SPARK"), name="Release 1.1"):
             for i, status in enumerate(statuses)
         ]
         db.session.add(
-            InstanceBuildTarget(
-                instance_id=inst.id, name=name, path=str(tmp_path)
-            )
+            InstanceBuildTarget(instance_id=inst.id, name=name, path=str(tmp_path))
         )
         db.session.commit()
         return str(inst.id), str(parent.id), str(release.id), [str(k.id) for k in kids]
@@ -181,9 +177,7 @@ def _run_until_done(release_id, limit=40):
 
 
 def test_full_release_runs_every_phase(celery_app, tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "app.tasks.ollama_tasks.OllamaClient", FakeOllama
-    )
+    monkeypatch.setattr("app.tasks.ollama_tasks.OllamaClient", FakeOllama)
     celery_app.config["OPENCODE_BUILD_ROOTS"] = str(tmp_path)
     _, _, rid, kid_ids = _seed(celery_app, tmp_path)
     FakeOllama.build_prompts = []
@@ -396,9 +390,7 @@ def test_missing_repo_is_caught_before_any_model_call(celery_app, tmp_path):
         assert not ok
         assert "no build repo" in message.lower()
         assert "no build roots" in message.lower()
-        assert PromptRun.query.filter_by(
-            idea_id=uuid.UUID(kid_ids[0])
-        ).count() == 0
+        assert PromptRun.query.filter_by(idea_id=uuid.UUID(kid_ids[0])).count() == 0
 
         release = db.session.get(Release, uuid.UUID(rid))
         assert release.pipeline_status == "idle"
@@ -427,9 +419,7 @@ def test_release_can_store_and_clear_its_repo(admin_client, app, tmp_path):
     payload = res.get_json()["data"]
     assert [t["id"] for t in payload["build_targets"]] == [target_id]
 
-    res = admin_client.patch(
-        f"/api/v1/releases/{rid}", json={"build_target_id": None}
-    )
+    res = admin_client.patch(f"/api/v1/releases/{rid}", json={"build_target_id": None})
     assert res.status_code == 200
     assert res.get_json()["data"]["release"]["build_target_id"] is None
 

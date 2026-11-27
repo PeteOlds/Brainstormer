@@ -1,19 +1,21 @@
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, Mock, patch
 
-from app.models import PromptConfig, Idea, SecondaryActionResult, User, UserRole
+import pytest
+
+from app.models import Idea, PromptConfig, SecondaryActionResult, User, UserRole
 from app.schemas.ollama_schemas import (
-    RefineOutput,
     CompetitorsOutput,
     FeasibilityOutput,
+    RefineOutput,
 )
 
 
 class TestGenerationOptions:
     def test_options_from_prompt_with_seed(self, celery_app):
         from types import SimpleNamespace
+
         from app.tasks.ollama_tasks import _generation_options
 
         cfg = SimpleNamespace(
@@ -29,6 +31,7 @@ class TestGenerationOptions:
 
     def test_options_defaults_without_seed(self, celery_app):
         from types import SimpleNamespace
+
         from app.tasks.ollama_tasks import _generation_options
 
         cfg = SimpleNamespace(
@@ -49,6 +52,7 @@ class TestGenerationOptions:
 
     def test_num_ctx_is_opt_in_from_stage_config(self, celery_app):
         from types import SimpleNamespace
+
         from app.tasks.ollama_tasks import _generation_options
 
         cfg = SimpleNamespace(
@@ -64,6 +68,7 @@ class TestGenerationOptions:
 
     def test_num_ctx_from_prompt_config_is_respected(self, celery_app):
         from types import SimpleNamespace
+
         from app.tasks.ollama_tasks import _generation_options
 
         cfg = SimpleNamespace(
@@ -97,7 +102,7 @@ class TestBuildCheckpoints:
 
 class TestPromptMemory:
     def _seed_prompt(self, db, admin_email="admin_mem@test.com"):
-        from app.models import User, PromptConfig, UserRole
+        from app.models import PromptConfig, User, UserRole
 
         admin = User(email=admin_email, role=UserRole.ADMIN)
         admin.set_password("admin123")
@@ -209,7 +214,7 @@ class TestReferenceCode:
         """
         with celery_app.app_context():
             from app.extensions import db
-            from app.models import User, PromptConfig, Idea, UserRole
+            from app.models import Idea, PromptConfig, User, UserRole
             from app.tasks.ollama_tasks import _generate_reference_code
 
             admin = User(email="admin_refcode@test.com", role=UserRole.ADMIN)
@@ -258,7 +263,7 @@ class TestReferenceCode:
         raised PendingRollbackError and the run orphaned as RUNNING."""
         with celery_app.app_context():
             from app.extensions import db
-            from app.models import User, PromptConfig, Idea, PromptRun, UserRole
+            from app.models import Idea, PromptConfig, PromptRun, User, UserRole
             from app.tasks.ollama_tasks import _record_failure
 
             admin = User(email="admin_poison@test.com", role=UserRole.ADMIN)
@@ -337,7 +342,7 @@ class TestGenerateIdeaTask:
 
         with celery_app.app_context():
             from app.extensions import db
-            from app.models import User, PromptConfig, Idea, UserRole
+            from app.models import Idea, PromptConfig, User, UserRole
             from app.tasks.ollama_tasks import generate_idea
 
             # Create admin user
@@ -425,7 +430,7 @@ class TestGenerateIdeaTask:
 
         with celery_app.app_context():
             from app.extensions import db
-            from app.models import User, PromptConfig, Idea, UserRole
+            from app.models import Idea, PromptConfig, User, UserRole
             from app.tasks.ollama_tasks import generate_idea
 
             admin = User(email="admin_dedup@test.com", role=UserRole.ADMIN)
@@ -496,7 +501,7 @@ class TestGenerateIdeaTask:
 
         with celery_app.app_context():
             from app.extensions import db
-            from app.models import User, PromptConfig, Idea, UserRole
+            from app.models import Idea, PromptConfig, User, UserRole
             from app.tasks.ollama_tasks import generate_idea
 
             admin = User(email="admin_nodedup@test.com", role=UserRole.ADMIN)
@@ -536,7 +541,7 @@ class TestGenerateIdeaTask:
 
 class TestSecondaryActionRobustness:
     def _seed(self, db, email="admin_sec@test.com", temperature=0.9):
-        from app.models import User, PromptConfig, Idea, UserRole
+        from app.models import Idea, PromptConfig, User, UserRole
 
         admin = User(email=email, role=UserRole.ADMIN)
         admin.set_password("admin123")
@@ -563,7 +568,9 @@ class TestSecondaryActionRobustness:
         return idea
 
     @patch("app.tasks.ollama_tasks.OllamaClient")
-    def test_hosted_model_prefix_without_provider_hints(self, mock_client_class, celery_app):
+    def test_hosted_model_prefix_without_provider_hints(
+        self, mock_client_class, celery_app
+    ):
         """Stale-dialog shape: hosted model id, no provider_override.
 
         Must fail with a plain-language pointer at the provider mismatch,
@@ -1085,10 +1092,10 @@ class TestRunSecondaryActionTask:
         with celery_app.app_context():
             from app.extensions import db
             from app.models import (
-                User,
-                PromptConfig,
                 Idea,
+                PromptConfig,
                 SecondaryActionResult,
+                User,
                 UserRole,
             )
             from app.tasks.ollama_tasks import run_secondary_action
@@ -1170,10 +1177,10 @@ class TestRunSecondaryActionTask:
         with celery_app.app_context():
             from app.extensions import db
             from app.models import (
-                User,
-                PromptConfig,
                 Idea,
+                PromptConfig,
                 SecondaryActionResult,
+                User,
                 UserRole,
             )
             from app.tasks.ollama_tasks import run_secondary_action
@@ -1241,10 +1248,10 @@ class TestRunSecondaryActionTask:
         with celery_app.app_context():
             from app.extensions import db
             from app.models import (
-                User,
-                PromptConfig,
                 Idea,
+                PromptConfig,
                 SecondaryActionResult,
+                User,
                 UserRole,
             )
             from app.tasks.ollama_tasks import run_secondary_action
@@ -1311,10 +1318,10 @@ class TestRunSecondaryActionTask:
         with celery_app.app_context():
             from app.extensions import db
             from app.models import (
-                User,
-                PromptConfig,
                 Idea,
+                PromptConfig,
                 SecondaryActionResult,
+                User,
                 UserRole,
             )
             from app.tasks.ollama_tasks import run_secondary_action
@@ -1381,7 +1388,7 @@ class TestRunSecondaryActionTask:
     def test_run_secondary_action_model_override(self, mock_client_class, celery_app):
         with celery_app.app_context():
             from app.extensions import db
-            from app.models import User, PromptConfig, Idea, UserRole
+            from app.models import Idea, PromptConfig, User, UserRole
             from app.tasks.ollama_tasks import run_secondary_action
 
             # Create admin user
@@ -1438,14 +1445,14 @@ class TestRunSecondaryActionTask:
         with celery_app.app_context():
             from app.extensions import db
             from app.models import (
-                User,
-                PromptConfig,
                 Idea,
+                PromptConfig,
                 SecondaryActionResult,
+                User,
                 UserRole,
             )
-            from app.tasks.ollama_tasks import _drop_answered_questions
             from app.schemas.ollama_schemas import PrdOutput
+            from app.tasks.ollama_tasks import _drop_answered_questions
 
             admin = User(email="admin_dedupq@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -1511,10 +1518,11 @@ class TestCheckDuePromptsTask:
     @patch("app.tasks.ollama_tasks.generate_idea")
     def test_check_due_prompts(self, mock_generate_idea, celery_app):
         with celery_app.app_context():
+            from datetime import datetime, timedelta, timezone
+
             from app.extensions import db
-            from app.models import User, PromptConfig, UserRole
+            from app.models import PromptConfig, User, UserRole
             from app.tasks.ollama_tasks import check_due_prompts
-            from datetime import datetime, timezone, timedelta
 
             admin = User(email="admin_due@test.com", role=UserRole.ADMIN)
             admin.set_password("admin123")
@@ -1618,7 +1626,7 @@ class TestSlackHook:
         }
 
     def _seed_prompt(self, db, channel, email):
-        from app.models import User, PromptConfig, UserRole
+        from app.models import PromptConfig, User, UserRole
 
         admin = User(email=email, role=UserRole.ADMIN)
         admin.set_password("admin123")

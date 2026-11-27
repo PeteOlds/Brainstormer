@@ -51,9 +51,7 @@ def test_javascript_uri_in_idea_content_is_inert(admin_page, live_server, seeded
     assert admin_page.evaluate("() => window.__xss") is None
 
 
-def test_admin_create_user_modal_opens_without_inline_handlers(
-    admin_page, live_server
-):
+def test_admin_create_user_modal_opens_without_inline_handlers(admin_page, live_server):
     """The button used to rely on onclick, which CSP now blocks."""
     from tests.ui.conftest import goto
 
@@ -127,19 +125,16 @@ def test_tokens_are_not_readable_by_javascript(admin_page, seeded):
 
 def test_cookie_auth_can_write_only_with_the_csrf_header(admin_page):
     """The session cookie alone is not enough to change state."""
-    with_csrf = admin_page.evaluate(
-        """async () => {
+    with_csrf = admin_page.evaluate("""async () => {
             const r = await authFetch('/api/v1/ideas', {
                 method: 'POST',
                 body: JSON.stringify({prompt_title: 'CSRF ok', raw_content: 'x'})
             });
             return r.status;
-        }"""
-    )
+        }""")
     assert with_csrf == 201, with_csrf
 
-    without_csrf = admin_page.evaluate(
-        """async () => {
+    without_csrf = admin_page.evaluate("""async () => {
             const r = await fetch('/api/v1/ideas', {
                 method: 'POST',
                 credentials: 'same-origin',
@@ -147,6 +142,5 @@ def test_cookie_auth_can_write_only_with_the_csrf_header(admin_page):
                 body: JSON.stringify({prompt_title: 'CSRF blocked', raw_content: 'x'})
             });
             return r.status;
-        }"""
-    )
+        }""")
     assert without_csrf == 401, without_csrf

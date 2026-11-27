@@ -144,9 +144,7 @@ def _check_spec(spec: dict) -> dict:
             "confirm the build again."
         )
     frontend_workdir = str(spec.get("frontend_workdir") or "").strip() or workdir
-    if frontend_argv and (
-        not frontend_workdir or not os.path.isabs(frontend_workdir)
-    ):
+    if frontend_argv and (not frontend_workdir or not os.path.isabs(frontend_workdir)):
         raise RunnerError(
             "The app has no front-end folder recorded — confirm the build again."
         )
@@ -386,12 +384,16 @@ class LocalRunner(Runner):
                     start_new_session=True,
                 )
             except OSError as exc:
-                self._terminate_process_group(proc.pid, signal.SIGTERM, self.STOP_GRACE_SECONDS)
+                self._terminate_process_group(
+                    proc.pid, signal.SIGTERM, self.STOP_GRACE_SECONDS
+                )
                 log_fh.close()
                 raise RunnerError(f"Could not start the app UI: {exc}") from exc
             time.sleep(1)
             if frontend_proc.poll() is not None:
-                self._terminate_process_group(proc.pid, signal.SIGTERM, self.STOP_GRACE_SECONDS)
+                self._terminate_process_group(
+                    proc.pid, signal.SIGTERM, self.STOP_GRACE_SECONDS
+                )
                 log_fh.close()
                 tail_lines = self.tail(log_path, 15)
                 raise RunnerError(
@@ -415,7 +417,11 @@ class LocalRunner(Runner):
             pids = [proc.pid]
             if frontend_proc is not None:
                 pids.append(frontend_proc.pid)
-            return {"pid": proc.pid, "frontend_pid": getattr(frontend_proc, "pid", None), "pids": pids}
+            return {
+                "pid": proc.pid,
+                "frontend_pid": getattr(frontend_proc, "pid", None),
+                "pids": pids,
+            }
         tail_lines = self.tail(log_path, 15)
         if frontend_proc is not None:
             try:

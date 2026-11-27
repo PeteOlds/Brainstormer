@@ -61,7 +61,9 @@ def test_overview_requires_admin(client, app, site_with_admin):
 
 
 def test_overview_lists_own_instance(client, app, site_with_admin):
-    headers = _login(client, "inst-admin@example.com", instance_id=site_with_admin["instance_id"])
+    headers = _login(
+        client, "inst-admin@example.com", instance_id=site_with_admin["instance_id"]
+    )
     res = client.get("/api/v1/admin/backup", headers=headers)
     assert res.status_code == 200
     data = res.get_json()["data"]
@@ -94,7 +96,9 @@ def test_site_backup_roundtrip(admin_client, app, site_with_admin, tmp_path):
         content_type="multipart/form-data",
     )
     assert verify.status_code == 200, verify.get_json()
-    assert verify.get_json()["data"]["manifest"]["tables"] == bundle["manifest"]["tables"]
+    assert (
+        verify.get_json()["data"]["manifest"]["tables"] == bundle["manifest"]["tables"]
+    )
 
     restore = admin_client.post(
         "/api/v1/admin/backup/site/restore",
@@ -167,9 +171,7 @@ def test_instance_backup_roundtrip(client, app, site_with_admin):
     assert ok.get_json()["data"]["rows"] > 0
 
 
-def test_instance_restore_rejects_other_instances_bundle(
-    client, app, site_with_admin
-):
+def test_instance_restore_rejects_other_instances_bundle(client, app, site_with_admin):
     other = Instance(number=78, name="Other")
     with app.app_context():
         db.session.add(other)
@@ -214,9 +216,7 @@ def test_scheduled_task_respects_toggle(app, monkeypatch):
     assert result["status"] == "skipped"
 
 
-def test_relative_backup_dir_still_downloads(
-    admin_client, app, tmp_path, monkeypatch
-):
+def test_relative_backup_dir_still_downloads(admin_client, app, tmp_path, monkeypatch):
     """Regression: the default BACKUP_DIR is relative (./backups).
 
     os.listdir() resolved it from the process CWD, but send_file() resolves

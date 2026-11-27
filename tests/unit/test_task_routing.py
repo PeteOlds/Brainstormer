@@ -51,9 +51,10 @@ def test_due_prompt_schedule_advances_on_enqueue(app):
 
     fake_job = MagicMock()
     fake_job.id = "job-sched"
-    with app.app_context(), patch.object(
-        ollama_tasks, "enqueue_generation", return_value=fake_job
-    ) as enq:
+    with (
+        app.app_context(),
+        patch.object(ollama_tasks, "enqueue_generation", return_value=fake_job) as enq,
+    ):
         ollama_tasks.check_due_prompts.run()
     assert enq.called
 

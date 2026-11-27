@@ -14,7 +14,11 @@ DEFAULT_MAX_CHARS = 6000
 def _lines(items: Any, key: str) -> list[str]:
     if not isinstance(items, list):
         return []
-    return [item for item in items if isinstance(item, dict) and str(item.get(key, "")).strip()]
+    return [
+        item
+        for item in items
+        if isinstance(item, dict) and str(item.get(key, "")).strip()
+    ]
 
 
 def _join(values: Any) -> str:
@@ -23,7 +27,9 @@ def _join(values: Any) -> str:
     return ", ".join(str(v).strip() for v in values if str(v).strip())
 
 
-def render_design_contract(result_data: dict | None, max_chars: int = DEFAULT_MAX_CHARS) -> str:
+def render_design_contract(
+    result_data: dict | None, max_chars: int = DEFAULT_MAX_CHARS
+) -> str:
     """Return a plain-text contract for the BUILD_CODE prompt, or ''."""
     if not isinstance(result_data, dict):
         return ""

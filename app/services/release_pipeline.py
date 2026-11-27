@@ -271,9 +271,7 @@ def _phase_settled(state, phase: str, child_ids) -> bool:
 
 
 def _phase_failed(state, phase: str, child_ids) -> bool:
-    return any(
-        state["children"][idea_id][phase] == "failed" for idea_id in child_ids
-    )
+    return any(state["children"][idea_id][phase] == "failed" for idea_id in child_ids)
 
 
 def _process_docs(release, children, phase: str, state, pending: list):
@@ -463,12 +461,7 @@ def _seed_build_tests(child) -> int:
         data.get("runbook"),
     )
     stats = seed_idea_tests(child, tests)
-    return (
-        stats["created"]
-        + stats["updated"]
-        + stats["removed"]
-        + (0 if tests else 1)
-    )
+    return stats["created"] + stats["updated"] + stats["removed"] + (0 if tests else 1)
 
 
 def _process_test(children, state):
@@ -501,12 +494,8 @@ def _finish(release, state, children):
     release.pipeline_phase = "done"
     release.pipeline_finished_at = _now()
     if failed:
-        codes = ", ".join(
-            str(c.get("reference_code") or "?") for c in failed
-        )
-        first_reason = next(
-            (c.get("reason") for c in failed if c.get("reason")), None
-        )
+        codes = ", ".join(str(c.get("reference_code") or "?") for c in failed)
+        first_reason = next((c.get("reason") for c in failed if c.get("reason")), None)
         release.pipeline_status = "failed"
         release.status = "in_progress"
         release.pipeline_error = (
@@ -537,9 +526,7 @@ def _finish(release, state, children):
             parent = db.session.get(Idea, release.parent_idea_id)
             write_release_notes_file(release, parent)
         except Exception:
-            logger.exception(
-                "release_notes_write_failed", release_id=str(release.id)
-            )
+            logger.exception("release_notes_write_failed", release_id=str(release.id))
     logger.info(
         "release_pipeline_finished",
         release_id=str(release.id),
@@ -583,8 +570,8 @@ def start_release_pipeline(release, user=None, force=False, target_phase=None):
     # PRD and Design had already spent model calls, leaving a broken release
     # that had done half the work. Resolve (and, when allowed, lazily create)
     # every child's repo before anything moves.
-    from app.services.build_targets import resolve_build_target
     from app.services.build_service import BuildError, resolve_target_path
+    from app.services.build_targets import resolve_build_target
 
     creator_id = user.id if user is not None else release.created_by_id
     for child in children:
@@ -598,8 +585,7 @@ def start_release_pipeline(release, user=None, force=False, target_phase=None):
         )
         if target is None:
             return False, (
-                f"Cannot start: {child.reference_code} has no build repo. "
-                f"{reason}"
+                f"Cannot start: {child.reference_code} has no build repo. " f"{reason}"
             )
         try:
             resolve_target_path(target.path)
@@ -635,9 +621,7 @@ def start_release_pipeline(release, user=None, force=False, target_phase=None):
 
     phase = "prd"
     for candidate in PHASES:
-        if not _phase_settled(
-            state, candidate, [str(c.id) for c in children]
-        ):
+        if not _phase_settled(state, candidate, [str(c.id) for c in children]):
             phase = candidate
             break
     else:
@@ -662,9 +646,7 @@ def start_release_pipeline(release, user=None, force=False, target_phase=None):
     _save(release, state)
     db.session.commit()
     _schedule(release.id, countdown=0)
-    logger.info(
-        "release_pipeline_started", release_id=str(release.id), phase=phase
-    )
+    logger.info("release_pipeline_started", release_id=str(release.id), phase=phase)
     return True, "Release run started."
 
 
@@ -684,12 +666,7 @@ def advance_release(release_id) -> bool:
         key = uuid.UUID(str(release_id))
     except (ValueError, TypeError):
         return False
-    release = (
-        db.session.query(Release)
-        .filter_by(id=key)
-        .with_for_update()
-        .first()
-    )
+    release = db.session.query(Release).filter_by(id=key).with_for_update().first()
     if release is None:
         return False
 
@@ -744,9 +721,7 @@ def advance_release(release_id) -> bool:
             try:
                 _enqueue_launch(launch)
             except Exception:
-                logger.exception(
-                    "release_launch_failed", run_id=launch["run_id"]
-                )
+                logger.exception("release_launch_failed", run_id=launch["run_id"])
                 from app.models import PromptRun
 
                 run = _poll(launch["run_id"])

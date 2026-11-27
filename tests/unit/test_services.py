@@ -1,24 +1,25 @@
-import pytest
-from unittest.mock import AsyncMock, Mock, patch
 import json
+from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
+
+from app.schemas.ollama_schemas import (
+    CompetitorsOutput,
+    FeasibilityOutput,
+    RefineOutput,
+    Verdict,
+    validate_ollama_output,
+)
 from app.services.ollama_client import OllamaClient, OllamaError
 from app.services.prompt_templates import (
     PromptTemplate,
     get_base_prompt,
-    get_refine_prompt,
     get_competitors_prompt,
     get_feasibility_prompt,
     get_prompt_template,
+    get_refine_prompt,
 )
 from app.utils.markdown import render_markdown_safe, render_markdown_to_text
-from app.schemas.ollama_schemas import (
-    RefineOutput,
-    CompetitorsOutput,
-    FeasibilityOutput,
-    validate_ollama_output,
-    Verdict,
-)
 
 
 class TestOllamaClient:
@@ -104,6 +105,7 @@ class TestOllamaClient:
 
     def test_generate_sync_http_error_carries_body(self, client):
         import httpx as _httpx
+
         from app.services.ollama_client import OllamaError
 
         request = Mock()
@@ -438,6 +440,7 @@ class TestOllamaSchemas:
         pitch, not the raw JSON blob (shared schema keys inflate scores
         between unrelated same-prompt ideas)."""
         import json as _json
+
         from app.models import Idea
         from app.services.embedding_service import embedding_text
 
@@ -579,9 +582,9 @@ class TestTokenLifetime:
 class TestBeatHeartbeat:
     def test_write_then_check_fresh(self):
         from app.tasks.maintenance_tasks import (
-            write_beat_heartbeat,
-            check_beat_heartbeat,
             HEARTBEAT_KEY,
+            check_beat_heartbeat,
+            write_beat_heartbeat,
         )
 
         class FakeRedis:
@@ -609,7 +612,8 @@ class TestBeatHeartbeat:
         assert check_beat_heartbeat(FakeRedis()) is True
 
     def test_stale_heartbeat_fails(self):
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
+
         from app.tasks.maintenance_tasks import check_beat_heartbeat
 
         class FakeRedis:
@@ -637,6 +641,7 @@ class TestSlackService:
 
     def test_success_returns_ts(self):
         from unittest.mock import MagicMock
+
         from app.services import slack_service
 
         client = MagicMock()
@@ -654,6 +659,7 @@ class TestSlackService:
 
     def test_failure_returns_none(self):
         from unittest.mock import MagicMock
+
         from app.services import slack_service
 
         client = MagicMock()
@@ -667,6 +673,7 @@ class TestSlackService:
 
     def test_rate_limit_retries_once(self):
         from unittest.mock import MagicMock
+
         from app.services import slack_service
 
         class RateLimited(Exception):

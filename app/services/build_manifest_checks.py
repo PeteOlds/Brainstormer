@@ -9,10 +9,18 @@ import re
 
 MAX_LINES = 300
 # Data/config files can legitimately be long; source files cannot.
-LONG_FILE_EXTENSIONS = {".json", ".lock", ".txt", ".md", ".yml", ".yaml", ".csv", ".svg"}
+LONG_FILE_EXTENSIONS = {
+    ".json",
+    ".lock",
+    ".txt",
+    ".md",
+    ".yml",
+    ".yaml",
+    ".csv",
+    ".svg",
+}
 PLACEHOLDER_RE = re.compile(
-    r"\b(TODO|FIXME|PLACEHOLDER|STUB|XXX)\b|NotImplementedError|"
-    r"#\s*\.\.\.\s*$",
+    r"\b(TODO|FIXME|PLACEHOLDER|STUB|XXX)\b|NotImplementedError|" r"#\s*\.\.\.\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -21,7 +29,9 @@ class BuildManifestError(ValueError):
     """Raised when a manifest fails a deterministic check."""
 
 
-def check_manifest_files(files: list[dict], require_agents_md: bool = False) -> list[str]:
+def check_manifest_files(
+    files: list[dict], require_agents_md: bool = False
+) -> list[str]:
     """Return human-readable problems; empty list means the manifest is OK."""
     problems: list[str] = []
     paths: list[str] = []

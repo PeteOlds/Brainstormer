@@ -1,8 +1,8 @@
 from flask import Blueprint, current_app, request
 
-from app.utils.decorators import token_required
-from app.utils.responses import api_ok, api_error
 from app.services.ollama_client import OllamaClient
+from app.utils.decorators import token_required
+from app.utils.responses import api_error, api_ok
 from app.utils.tenancy import current_instance_id
 
 bp = Blueprint("ollama", __name__)
@@ -62,8 +62,10 @@ def list_models(user):
             ).first()
             allowlist = list((config.model_allowlist if config else None) or [])
             endpoint = (config.endpoint if config else None) or None
-        include_catalogue = (
-            request.args.get("include_catalogue", "0").lower() in ("1", "true", "yes")
+        include_catalogue = request.args.get("include_catalogue", "0").lower() in (
+            "1",
+            "true",
+            "yes",
         )
         if allowlist and not include_catalogue:
             return api_ok(
@@ -82,7 +84,13 @@ def list_models(user):
         for m in allowlist:
             if m not in models:
                 models.append(m)
-        return api_ok({"models": models, "provider": provider, "unrestricted": len(allowlist) == 0})
+        return api_ok(
+            {
+                "models": models,
+                "provider": provider,
+                "unrestricted": len(allowlist) == 0,
+            }
+        )
         # No allowlist: anything goes (validation enforces nothing), but
         # the dropdown still needs options so non-technical users can pick
         # instead of typing a model id.

@@ -73,9 +73,7 @@ def test_tests_tab_lists_seeded_checks(admin_page, live_server, live_app, seeded
 
     detail = page.locator(DETAIL)
     assert detail.get_by_text("UI: main screen loads in a browser").is_visible()
-    assert detail.get_by_text(
-        "POST /describe returns a valid response"
-    ).is_visible()
+    assert detail.get_by_text("POST /describe returns a valid response").is_visible()
     # Generated checks are labelled so they are not mistaken for manual ones.
     assert detail.get_by_text("build", exact=True).first.is_visible()
     assert_no_page_errors(page)

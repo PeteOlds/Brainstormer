@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from app.extensions import db
-from app.utils import auth
 from app.models.types import GUID
+from app.utils import auth
 
 
 class UserRole(str, Enum):
@@ -26,8 +26,17 @@ class User(db.Model):
     login_count = db.Column(db.Integer, default=0, nullable=False)
     slack_user_id = db.Column(db.String(20), nullable=True, unique=True, index=True)
     can_create_ideas = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     def record_login(self):
         """Stamp last login + bump counter (called on successful login)."""
@@ -49,7 +58,9 @@ class User(db.Model):
             "role": self.role.value,
             "is_active": self.is_active,
             "can_create_ideas": self.can_create_ideas,
-            "last_login_at": self.last_login_at.isoformat() if self.last_login_at else None,
+            "last_login_at": (
+                self.last_login_at.isoformat() if self.last_login_at else None
+            ),
             "login_count": self.login_count or 0,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

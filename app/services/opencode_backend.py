@@ -307,10 +307,8 @@ def list_server_models(
         try:
             import json as _json
 
-            with open(
-                _os.path.expanduser("~/.config/opencode/service.json")
-            ) as _fh:
-                password = (_json.load(_fh).get("password") or "")
+            with open(_os.path.expanduser("~/.config/opencode/service.json")) as _fh:
+                password = _json.load(_fh).get("password") or ""
         except (OSError, ValueError, KeyError):
             password = ""
     headers = {}

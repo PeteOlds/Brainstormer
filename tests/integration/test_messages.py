@@ -25,9 +25,7 @@ def test_message_model_creation(app):
         db.session.add(recipient)
         db.session.flush()
 
-        db.session.add(
-            Membership(user_id=sender.id, instance_id=inst.id, role="USER")
-        )
+        db.session.add(Membership(user_id=sender.id, instance_id=inst.id, role="USER"))
         db.session.add(
             Membership(
                 user_id=recipient.id,
@@ -64,7 +62,7 @@ def test_message_model_creation(app):
 def test_message_with_idea_link(app, client):
     """Test sending a message with an idea link."""
     from app.extensions import db
-    from app.models import Instance, Idea, Membership, User
+    from app.models import Idea, Instance, Membership, User
 
     with app.app_context():
         inst = Instance(number=9903, name="Msg Link Test")
@@ -80,9 +78,7 @@ def test_message_with_idea_link(app, client):
         db.session.add(user)
         db.session.flush()
 
-        db.session.add(
-            Membership(user_id=user.id, instance_id=iid, role="USER")
-        )
+        db.session.add(Membership(user_id=user.id, instance_id=iid, role="USER"))
         db.session.add(
             Membership(user_id=admin.id, instance_id=iid, role="INSTANCE_ADMIN")
         )
@@ -104,7 +100,11 @@ def test_message_with_idea_link(app, client):
     # Login as user
     res = client.post(
         "/api/v1/login",
-        json={"email": "msg-user-link@example.com", "password": "password123", "instance_id": iid},
+        json={
+            "email": "msg-user-link@example.com",
+            "password": "password123",
+            "instance_id": iid,
+        },
     )
     assert res.status_code == 200
     user_token = res.get_json()["data"]["access_token"]
@@ -145,9 +145,7 @@ def test_message_delete_own(app, client):
         db.session.add(user)
         db.session.flush()
 
-        db.session.add(
-            Membership(user_id=user.id, instance_id=iid, role="USER")
-        )
+        db.session.add(Membership(user_id=user.id, instance_id=iid, role="USER"))
         db.session.add(
             Membership(user_id=admin.id, instance_id=iid, role="INSTANCE_ADMIN")
         )
@@ -159,7 +157,11 @@ def test_message_delete_own(app, client):
     # Login as user
     res = client.post(
         "/api/v1/login",
-        json={"email": "msg-user-del@example.com", "password": "password123", "instance_id": iid},
+        json={
+            "email": "msg-user-del@example.com",
+            "password": "password123",
+            "instance_id": iid,
+        },
     )
     assert res.status_code == 200
     user_token = res.get_json()["data"]["access_token"]
@@ -183,12 +185,18 @@ def test_message_delete_own(app, client):
     # Verify it's gone from admin's inbox
     res = client.post(
         "/api/v1/login",
-        json={"email": "msg-admin-del@example.com", "password": "password123", "instance_id": iid},
+        json={
+            "email": "msg-admin-del@example.com",
+            "password": "password123",
+            "instance_id": iid,
+        },
     )
     assert res.status_code == 200
     admin_token = res.get_json()["data"]["access_token"]
 
-    res = client.get("/api/v1/messages", headers={"Authorization": f"Bearer {admin_token}"})
+    res = client.get(
+        "/api/v1/messages", headers={"Authorization": f"Bearer {admin_token}"}
+    )
     assert res.status_code == 200
     ids = [m["id"] for m in res.get_json()["data"]["messages"]]
     assert msg_id not in ids
@@ -213,9 +221,7 @@ def test_admins_picker(app, client):
         db.session.add(user)
         db.session.flush()
 
-        db.session.add(
-            Membership(user_id=user.id, instance_id=iid, role="USER")
-        )
+        db.session.add(Membership(user_id=user.id, instance_id=iid, role="USER"))
         db.session.add(
             Membership(user_id=admin.id, instance_id=iid, role="INSTANCE_ADMIN")
         )
@@ -227,13 +233,19 @@ def test_admins_picker(app, client):
     # Login as user
     res = client.post(
         "/api/v1/login",
-        json={"email": "msg-user-pick@example.com", "password": "password123", "instance_id": iid},
+        json={
+            "email": "msg-user-pick@example.com",
+            "password": "password123",
+            "instance_id": iid,
+        },
     )
     assert res.status_code == 200
     user_token = res.get_json()["data"]["access_token"]
 
     # User can see admin in picker
-    res = client.get("/api/v1/messages/admins", headers={"Authorization": f"Bearer {user_token}"})
+    res = client.get(
+        "/api/v1/messages/admins", headers={"Authorization": f"Bearer {user_token}"}
+    )
     assert res.status_code == 200
     admins = res.get_json()["data"]["admins"]
     assert len(admins) == 1

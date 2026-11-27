@@ -1,6 +1,7 @@
 import os
-import httpx
 from typing import Any
+
+import httpx
 
 
 class OllamaError(Exception):

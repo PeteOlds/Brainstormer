@@ -37,7 +37,13 @@ def test_transition_matrix_unit():
     assert not can_transition(IdeaStatus.SPARK, IdeaStatus.SHIP)
     assert can_transition(IdeaStatus.SCOPE, IdeaStatus.SCOPE)
     assert set(allowed_from(IdeaStatus.ARCHIVE)) == {
-        "DROP", "FREEZE", "MAP", "SCALE", "SCOPE", "SHIP", "SPARK"
+        "DROP",
+        "FREEZE",
+        "MAP",
+        "SCALE",
+        "SCOPE",
+        "SHIP",
+        "SPARK",
     }
 
 

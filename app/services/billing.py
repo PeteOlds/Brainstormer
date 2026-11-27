@@ -9,7 +9,6 @@ the Stripe objects drives everything (`instance_id`, comma-separated
 
 import hashlib
 import hmac
-import structlog
 import time
 from typing import Any
 

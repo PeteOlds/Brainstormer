@@ -17,7 +17,10 @@ class TestIdeasContract:
         # First create an idea
         res = admin_client.post(
             "/api/v1/ideas",
-            json={"prompt_title": "Contract Test Idea", "raw_content": "This is the idea content for testing."},
+            json={
+                "prompt_title": "Contract Test Idea",
+                "raw_content": "This is the idea content for testing.",
+            },
         )
         assert res.status_code == 201, res.get_data(as_text=True)
         idea_id = res.get_json()["data"]["id"]
@@ -29,9 +32,9 @@ class TestIdeasContract:
         idea = data["data"]["idea"]
 
         assert idea["content"] is not None, "content field missing from idea detail"
-        assert idea["content"] == "This is the idea content for testing.", (
-            f"Expected raw content, got: {idea.get('content')!r}"
-        )
+        assert (
+            idea["content"] == "This is the idea content for testing."
+        ), f"Expected raw content, got: {idea.get('content')!r}"
 
     def test_list_ideas_returns_expected_fields(self, admin_client):
         """GET /api/v1/ideas must return ideas with expected fields."""
@@ -50,9 +53,15 @@ class TestIdeasContract:
 
         idea = ideas[0]
         required_fields = [
-            "id", "reference_code", "prompt_title", "status",
-            "net_votes", "upvotes_count", "downvotes_count",
-            "created_at", "updated_at",
+            "id",
+            "reference_code",
+            "prompt_title",
+            "status",
+            "net_votes",
+            "upvotes_count",
+            "downvotes_count",
+            "created_at",
+            "updated_at",
         ]
         for field in required_fields:
             assert field in idea, f"idea missing required field: {field}"
@@ -84,9 +93,9 @@ class TestIdeasContract:
         for idea_id in idea_ids:
             res = admin_client.get(f"/api/v1/ideas/{idea_id}")
             idea = res.get_json()["data"]["idea"]
-            assert idea["status"] == "SCOPE", (
-                f"idea {idea_id} status is {idea['status']}, expected SCOPE"
-            )
+            assert (
+                idea["status"] == "SCOPE"
+            ), f"idea {idea_id} status is {idea['status']}, expected SCOPE"
 
     def test_get_releases_for_idea(self, admin_client):
         """GET /api/v1/ideas/<id>/releases must not 500 and must return
@@ -95,7 +104,11 @@ class TestIdeasContract:
         # First create a parent idea (SCALE status so it can have releases)
         res = admin_client.post(
             "/api/v1/ideas",
-            json={"prompt_title": "Release Parent Idea", "raw_content": "parent", "status": "SCALE"},
+            json={
+                "prompt_title": "Release Parent Idea",
+                "raw_content": "parent",
+                "status": "SCALE",
+            },
         )
         assert res.status_code == 201, res.get_data(as_text=True)
         idea_id = res.get_json()["data"]["id"]
@@ -103,7 +116,9 @@ class TestIdeasContract:
         # Fetch releases for the parent idea - this used to 500 because
         # _release_counts used parent_idea_id instead of parent_id on Idea
         res = admin_client.get(f"/api/v1/ideas/{idea_id}/releases")
-        assert res.status_code == 200, f"releases API returned {res.status_code}: {res.get_data(as_text=True)}"
+        assert (
+            res.status_code == 200
+        ), f"releases API returned {res.status_code}: {res.get_data(as_text=True)}"
         data = res.get_json()
         assert "data" in data, "response missing 'data' key"
         assert "releases" in data["data"], "response data missing 'releases' key"

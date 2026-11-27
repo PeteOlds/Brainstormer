@@ -4,6 +4,7 @@ These helpers derive how to run a built app (entry point, port, runbook) and
 rewrite hard-coded ports. They are pure-ish (no Celery task state) and are
 re-exported from ``app.tasks.ollama_tasks`` for backwards compatibility.
 """
+
 import os
 import re
 
@@ -137,6 +138,8 @@ def _infer_entry_command(
         ):
             return f"python3 {rel}", known_port, f"Start command inferred from {rel}."
     return None, None, None
+
+
 def _extract_runtime_info(files: list, preferred_paths=None) -> dict:
     """Infer how to run a built app from its manifest files.
 
@@ -543,6 +546,8 @@ def _extract_runtime_info(files: list, preferred_paths=None) -> dict:
         }
     )
     return info
+
+
 def _pretty_cmd(value) -> str:
     """Model commands into runnable host commands.
 
@@ -566,6 +571,8 @@ def _pretty_cmd(value) -> str:
     else:
         text = value if isinstance(value, str) else ""
     return _re.sub(r"(^|&&\s*|;\s*|\|\s*|\)\s*)python(?=\s|$)", r"\1python3", text)
+
+
 def _derive_runbook(
     files: list,
     start_command,

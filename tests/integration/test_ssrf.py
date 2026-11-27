@@ -23,19 +23,17 @@ def tenant_admin(app, client):
             db.session.add(user)
             db.session.flush()
         if (
-            Membership.query.filter_by(
-                user_id=user.id, instance_id=inst.id
-            ).first()
+            Membership.query.filter_by(user_id=user.id, instance_id=inst.id).first()
             is None
         ):
             db.session.add(
-                Membership(
-                    user_id=user.id, instance_id=inst.id, role="INSTANCE_ADMIN"
-                )
+                Membership(user_id=user.id, instance_id=inst.id, role="INSTANCE_ADMIN")
             )
         db.session.commit()
         instance_id = str(inst.id)
-        tokens = create_tokens(str(user.id), user.role.value, user.email, False, instance_id)
+        tokens = create_tokens(
+            str(user.id), user.role.value, user.email, False, instance_id
+        )
 
     headers = {"Authorization": f"Bearer {tokens['access_token']}"}
     return client, headers, instance_id

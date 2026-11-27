@@ -38,7 +38,9 @@ def list_instances(user):
     """Own instances (memberships); site admins see everything."""
     if is_site_admin(user):
         instances = Instance.query.order_by(Instance.number.asc()).all()
-        return api_ok({"instances": [i.to_dict(include_billing=True) for i in instances]})
+        return api_ok(
+            {"instances": [i.to_dict(include_billing=True) for i in instances]}
+        )
     memberships = Membership.query.filter_by(user_id=user.id).all()
     ids = [m.instance_id for m in memberships if m.instance_id is not None]
     instances = (
@@ -51,7 +53,9 @@ def list_instances(user):
     payload = []
     for inst in instances:
         role = Membership.get_role(user.id, inst.id)
-        payload.append(inst.to_dict(include_billing=role in ("INSTANCE_ADMIN", "SITE_ADMIN")))
+        payload.append(
+            inst.to_dict(include_billing=role in ("INSTANCE_ADMIN", "SITE_ADMIN"))
+        )
     return api_ok({"instances": payload})
 
 
@@ -106,9 +110,13 @@ def update_instance(user, instance_id):
             try:
                 updates["renewal_date"] = date.fromisoformat(raw)
             except ValueError:
-                return api_error("renewal_date must be an ISO date (YYYY-MM-DD).", status_code=400)
+                return api_error(
+                    "renewal_date must be an ISO date (YYYY-MM-DD).", status_code=400
+                )
         else:
-            return api_error("renewal_date must be an ISO date or null.", status_code=400)
+            return api_error(
+                "renewal_date must be an ISO date or null.", status_code=400
+            )
 
     if "comment" in data:
         raw = data["comment"]
@@ -119,9 +127,13 @@ def update_instance(user, instance_id):
     if "payment_reference" in data:
         raw = data["payment_reference"]
         if raw is not None and not isinstance(raw, str):
-            return api_error("payment_reference must be a string or null.", status_code=400)
+            return api_error(
+                "payment_reference must be a string or null.", status_code=400
+            )
         if raw and len(raw.strip()) > 200:
-            return api_error("payment_reference must be 200 characters or fewer.", status_code=400)
+            return api_error(
+                "payment_reference must be 200 characters or fewer.", status_code=400
+            )
         updates["payment_reference"] = raw.strip() if raw and raw.strip() else None
 
     if "amount_paid" in data:
@@ -132,9 +144,13 @@ def update_instance(user, instance_id):
             try:
                 amount = Decimal(str(raw))
             except (InvalidOperation, ValueError):
-                return api_error("amount_paid must be a number or null.", status_code=400)
+                return api_error(
+                    "amount_paid must be a number or null.", status_code=400
+                )
             if amount < 0:
-                return api_error("amount_paid must be zero or greater.", status_code=400)
+                return api_error(
+                    "amount_paid must be zero or greater.", status_code=400
+                )
             updates["amount_paid"] = amount.quantize(Decimal("0.01"))
 
     if "currency" in data:
@@ -151,7 +167,9 @@ def update_instance(user, instance_id):
         if raw is not None and not isinstance(raw, str):
             return api_error("paid_by must be a string or null.", status_code=400)
         if raw and len(raw.strip()) > 200:
-            return api_error("paid_by must be 200 characters or fewer.", status_code=400)
+            return api_error(
+                "paid_by must be 200 characters or fewer.", status_code=400
+            )
         updates["paid_by"] = raw.strip() if raw and raw.strip() else None
 
     for flag in ("promotional", "charitable"):
@@ -184,7 +202,13 @@ def get_instance(user, instance_id):
             return api_error("Not found.", 404)
         if current_instance_id() is not None and current_instance_id() != instance.id:
             return api_error("Not found.", 404)
-        return api_ok({"instance": instance.to_dict(include_billing=role in ("INSTANCE_ADMIN", "SITE_ADMIN"))})
+        return api_ok(
+            {
+                "instance": instance.to_dict(
+                    include_billing=role in ("INSTANCE_ADMIN", "SITE_ADMIN")
+                )
+            }
+        )
     return api_ok({"instance": instance.to_dict(include_billing=True)})
 
 
@@ -338,9 +362,9 @@ def upsert_ai_config(user, instance_id):
 def test_ai_config(user, instance_id):
     """Run a tiny prompt against a provider config to verify connectivity."""
     from app.models import InstanceAIConfig
-    from app.utils.tenancy import current_instance_id
     from app.services.llm_backends import _litellm_generate, get_provider_config
     from app.services.ollama_client import OllamaClient
+    from app.utils.tenancy import current_instance_id
 
     data = request.get_json() or {}
     provider = (data.get("provider") or "").strip().lower()
@@ -358,8 +382,12 @@ def test_ai_config(user, instance_id):
         client = OllamaClient(base_url, timeout=15.0)
         try:
             resp = client.generate_sync(
-                model=model, prompt="Reply with OK.", system=None,
-                format=None, options={"num_predict": 8}, keep_alive=None,
+                model=model,
+                prompt="Reply with OK.",
+                system=None,
+                format=None,
+                options={"num_predict": 8},
+                keep_alive=None,
             )
             text = (resp.get("response") or "").strip()
             return api_ok({"ok": True, "reply": text[:200]})
@@ -392,17 +420,28 @@ def test_ai_config(user, instance_id):
     endpoint = override_endpoint or (config.endpoint if config else None)
     model = override_model or (
         (config.model_allowlist[0] if (config and config.model_allowlist) else None)
-        or ("gpt-4o-mini" if provider == "openai" else
-            "claude-3-5-haiku-latest" if provider == "anthropic" else
-            "gemini-1.5-flash")
+        or (
+            "gpt-4o-mini"
+            if provider == "openai"
+            else (
+                "claude-3-5-haiku-latest"
+                if provider == "anthropic"
+                else "gemini-1.5-flash"
+            )
+        )
     )
     if not api_key:
         return api_ok({"ok": False, "error": "No API key configured."})
     try:
         result = _litellm_generate(
-            model=model, prompt="Reply with OK.", system=None,
-            options={"num_predict": 8}, api_key=api_key,
-            endpoint=endpoint, timeout=20.0, json_mode=False,
+            model=model,
+            prompt="Reply with OK.",
+            system=None,
+            options={"num_predict": 8},
+            api_key=api_key,
+            endpoint=endpoint,
+            timeout=20.0,
+            json_mode=False,
         )
         return api_ok({"ok": True, "reply": (result.text or "").strip()[:200]})
     except Exception as exc:  # noqa: BLE001
@@ -452,9 +491,7 @@ def upload_guide(user, instance_id):
     return api_ok({"name": path.stem, "file": path.name, "size": size})
 
 
-@bp.route(
-    "/instances/<uuid:instance_id>/guides/<name>", methods=["DELETE"]
-)
+@bp.route("/instances/<uuid:instance_id>/guides/<name>", methods=["DELETE"])
 @token_required
 def delete_guide(user, instance_id, name):
     """Delete an uploaded guide."""
@@ -695,15 +732,15 @@ def _spec_from_build_version(version_row, target, idea_ref):
     import os
     import sys
 
-    from app.services.build_service import (
-        container_path,
-        existing_repo_files,
-        server_path,
-    )
     from app.services.build_runtime import (
         _derive_runbook,
         _extract_runtime_info,
         _merge_files,
+    )
+    from app.services.build_service import (
+        container_path,
+        existing_repo_files,
+        server_path,
     )
 
     out = version_row.result_data or {}
@@ -1164,12 +1201,16 @@ def diagnose_managed_app(user, instance_id, app_id):
 
             client = OllamaClient(timeout=20.0)
             r = client.generate_sync(
-                prompt=prompt, model="llama3:8b", format=None, options={"temperature": 0.2}
+                prompt=prompt,
+                model="llama3:8b",
+                format=None,
+                options={"temperature": 0.2},
             )
             diagnosis = r.get("response", "") if isinstance(r, dict) else str(r)
         except Exception as exc2:
             return api_ok({"diagnosis": f"Diagnosis failed: {exc2}"})
     return api_ok({"diagnosis": diagnosis})
+
 
 @bp.route(
     "/instances/<uuid:instance_id>/managed-apps/<uuid:app_id>/logs",
@@ -1281,9 +1322,9 @@ def add_member(user, instance_id):
     """Add an existing user to an instance (by email)."""
     from app.models import (
         ASSIGNABLE_ROLES,
-        Membership as MembershipModel,
-        User as UserModel,
     )
+    from app.models import Membership as MembershipModel
+    from app.models import User as UserModel
 
     instance, err = _require_instance_admin(user, instance_id)
     if err:
@@ -1310,8 +1351,8 @@ def add_member(user, instance_id):
 
 
 def _last_admin_guard(instance_id, target_user_id):
-    from app.models import Membership as MembershipModel
     from app.models import ROLE_INSTANCE_ADMIN
+    from app.models import Membership as MembershipModel
 
     others = MembershipModel.query.filter(
         MembershipModel.instance_id == instance_id,
@@ -1331,9 +1372,9 @@ def update_member(user, instance_id, member_id):
         ASSIGNABLE_ROLES,
         ROLE_INSTANCE_ADMIN,
         ROLE_USER,
-        Membership as MembershipModel,
-        User as UserModel,
     )
+    from app.models import Membership as MembershipModel
+    from app.models import User as UserModel
 
     instance, err = _require_instance_admin(user, instance_id)
     if err:
@@ -1384,7 +1425,8 @@ def update_member(user, instance_id, member_id):
 @token_required
 def remove_member(user, instance_id, member_id):
     """Remove a membership (never yourself, never the last admin)."""
-    from app.models import ROLE_INSTANCE_ADMIN, Membership as MembershipModel
+    from app.models import ROLE_INSTANCE_ADMIN
+    from app.models import Membership as MembershipModel
 
     instance, err = _require_instance_admin(user, instance_id)
     if err:
@@ -1436,6 +1478,7 @@ def reset_member_password(user, instance_id, member_id):
     target.set_password(temp)
     db.session.commit()
     return api_ok({"user_id": str(member_id), "temp_password": temp})
+
 
 @bp.route("/instances/<uuid:instance_id>/export", methods=["GET"])
 @token_required

@@ -90,8 +90,7 @@ def _routes(files: list) -> list[tuple[str, str]]:
     """(method, path) pairs found in Flask/FastAPI/Express sources."""
     routes: list[tuple[str, str]] = []
     flask_re = re.compile(
-        r"@\w+\.route\(\s*['\"]([^'\"]+)['\"]"
-        r"(?:\s*,\s*methods\s*=\s*\[([^\]]*)\])?"
+        r"@\w+\.route\(\s*['\"]([^'\"]+)['\"]" r"(?:\s*,\s*methods\s*=\s*\[([^\]]*)\])?"
     )
     fastapi_re = re.compile(
         r"@\w+\.(get|post|put|patch|delete)\(\s*['\"]([^'\"]+)['\"]", re.I
@@ -252,8 +251,7 @@ def derive_build_tests(
             }
         )
     if any(
-        str(f.get("path") or "").rsplit("/", 1)[-1] == "package.json"
-        for f in files
+        str(f.get("path") or "").rsplit("/", 1)[-1] == "package.json" for f in files
     ):
         add(
             {
@@ -345,10 +343,9 @@ def seed_idea_tests(idea, tests: list[dict], source: str = BUILD_SOURCE) -> dict
         key = item["name"].strip().lower()
         row = by_name.get(key)
         if row is not None:
-            changed = (
-                row.description != item["description"]
-                or row.test_type != TestType(item["test_type"])
-            )
+            changed = row.description != item[
+                "description"
+            ] or row.test_type != TestType(item["test_type"])
             if changed:
                 row.description = item["description"]
                 row.test_type = TestType(item["test_type"])

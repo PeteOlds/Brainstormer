@@ -313,7 +313,7 @@ def restore_instance_backup(user, instance_id):
     confirm = (request.form.get("confirm") or "").strip()
     if confirm != str(instance.number):
         return api_error(
-            f'Type the instance number ({instance.number}) to confirm.', 400
+            f"Type the instance number ({instance.number}) to confirm.", 400
         )
     bundle, error = _read_upload()
     if error:

@@ -39,9 +39,9 @@ def _git_env(pat: str | None = None) -> dict:
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
     if pat:
-        token = base64.b64encode(
-            f"x-access-token:{pat}".encode("utf-8")
-        ).decode("ascii")
+        token = base64.b64encode(f"x-access-token:{pat}".encode("utf-8")).decode(
+            "ascii"
+        )
         env["GIT_CONFIG_COUNT"] = "1"
         env["GIT_CONFIG_KEY_0"] = "http.https://github.com/.extraheader"
         env["GIT_CONFIG_VALUE_0"] = f"AUTHORIZATION: basic {token}"

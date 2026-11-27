@@ -1,8 +1,7 @@
 name: fast-checks
 
-# Advisory while the existing baseline is cleaned up (RM-069). These checks
-# are deliberately NOT required by branch protection yet: making them
-# required today would block every PR on pre-existing formatting/type debt.
+# Required by branch protection. Formatting is clean and type errors are
+# gated by a reviewed baseline, so new debt cannot enter through a PR.
 
 on:
   push:
@@ -22,13 +21,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
       - name: Black
-        continue-on-error: true
         run: black --check app tests
       - name: isort
-        continue-on-error: true
         run: isort --check-only app tests
-      - name: mypy
-        continue-on-error: true
-        run: mypy app
-      - name: Advisory summary
-        run: echo "Fast checks are advisory until RM-069 clears the baseline and makes them required."
+      - name: Type check
+        run: python scripts/check_types.py

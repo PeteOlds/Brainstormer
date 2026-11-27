@@ -123,7 +123,9 @@ def main():
         *handler_args, directory=args.root, backend=args.backend, **handler_kwargs
     )
     # Bind all interfaces so sibling containers can reach the proxy.
-    httpd = socketserver.ThreadingTCPServer(("0.0.0.0", args.port), handler)  # nosec B104
+    httpd = socketserver.ThreadingTCPServer(
+        ("0.0.0.0", args.port), handler  # nosec B104
+    )
     httpd.allow_reuse_address = True
     try:
         httpd.serve_forever()

@@ -50,9 +50,7 @@ def create_tokens(
 ) -> dict:
     """Create access and refresh tokens for a user with refresh token rotation."""
     # Create access token with role claim using PyJWT directly
-    access_payload, csrf_token = _access_payload(
-        user_id, role, email, instance_id
-    )
+    access_payload, csrf_token = _access_payload(user_id, role, email, instance_id)
     access_token = jwt.encode(
         access_payload,
         current_app.config["JWT_SECRET_KEY"],

@@ -143,9 +143,7 @@ def seeded(live_app):
             ).first()
             if exists is None:
                 db.session.add(
-                    Membership(
-                        user_id=user.id, instance_id=instance.id, role=role
-                    )
+                    Membership(user_id=user.id, instance_id=instance.id, role=role)
                 )
         db.session.commit()
 

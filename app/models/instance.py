@@ -41,7 +41,9 @@ class Instance(db.Model):
     comment = db.Column(db.Text, nullable=True)
     payment_reference = db.Column(db.String(200), nullable=True)
     amount_paid = db.Column(db.Numeric(12, 2), nullable=True)
-    currency = db.Column(db.String(3), nullable=False, default="NZD", server_default="NZD")
+    currency = db.Column(
+        db.String(3), nullable=False, default="NZD", server_default="NZD"
+    )
     paid_by = db.Column(db.String(200), nullable=True)
     promotional = db.Column(db.Boolean, default=False, nullable=False)
     charitable = db.Column(db.Boolean, default=False, nullable=False)
@@ -80,10 +82,14 @@ class Instance(db.Model):
         if include_billing:
             data.update(
                 {
-                    "renewal_date": self.renewal_date.isoformat() if self.renewal_date else None,
+                    "renewal_date": (
+                        self.renewal_date.isoformat() if self.renewal_date else None
+                    ),
                     "comment": self.comment,
                     "payment_reference": self.payment_reference,
-                    "amount_paid": str(self.amount_paid) if self.amount_paid is not None else None,
+                    "amount_paid": (
+                        str(self.amount_paid) if self.amount_paid is not None else None
+                    ),
                     "currency": self.currency,
                     "paid_by": self.paid_by,
                     "promotional": self.promotional,

@@ -19,22 +19,37 @@ def _detect_stack(paths: Iterable[str]) -> tuple[str, str, str, str]:
             "npm start",
             "npm test",
         )
-    if any(p.endswith(("requirements.txt", "pyproject.toml")) or p.endswith(".py") for p in names):
-        entry = "app.py" if "app.py" in names else ("main.py" if "main.py" in names else "app.py")
+    if any(
+        p.endswith(("requirements.txt", "pyproject.toml")) or p.endswith(".py")
+        for p in names
+    ):
+        entry = (
+            "app.py"
+            if "app.py" in names
+            else ("main.py" if "main.py" in names else "app.py")
+        )
         return (
             "Python (Flask-style app)",
             "python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt",
             f"python {entry}",
             "python -m pytest -q",
         )
-    if any(p.endswith(("dockerfile", "docker-compose.yml", "docker-compose.yaml")) for p in names):
+    if any(
+        p.endswith(("dockerfile", "docker-compose.yml", "docker-compose.yaml"))
+        for p in names
+    ):
         return (
             "Containerised app",
             "docker compose build",
             "docker compose up",
             "docker compose run --rm app npm test || true",
         )
-    return ("See the source files", "inspect the README", "inspect the entry point", "none defined")
+    return (
+        "See the source files",
+        "inspect the README",
+        "inspect the entry point",
+        "none defined",
+    )
 
 
 def render_agents_md(files: list[dict], target_name: str | None = None) -> str:

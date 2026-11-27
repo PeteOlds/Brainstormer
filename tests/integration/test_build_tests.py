@@ -30,13 +30,13 @@ FLASK_IDEA = [
             "\n"
             "app = Flask(__name__)\n"
             "\n"
-            "@app.route(\"/\")\n"
+            '@app.route("/")\n'
             "def index():\n"
-            "    return render_template(\"index.html\")\n"
+            '    return render_template("index.html")\n'
             "\n"
-            "@app.route(\"/describe\", methods=[\"POST\"])\n"
+            '@app.route("/describe", methods=["POST"])\n'
             "def describe():\n"
-            "    return jsonify({\"description\": \"x\"})\n"
+            '    return jsonify({"description": "x"})\n'
         ),
     },
     {"path": "templates/index.html", "content": "<html><body>hi</body></html>"},
@@ -54,7 +54,9 @@ class TestDeriveBuildTests:
             "app_url": "http://192.168.1.130:5000",
             "start_command": "python3 app.py",
         }
-        tests = derive_build_tests(FLASK_IDEA, runtime, runbook={"run": "python3 app.py"})
+        tests = derive_build_tests(
+            FLASK_IDEA, runtime, runbook={"run": "python3 app.py"}
+        )
 
         # The UI check comes first and is an e2e check naming the URL.
         assert tests[0]["test_type"] == "e2e"
@@ -96,9 +98,9 @@ class TestDeriveBuildTests:
                 "content": (
                     "from fastapi import FastAPI\n"
                     "app = FastAPI()\n"
-                    "@app.get(\"/health\")\n"
+                    '@app.get("/health")\n'
                     "def health():\n"
-                    "    return {\"ok\": True}\n"
+                    '    return {"ok": True}\n'
                 ),
             }
         ]
@@ -107,9 +109,7 @@ class TestDeriveBuildTests:
         assert any("get /health" in t["name"].lower() for t in tests)
 
     def test_no_entry_point_still_returns_a_manual_check(self):
-        tests = derive_build_tests(
-            [{"path": "README.md", "content": "hi"}], runtime={}
-        )
+        tests = derive_build_tests([{"path": "README.md", "content": "hi"}], runtime={})
         assert len(tests) == 1
         assert tests[0]["test_type"] == "manual"
 
@@ -170,8 +170,15 @@ class TestSeedIdeaTests:
             seed_idea_tests(idea, [{"name": "UI: home loads", "test_type": "e2e"}])
             db.session.commit()
 
-            assert IdeaTest.query.filter_by(idea_id=idea.id, name="Manually verified login").count() == 1
-            assert IdeaTest.query.filter_by(idea_id=idea.id, source="manual").count() == 1
+            assert (
+                IdeaTest.query.filter_by(
+                    idea_id=idea.id, name="Manually verified login"
+                ).count()
+                == 1
+            )
+            assert (
+                IdeaTest.query.filter_by(idea_id=idea.id, source="manual").count() == 1
+            )
 
 
 class TestConfirmBuildSeedsTests:

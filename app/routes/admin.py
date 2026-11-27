@@ -206,7 +206,9 @@ def _prompts_health():
     # Batched aggregates: one query per metric instead of 4 per prompt.
     runs_by_prompt = dict(
         db.session.query(PromptRun.prompt_config_id, func.count(PromptRun.id))
-        .filter(PromptRun.prompt_config_id.in_(prompt_ids), PromptRun.created_at >= cutoff)
+        .filter(
+            PromptRun.prompt_config_id.in_(prompt_ids), PromptRun.created_at >= cutoff
+        )
         .group_by(PromptRun.prompt_config_id)
         .all()
     )
@@ -350,9 +352,7 @@ def prompt_stats(user, prompt_id):
         .scalar()
         or 0
     )
-    avg_net = (
-        db.session.query(func.avg(Idea.net_score)).filter(*idea_filters).scalar()
-    )
+    avg_net = db.session.query(func.avg(Idea.net_score)).filter(*idea_filters).scalar()
     avg_feas = (
         db.session.query(func.avg(Idea.feasibility_score))
         .filter(*idea_filters, Idea.feasibility_score.isnot(None))
@@ -386,7 +386,14 @@ def prompt_stats(user, prompt_id):
         model = run.model or prompt.model_name or "—"
         bucket = by_model.setdefault(
             (provider, model),
-            {"provider": provider, "model": model, "runs": 0, "success": 0, "failed": 0, "seconds": []},
+            {
+                "provider": provider,
+                "model": model,
+                "runs": 0,
+                "success": 0,
+                "failed": 0,
+                "seconds": [],
+            },
         )
         bucket["runs"] += 1
         if status == "SUCCESS":
@@ -404,9 +411,7 @@ def prompt_stats(user, prompt_id):
         .order_by(PromptRun.finished_at.desc())
         .first()
     )
-    last_run = (
-        _runs_query().order_by(PromptRun.created_at.desc()).first()
-    )
+    last_run = _runs_query().order_by(PromptRun.created_at.desc()).first()
 
     models = [
         {
@@ -493,7 +498,9 @@ def prompt_stats(user, prompt_id):
                 "total": sum(by_status.values()),
                 "by_status": by_status,
                 "created_in_window": ideas_in_window,
-                "avg_net_score": round(float(avg_net), 1) if avg_net is not None else None,
+                "avg_net_score": (
+                    round(float(avg_net), 1) if avg_net is not None else None
+                ),
                 "avg_feasibility": (
                     round(float(avg_feas), 1) if avg_feas is not None else None
                 ),
@@ -521,10 +528,12 @@ def prompt_stats(user, prompt_id):
                             or last_failure.categorize_error(last_failure.error)
                         ),
                         "created_at": (
-                            last_failure.finished_at or last_failure.created_at
-                        ).isoformat()
-                        if (last_failure.finished_at or last_failure.created_at)
-                        else None,
+                            (
+                                last_failure.finished_at or last_failure.created_at
+                            ).isoformat()
+                            if (last_failure.finished_at or last_failure.created_at)
+                            else None
+                        ),
                     }
                     if last_failure is not None
                     else None
@@ -589,8 +598,9 @@ def backup_page(user):
 @admin_required
 def activity_stats(user):
     """Activity, performance and popularity stats for the admin dashboard."""
-    from app.models import PromptRun, PromptRunStatus
     from datetime import datetime, timedelta, timezone
+
+    from app.models import PromptRun, PromptRunStatus
 
     # Optional server-side run filters (?run_status=, ?model=, ?idea_number=).
     # The stream defaults to the 20 most recent runs; a filter widens the

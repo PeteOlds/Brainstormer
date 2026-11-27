@@ -52,11 +52,7 @@ def build_release_notes(release, children, moved: int, rejected: int = 0) -> str
         lines.append(
             f"{child.prompt_title or child.reference_code} ({child.reference_code})"
         )
-    finished = (
-        release.completed_at.strftime("%d-%b-%y")
-        if release.completed_at
-        else ""
-    )
+    finished = release.completed_at.strftime("%d-%b-%y") if release.completed_at else ""
     lines.append("")
     lines.append(f"Finished {finished}: {moved} shipped")
     return "\n".join(lines)

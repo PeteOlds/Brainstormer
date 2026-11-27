@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.107.0 — 2026-11-27
+
+### Features
+- RM-069: `fast-checks` is now a required CI check. Black and isort are clean across `app/` and `tests/`, and `scripts/check_types.py` gates mypy against a reviewed baseline of 280 existing errors, failing only on new ones.
+
+---
+
 ## v0.106.0 — 2026-11-27
 
 ### Features

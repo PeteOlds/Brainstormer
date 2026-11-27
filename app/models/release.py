@@ -55,7 +55,9 @@ class Release(db.Model):
     pipeline_status = db.Column(
         db.String(20), default="idle", nullable=False
     )  # idle|running|stopping|done|failed
-    pipeline_phase = db.Column(db.String(20), nullable=True)  # prd|design|build|test|done
+    pipeline_phase = db.Column(
+        db.String(20), nullable=True
+    )  # prd|design|build|test|done
     pipeline_state = db.Column(db.JSON, nullable=True)
     pipeline_started_at = db.Column(db.DateTime(timezone=True), nullable=True)
     pipeline_finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -76,9 +78,7 @@ class Release(db.Model):
         path = release_notes_path(self, parent)
         target = None
         if parent is not None:
-            target, _ = resolve_build_target(
-                parent, release=self, allow_create=False
-            )
+            target, _ = resolve_build_target(parent, release=self, allow_create=False)
         return {
             "id": str(self.id),
             "parent_idea_id": str(self.parent_idea_id),
