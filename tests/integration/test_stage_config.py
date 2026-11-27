@@ -69,11 +69,18 @@ def test_stage_crud_and_validation(app, client):
 
     res = client.put(
         f"/api/v1/instances/{iid}/stage-config",
+        json={"stage": "SPARK", "num_ctx": 16},
+        headers=headers,
+    )
+    assert res.status_code == 400
+    res = client.put(
+        f"/api/v1/instances/{iid}/stage-config",
         json={
             "stage": "SPARK",
             "provider": "ollama",
             "model_name": "llama3:8b",
             "temperature": 0.2,
+            "num_ctx": 8192,
             "skills": ["a"],
             "guidelines": ["g"],
         },
@@ -82,6 +89,7 @@ def test_stage_crud_and_validation(app, client):
     assert res.status_code == 200, res.get_json()
     body = res.get_json()["data"]["stage_config"]
     assert body["temperature"] == 0.2 and body["skills"] == ["a"]
+    assert body["num_ctx"] == 8192
 
     res = client.get(f"/api/v1/instances/{iid}/stage-config", headers=headers)
     stages = res.get_json()["data"]["stages"]
@@ -90,6 +98,7 @@ def test_stage_crud_and_validation(app, client):
 
     with app.app_context():
         assert resolve_stage(uuid_parse(iid), "SPARK")["temperature"] == 0.2
+        assert resolve_stage(uuid_parse(iid), "SPARK")["num_ctx"] == 8192
         assert resolve_stage(uuid_parse(iid), "MAP") == {}
 
 

@@ -1639,6 +1639,14 @@ def upsert_stage_config(user, instance_id):
             return api_error("num_predict must be an integer.", status_code=400)
         if not 1 <= num_predict <= 4096:
             return api_error("num_predict must be 1-4096.", status_code=400)
+    num_ctx = data.get("num_ctx")
+    if num_ctx is not None:
+        try:
+            num_ctx = int(num_ctx)
+        except (TypeError, ValueError):
+            return api_error("num_ctx must be an integer.", status_code=400)
+        if not 512 <= num_ctx <= 131072:
+            return api_error("num_ctx must be 512-131072.", status_code=400)
     for list_key in ("skills", "guidelines"):
         if list_key in data and (
             not isinstance(data[list_key], list)
@@ -1678,6 +1686,8 @@ def upsert_stage_config(user, instance_id):
         row.top_p = top_p
     if "num_predict" in data:
         row.num_predict = num_predict
+    if "num_ctx" in data:
+        row.num_ctx = num_ctx
     if "skills" in data:
         row.skills = list(data["skills"])
     if "guidelines" in data:

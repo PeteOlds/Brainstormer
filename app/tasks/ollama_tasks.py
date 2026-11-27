@@ -88,7 +88,12 @@ def _generation_options(prompt_config, stage_cfg=None) -> dict:
     }
     if getattr(prompt_config, "seed", None) is not None:
         options["seed"] = prompt_config.seed
-    for key in ("temperature", "top_p", "num_predict"):
+    # Context size is deliberately opt-in: local models share VRAM with the
+    # rest of the machine, so an unset value keeps Ollama's own default.
+    configured_ctx = getattr(prompt_config, "num_ctx", None)
+    if configured_ctx is not None:
+        options["num_ctx"] = configured_ctx
+    for key in ("temperature", "top_p", "num_predict", "num_ctx"):
         if stage_cfg and stage_cfg.get(key) is not None:
             options[key] = stage_cfg[key]
     return options
@@ -1323,7 +1328,7 @@ def run_secondary_action(
             options = {"temperature": 0.3}
             # Prompt-less ideas (children, manual ideas) still honour the
             # release/stage panel for params.
-            for key in ("top_p", "num_predict"):
+            for key in ("top_p", "num_predict", "num_ctx"):
                 if merged_cfg.get(key) is not None:
                     options[key] = merged_cfg[key]
         chosen_temp = merged_cfg.get("temperature")

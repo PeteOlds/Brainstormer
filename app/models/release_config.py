@@ -29,6 +29,7 @@ class ReleaseAIConfig(db.Model):
     temperature = db.Column(db.Float, nullable=True)
     top_p = db.Column(db.Float, nullable=True)
     num_predict = db.Column(db.Integer, nullable=True)
+    num_ctx = db.Column(db.Integer, nullable=True)
     skills = db.Column(db.JSON, default=list)
     guidelines = db.Column(db.JSON, default=list)
     created_at = db.Column(
@@ -54,6 +55,7 @@ class ReleaseAIConfig(db.Model):
             "temperature": self.temperature,
             "top_p": self.top_p,
             "num_predict": self.num_predict,
+            "num_ctx": self.num_ctx,
             "skills": list(self.skills or []),
             "guidelines": list(self.guidelines or []),
         }
@@ -83,6 +85,8 @@ def resolve_release(idea) -> dict:
         merged["top_p"] = row.top_p
     if row.num_predict is not None:
         merged["num_predict"] = row.num_predict
+    if row.num_ctx is not None:
+        merged["num_ctx"] = row.num_ctx
     if row.skills:
         merged["skills"] = list(row.skills)
     if row.guidelines:

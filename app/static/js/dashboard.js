@@ -1036,6 +1036,7 @@ function ideasApp() {
                                 temperature: ai.temperature ?? '',
                                 top_p: ai.top_p ?? '',
                                 num_predict: ai.num_predict ?? '',
+                                num_ctx: ai.num_ctx ?? '',
                                 // Arrays end to end: the multiselect control
                                 // edits them directly, no comma round-trip.
                                 skills: Array.isArray(ai.skills) ? [...ai.skills] : [],
@@ -1814,6 +1815,7 @@ function ideasApp() {
                 temperature: draft.temperature === '' ? null : Number(draft.temperature),
                 top_p: draft.top_p === '' ? null : Number(draft.top_p),
                 num_predict: draft.num_predict === '' ? null : Number(draft.num_predict),
+                num_ctx: draft.num_ctx === '' ? null : Number(draft.num_ctx),
                 skills: Array.isArray(draft.skills) ? [...draft.skills] : [],
                 guidelines: Array.isArray(draft.guidelines) ? [...draft.guidelines] : [],
             };

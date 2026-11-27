@@ -799,6 +799,10 @@
                                                 <input x-model="relAiDraft[rel.id].num_predict" type="number" step="100" min="100" placeholder="—" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
                                             </div>
                                             <div>
+                                                <label class="block text-[11px] text-slate-400 dark:text-slate-500">Context (num_ctx)</label>
+                                                <input x-model="relAiDraft[rel.id].num_ctx" type="number" step="512" min="512" placeholder="—" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700">
+                                            </div>
+                                            <div>
                                                 {{ ai_multiselect("Skills", "discoverySkills", "relAiDraft[rel.id].skills", "relAiOpen['skills-' + rel.id]", "s.description", "Stage default", "sm", "None available.", "release-ai-skills") }}
                                             </div>
                                         </div>

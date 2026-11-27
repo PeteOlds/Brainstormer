@@ -420,6 +420,34 @@ def opencode_generate(
     started = time.monotonic()
     attached = bool(attach_url)
     with _run_dir(workspace, attach_url) as (cwd, server_dir):
+        # num_ctx is an Ollama option. There is no CLI flag for it, so for
+        # local sandbox runs we express it in a throwaway opencode.json.
+        # Repo/attached workspaces are never modified: their context is
+        # managed by the remote server or the project's own config.
+        num_ctx = None
+        if options:
+            try:
+                num_ctx = int(options.get("num_ctx") or 0) or None
+            except (TypeError, ValueError):
+                num_ctx = None
+        if num_ctx and not attach_url and workspace == "sandbox":
+            provider_id = model.split("/", 1)[0] if "/" in model else "ollama"
+            config_path = os.path.join(cwd, "opencode.json")
+            try:
+                with open(config_path, "w", encoding="utf-8") as fh:
+                    json.dump(
+                        {"provider": {provider_id: {"options": {"num_ctx": num_ctx}}}},
+                        fh,
+                    )
+            except OSError:
+                pass
+        elif num_ctx:
+            logger.info(
+                "opencode_num_ctx_server_managed",
+                model=model,
+                num_ctx=num_ctx,
+                attached=bool(attach_url),
+            )
         if attach_url and server_dir:
             argv.append(server_dir)
         argv.append(_compose_message(prompt_text, system))
