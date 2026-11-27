@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.4 — 2026-11-27
+
+### Bug fixes
+- BUG.062 (#39) / BUG.064 (#40): Brief and Design documents now render as labelled sections and readable bullets in the Flutter detail view, including typed screen/entity/endpoint specs. Raw JSON remains available through View details.
+
+---
+
 ## v0.109.3 — 2026-11-27
 
 ### Bug fixes
