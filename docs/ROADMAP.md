@@ -20,7 +20,6 @@ Spec baselines: `PRD_V2.md`, `docs/Design.md`, `Guardrail.md`. Standing decision
 | --- | --- | --- | --- |
 | RM-001 | blocked | **Device CI maiden run (Chrome)** | Workflow now builds with `./scripts/build_web.sh`; a confirmed green GitHub Actions run is still required. |
 | RM-002 | in-progress | **Coverage ratchet to 85%** | Gate restored to 75% with tests for release and supervision wrappers; the ratchet to 85% remains. |
-| RM-003 | blocked | **GitHub flow CI coverage** | Mocked push-flow tests always run; the optional Actions secret `CI_TEST_PAT` (exposed to tests as `GITHUB_TEST_PAT`) enables the CI-secret leg. The secret is now configured; live GitHub-flow coverage still needs test work. Issue: #47 |
 
 ## R2 — User-visible bug sweep
 
@@ -184,7 +183,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **REQ.039** — Bookkeeping: the v0.100.0 status-bar items were renumbered to REQ.038/REQ.039, the duplicated v0.96.21 release block was merged, and the roadmap regained RM-005. *(v0.101.0)*
 - **RM-001** — Device CI maiden run (Chrome). Workflow now builds with `./scripts/build_web.sh`; a confirmed green GitHub Actions run is still required. *(outstanding)*
 - **RM-002** — Coverage ratchet to 85%. Gate restored to 75% with tests for release and supervision wrappers; the ratchet to 85% remains. *(outstanding)*
-- **RM-003** — GitHub flow CI coverage. Mocked push-flow tests always run; the optional Actions secret `CI_TEST_PAT` (exposed to tests as `GITHUB_TEST_PAT`) enables the CI-secret leg. The secret is now configured; live GitHub-flow coverage still needs test work. *(outstanding)*
+- **RM-003** — Added a local git clone/commit/push round-trip plus a live scratch-repo test gated by `CI_TEST_PAT`; PAT stays out of argv and output. *(v0.109.7)*
 - **RM-004** — OpenCode attach-mode auth. Investigate and fix LAN attach-mode auth: `OPENCODE_PASSWORD`/server password from `~/.config/opencode/service.json` is rejected by the v2 CLI client. Replace the current Ollama workaround for SHIP/SCALE once verified. *(outstanding)*
 - **RM-005** — Bookkeeping: the v0.100.0 status-bar items were renumbered to REQ.038/REQ.039, the duplicated v0.96.21 release block was merged, and the roadmap regained RM-005. *(v0.101.0)*
 - **RM-010** — Roadmap updated: RM-010 completed (cutover flip) and replaced by RM-013 for template removal after monitoring. *(v0.89.0)*

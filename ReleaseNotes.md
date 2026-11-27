@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.7 — 2026-11-28
+
+### Features
+- RM-003 (#47): added GitHub-flow CI coverage — a deterministic local git round-trip through `_run_git`, plus a live clone/commit/push/delete test against a dedicated scratch repo, gated by `CI_TEST_PAT`. The token is passed out-of-band and never appears in argv or surfaced output.
+
+---
+
 ## v0.109.6 — 2026-11-28
 
 ### Bug fixes
