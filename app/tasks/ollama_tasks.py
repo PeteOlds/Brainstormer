@@ -1204,6 +1204,30 @@ def run_secondary_action(
                     target=build_target.name,
                     chars=len(snapshot),
                 )
+            # The current Design doc is the build contract. Render its typed
+            # specs (or legacy strings) into the prompt instead of relying
+            # on the generic "Prior Analyses" key list.
+            from app.models import ActionType, SecondaryActionResult as _Result
+            from app.services.design_contract import render_design_contract
+
+            design = (
+                _Result.query.filter_by(
+                    idea_id=idea.id,
+                    action_type=ActionType.DESIGN_DOC,
+                    is_current=True,
+                )
+                .order_by(_Result.executed_at.desc())
+                .first()
+            )
+            if design is not None and isinstance(design.result_data, dict):
+                contract = render_design_contract(design.result_data)
+                if contract:
+                    supporting_material += "\n\n### Design contract\n" + contract
+                    logger.info(
+                        "build_design_contract_injected",
+                        idea_id=idea_id,
+                        chars=len(contract),
+                    )
 
         user_prompt = prompt_template.render(
             ORIGINAL_IDEA_CONTENT=idea.raw_content,

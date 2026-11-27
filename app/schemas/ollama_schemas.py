@@ -82,15 +82,91 @@ class PrdOutput(BaseModel):
     open_questions: List[str] = Field(default_factory=list, max_length=5)
 
 
+class ScreenSpec(BaseModel):
+    """One screen/component in the typed design contract."""
+    name: str = Field(..., min_length=1, max_length=120)
+    purpose: str = ""
+    components: List[str] = Field(default_factory=list)
+    states: List[str] = Field(default_factory=list)
+
+
+class EntitySpec(BaseModel):
+    """One data entity in the typed design contract."""
+    name: str = Field(..., min_length=1, max_length=120)
+    fields: List[str] = Field(default_factory=list)
+    relationships: str = ""
+
+
+class EndpointSpec(BaseModel):
+    """One API endpoint in the typed design contract."""
+    method: str = Field(..., min_length=2, max_length=10)
+    path: str = Field(..., min_length=1, max_length=200)
+    request: str = ""
+    response: str = ""
+    auth: str = ""
+
+
+def screens_to_text(specs: List[ScreenSpec]) -> str:
+    lines = []
+    for s in specs:
+        lines.append(f"- {s.name}: {s.purpose}".rstrip(": "))
+        if s.components:
+            lines.append("  components: " + ", ".join(s.components))
+        if s.states:
+            lines.append("  states: " + ", ".join(s.states))
+    return "\n".join(lines)
+
+
+def entities_to_text(specs: List[EntitySpec]) -> str:
+    lines = []
+    for e in specs:
+        lines.append(f"- {e.name}: {', '.join(e.fields)}".rstrip(": "))
+        if e.relationships:
+            lines.append(f"  relationships: {e.relationships}")
+    return "\n".join(lines)
+
+
+def endpoints_to_text(specs: List[EndpointSpec]) -> str:
+    lines = []
+    for e in specs:
+        lines.append(f"- {e.method.upper()} {e.path}")
+        if e.request:
+            lines.append(f"  request: {e.request}")
+        if e.response:
+            lines.append(f"  response: {e.response}")
+        if e.auth:
+            lines.append(f"  auth: {e.auth}")
+    return "\n".join(lines)
+
+
 class DesignDocOutput(BaseModel):
-    """Design document — build-ready blueprint derived from the PRD:
-    architecture, screens/components, data model, API contracts."""
-    architecture: str = Field(..., min_length=20)
-    screens: str = Field(..., min_length=20)
-    data_model: str = Field(..., min_length=20)
-    api_contracts: str = Field(..., min_length=20)
-    build_notes: str = Field(..., min_length=20)
+    """Design document — build-ready blueprint derived from the PRD.
+
+    The original flat string sections remain authoritative for stored
+    documents and existing views. ``*_specs`` add typed arrays so a local
+    model can hand the code-generation turn a compact, structured contract.
+    When the model emits only the arrays, the flat summaries are filled in
+    automatically so nothing downstream needs changing.
+    """
+    architecture: str = Field(default="", min_length=20)
+    screens: str = Field(default="", min_length=20)
+    data_model: str = Field(default="", min_length=20)
+    api_contracts: str = Field(default="", min_length=20)
+    build_notes: str = Field(default="", min_length=20)
     open_questions: List[str] = Field(default_factory=list, max_length=5)
+    screen_specs: List[ScreenSpec] = Field(default_factory=list, max_length=20)
+    entity_specs: List[EntitySpec] = Field(default_factory=list, max_length=20)
+    endpoint_specs: List[EndpointSpec] = Field(default_factory=list, max_length=30)
+
+    @model_validator(mode="after")
+    def _sync_legacy_summaries(self):
+        if not self.screens and self.screen_specs:
+            self.screens = screens_to_text(self.screen_specs)
+        if not self.data_model and self.entity_specs:
+            self.data_model = entities_to_text(self.entity_specs)
+        if not self.api_contracts and self.endpoint_specs:
+            self.api_contracts = endpoints_to_text(self.endpoint_specs)
+        return self
 
 
 class VrioOutput(BaseModel):

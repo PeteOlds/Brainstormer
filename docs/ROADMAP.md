@@ -56,7 +56,6 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 
 | ID | Status | Item | Notes / acceptance |
 | --- | --- | --- | --- |
-| RM-052 | planned | **Typed design contract for codegen** | `DesignDocOutput` is currently all plain strings, so the BUILD_CODE turn must hold unstructured prose in an ~8k-char context. Add typed `screens`, `entities`, `endpoints` (and keep the existing string fields for stored manifests), update `design_doc.txt` and `build_code.txt` to consume them. Acceptance: existing manifests still validate; schema tests cover both shapes. Issue: #4 |
 | RM-053 | planned | **Deterministic build manifest lint** | Before confirm, reject manifests with unsafe/absolute paths, per-file line count over ~300, TODO/placeholder stubs, or missing runbook. Follow the `scripts/check_no_external_calls.py` pattern; give actionable errors. Model-described checks (`BuildTest`) are not a gate. Issue: #5 |
 | RM-054 | planned | **Server-authored `AGENTS.md` in generated builds** | Emit a concise AGENTS.md (stack, layout, naming, test/run commands) into the manifest from server-side code, never model prose. Include it in incremental "EXISTING PROJECT FILES" builds so later agentic fixes stay within contract. Issue: #6 |
 | RM-055 | planned | **Vertical BUILD_CODE checkpoints** | Replace the single 25-file/60k-char turn with staged slices — schema + data + happy-path test, then UI/routes, then polish — reusing the parent/child idea flow. Keep a single-shot path for small builds. Acceptance: each checkpoint verifies before the next starts. Issue: #7 |
@@ -81,7 +80,7 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 
 ## Agentic-readiness design notes
 
-Guidance applied to both generated apps and brainstormer itself. These are standing principles, not work items; the work is tracked as RM-052–RM-068.
+Guidance applied to both generated apps and brainstormer itself. These are standing principles, not work items; the outstanding work is tracked as RM-053–RM-068.
 
 - **Small, single-purpose files** — roughly 150–300 lines where practical, with clear entry and exit points.
 - **Organise by feature/domain slice** for generated apps; keep brainstormer's existing layer layout (see RM-058).
@@ -212,7 +211,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **RM-020** — Roadmap cleanup: removed RM-012 (forgotten password flow) and RM-020 (multi-instance membership/switching) as already shipped in earlier releases. *(v0.89.0)*
 - **RM-040.1** — HOLD<br>Site Administrator should be able to configure default Guides for each phase, and this will apply across all instances.  On first configuration, this should be copied to all instances.  Instance administrator should be able to Guides should be. *(outstanding)*
 - **RM-051** — Bookkeeping: the live Stripe roadmap item is now RM-051, avoiding a clash with the shipped Guides request, and the old System settings tile wording request is recorded as BUG.070. *(v0.101.0)*
-- **RM-052** — Typed design contract for codegen. `DesignDocOutput` is currently all plain strings, so the BUILD_CODE turn must hold unstructured prose in an ~8k-char context. Add typed `screens`, `entities`, `endpoints` (and keep the existing string fields for stored manifests), update `design_doc.txt` and `build_code.txt` to consume them. Acceptance: existing manifests still validate; schema tests cover both shapes. Issue: #4 *(outstanding)*
+- **RM-052** — Design documents now carry typed screen/entity/endpoint specs; legacy summaries are filled from them, and BUILD_CODE receives a capped "Design contract" section instead of a key-only analysis summary. *(v0.102.0)*
 - **RM-053** — Deterministic build manifest lint. Before confirm, reject manifests with unsafe/absolute paths, per-file line count over ~300, TODO/placeholder stubs, or missing runbook. Follow the `scripts/check_no_external_calls.py` pattern; give actionable errors. Model-described checks (`BuildTest`) are not a gate. Issue: #5 *(outstanding)*
 - **RM-054** — Server-authored `AGENTS.md` in generated builds. Emit a concise AGENTS.md (stack, layout, naming, test/run commands) into the manifest from server-side code, never model prose. Include it in incremental "EXISTING PROJECT FILES" builds so later agentic fixes stay within contract. Issue: #6 *(outstanding)*
 - **RM-055** — Vertical BUILD_CODE checkpoints. Replace the single 25-file/60k-char turn with staged slices — schema + data + happy-path test, then UI/routes, then polish — reusing the parent/child idea flow. Keep a single-shot path for small builds. Acceptance: each checkpoint verifies before the next starts. Issue: #7 *(outstanding)*
