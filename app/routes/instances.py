@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -872,7 +873,7 @@ def diagnose_managed_app(user, instance_id, app_id):
     if row is None:
         return api_error("Unknown supervised app for this instance.", status_code=404)
 
-    log_path = (row.spec or {}).get("log_path") or row.log_path
+    log_path = _managed_log_path(row)
     log_text = ""
     if log_path and os.path.exists(log_path):
         try:
@@ -933,6 +934,19 @@ def diagnose_managed_app(user, instance_id, app_id):
     return api_ok({"diagnosis": diagnosis})
 
 
+def _managed_log_path(row):
+    """Log path for a managed app, tolerating legacy JSON-string specs."""
+    spec = row.spec if isinstance(row.spec, dict) else {}
+    if isinstance(row.spec, str):
+        try:
+            parsed = json.loads(row.spec)
+            spec = parsed if isinstance(parsed, dict) else {}
+        except (ValueError, TypeError):
+            spec = {}
+    path = spec.get("log_path") or row.log_path
+    return path if isinstance(path, str) else ""
+
+
 @bp.route(
     "/instances/<uuid:instance_id>/managed-apps/<uuid:app_id>/logs",
     methods=["GET"],
@@ -954,8 +968,32 @@ def managed_app_logs(user, instance_id, app_id):
     except (TypeError, ValueError):
         lines = 200
     return api_ok(
-        {"lines": get_runner().tail(row.log_path or "", lines), "state": row.state}
+        {"lines": get_runner().tail(_managed_log_path(row), lines), "state": row.state}
     )
+
+
+@bp.route(
+    "/instances/<uuid:instance_id>/managed-apps/<uuid:app_id>/logs/clear",
+    methods=["POST"],
+)
+@token_required
+def clear_managed_app_logs(user, instance_id, app_id):
+    """Truncate a supervised app's log in place (admin only)."""
+    instance, err = _require_instance_admin(user, instance_id)
+    if err:
+        return err
+    row = _managed_row(instance.id, app_id)
+    if row is None:
+        return api_error("Unknown supervised app for this instance.", status_code=404)
+    path = _managed_log_path(row)
+    if not path or not os.path.exists(path):
+        return api_ok({"cleared": False, "message": "No log file to clear."})
+    try:
+        with open(path, "w", encoding="utf-8"):
+            pass
+    except OSError as exc:
+        return api_error(f"Could not clear logs: {exc}", status_code=500)
+    return api_ok({"cleared": True})
 
 
 @bp.route("/instances/<uuid:instance_id>/oauth", methods=["GET"])
