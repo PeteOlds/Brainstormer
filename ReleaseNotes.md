@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.109.6 — 2026-11-28
+
+### Bug fixes
+- BUG.063 (#42): full runs now resolve or auto-create a build repo before the Build step. Previously the task bypassed the route that registers a repo, so the Build preview silently failed and the pipeline appeared to stop at Design. Added an integration test covering the no-repo case.
+
+---
+
 ## v0.109.5 — 2026-11-27
 
 ### Bug fixes
