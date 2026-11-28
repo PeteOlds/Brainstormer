@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.112.4 — 2026-11-29
+
+### Features
+- REQ.042 (#72): every tab within an idea now shows the same `IDEA-number: Title` heading via a shared widget, including Chat. Added a widget test.
+
+---
+
 ## v0.112.3 — 2026-11-29
 
 ### Bug fixes
