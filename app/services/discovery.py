@@ -200,4 +200,18 @@ def discover_actions(user, idea=None) -> list:
     actions = list_actions()
     if idea is not None:
         actions = [a for a in actions if _check_action_allowed(idea, a["key"])]
+        # BUILD_REVIEW is a build artifact, not a general analysis. It is
+        # created automatically after a write and shown on the Build tab.
+        from app.models import SecondaryActionResult
+
+        build = SecondaryActionResult.query.filter_by(
+            idea_id=idea.id, action_type="BUILD_CODE", is_current=True
+        ).first()
+        has_written_build = bool(
+            build
+            and isinstance(build.result_data, dict)
+            and build.result_data.get("written")
+        )
+        if not has_written_build:
+            actions = [a for a in actions if a["key"] != "BUILD_REVIEW"]
     return actions
