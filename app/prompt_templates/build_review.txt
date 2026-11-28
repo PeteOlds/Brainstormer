@@ -13,6 +13,7 @@ ${SUPPORTING_MATERIAL}
 2. Be concrete: name files, screens, endpoints or fields from the supporting material. Do not invent features the design does not describe.
 3. Every list entry must be short and readable: "Title — one-line rationale". Prefer 2–5 entries per list over long prose.
 4. `gaps` covers missing behaviour or broken states; `suggested_features` covers worthwhile additions; `approach_suggestions` covers architecture, testing or delivery order; `risks` covers security, data and operational concerns.
+5. In `approach_suggestions`, check the engineering contract: small single-purpose files, typed boundaries, pure logic separated from I/O, fast automated checks, and any repository AGENTS.md rules. Do not suggest a broad rewrite unless the contract is clearly broken.
 5. Output STRICTLY a valid JSON object matching the schema below. No prose, no markdown fences, no commentary outside the JSON.
 
 ### OUTPUT JSON SCHEMA:
