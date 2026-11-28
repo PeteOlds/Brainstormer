@@ -106,7 +106,7 @@ def user_payload(user: Any) -> dict:
     `is_site_admin` and `admin_instance_ids`, and a response that omits the
     last two silently hides the Admin menu and bulk actions.
     """
-    from app.models import ROLE_INSTANCE_ADMIN, Membership
+    from app.models import ROLE_INSTANCE_ADMIN, ROLE_SITE_ADMIN, Membership
 
     payload = user.to_dict()
     payload["is_site_admin"] = Membership.is_site_admin(user.id)
@@ -115,6 +115,14 @@ def user_payload(user: Any) -> dict:
         for m in Membership.query.filter_by(
             user_id=user.id, role=ROLE_INSTANCE_ADMIN
         ).all()
+        if m.instance_id is not None
+    ]
+    # Site-admin grants scoped to a specific instance count as admin for
+    # that instance only. A NULL-instance site-wide grant lives in
+    # `is_site_admin` and must NOT unlock instance data (D-01).
+    payload["site_admin_instance_ids"] = [
+        str(m.instance_id)
+        for m in Membership.query.filter_by(user_id=user.id, role=ROLE_SITE_ADMIN).all()
         if m.instance_id is not None
     ]
     payload["product_manager_instance_ids"] = [
