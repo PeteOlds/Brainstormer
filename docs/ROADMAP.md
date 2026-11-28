@@ -58,7 +58,6 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 | BUG.069  |                    | Debugging a failed job (Design Doc on IDEA-9263) gave the following error message<br><br>Failed to load: ApiException(0): Network error: ClientException: Failed to fetch, uri=/api/v1/ideas/f588be63-71bf-442f-8ba1-6a75e335a9ba                                                     |
 | BUG.070  |                    | HOLD<br>On the Admin Panel, update the System settings tile to read "System Settings Platform, location, build location" (old BUG.001 was reused for a different fix)                                                                                                                 |
 | BUG.075  |                    | Logged in as user on Site 90<br>Ran a Chat session again an idea<br>Got an error message <br>**Chat failed: ApiException(500): Server returned an HTML page instead of JSON. Your session may have expired.**<br><br>After resolution, ensure there is a test to cover this in future Issue: #68 |
-| REQ.042  |                    | On the Idea Chat tab, show the IDEA-number: Title (the same as on the Idea tab).<br>All tabs within an Idea should show this same heading for co0nsistency and clarity Issue: #72 |
 
 ---
 
@@ -162,7 +161,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **BUG.076** — Account menu Prompts link is gated by permission for the selected instance. Issue: #69 *(v0.112.2)*
 - **BUG.077** — Review Build is now a build artifact: hidden from Secondary Analysis until a written build exists, and shown on the Build tab. Issue: #70 *(v0.112.3)*
 - **BUG.078** — Admin menu is hidden unless the user has admin rights in the selected instance; site-wide grants alone do not unlock instance data. Issue: #71 *(v0.112.2)*
-- **REQ.042** — Show `IDEA-number: Title` heading consistently on every idea tab. Issue: #72 *(outstanding)*
+- **REQ.042** — Every idea tab now shows a shared `IDEA-number: Title` heading. Issue: #72 *(v0.112.4)*
 - **REQ.001** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*
 - **REQ.002** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*
 - **REQ.003** — REQ.003-REQ.008: Product Manager role, password reset, Prompts visibility gating, test user. *(v0.96.3)*

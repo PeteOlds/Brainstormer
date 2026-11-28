@@ -69,6 +69,32 @@ class _IdeaDetailPageState extends ConsumerState<IdeaDetailPage> {
 
 /// Stateful widget that manages its own TabController so tab selection
 /// persists across detail provider rebuilds.
+/// Shared heading shown at the top of every idea tab.
+class IdeaHeading extends StatelessWidget {
+  const IdeaHeading({super.key, required this.idea});
+
+  final IdeaSummary idea;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        0,
+      ),
+      child: Text(
+        '${idea.referenceCode}: ${idea.promptTitle}',
+        key: const Key('idea_consistent_heading'),
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+    );
+  }
+}
+
 class _IdeaTabsWidget extends ConsumerStatefulWidget {
   final String ideaId;
 
@@ -234,20 +260,31 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
   }
 
   List<Widget> _buildViews(IdeaDetail detail, bool isAdmin) {
-    final views = <Widget>[_overviewTab(context, detail, isAdmin)];
+    Widget withHeading(Widget view) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            IdeaHeading(idea: detail.idea),
+            Expanded(child: view),
+          ],
+        );
+    final views = <Widget>[withHeading(_overviewTab(context, detail, isAdmin))];
     if (_secondaryAnalyses(detail).isNotEmpty) {
-      views.add(_analysisTab(context, detail));
+      views.add(withHeading(_analysisTab(context, detail)));
     }
-    if (_hasResult(detail, 'PRD_DOC')) views.add(_briefTab(context, detail));
-    if (_hasResult(detail, 'DESIGN_DOC')) views.add(_designTab(context, detail));
+    if (_hasResult(detail, 'PRD_DOC')) {
+      views.add(withHeading(_briefTab(context, detail)));
+    }
+    if (_hasResult(detail, 'DESIGN_DOC')) {
+      views.add(withHeading(_designTab(context, detail)));
+    }
     if (_hasResult(detail, 'BUILD_CODE')) {
-      views.add(_buildTab(context, detail));
-      views.add(_testsTab(context, detail));
+      views.add(withHeading(_buildTab(context, detail)));
+      views.add(withHeading(_testsTab(context, detail)));
     }
     if (detail.idea.status == 'SCALE' && detail.idea.parentId == null) {
-      views.add(_scaleTab(context, detail, isAdmin));
+      views.add(withHeading(_scaleTab(context, detail, isAdmin)));
     }
-    views.add(_chatTab(context, detail));
+    views.add(withHeading(_chatTab(context, detail)));
     return views;
   }
 
@@ -289,12 +326,6 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Text(
-          '${idea.referenceCode}: ${idea.promptTitle}',
-          key: const Key('idea_detail_title'),
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: AppSpacing.sm),
         Text(idea.summary ?? '(no summary)',
             style: Theme.of(context).textTheme.bodyLarge),
         if (isAdmin)
