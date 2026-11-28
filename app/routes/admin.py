@@ -1,3 +1,4 @@
+import structlog
 from flask import (
     Blueprint,
     current_app,
@@ -11,9 +12,11 @@ from sqlalchemy import func, or_
 from app.extensions import db
 from app.models import Idea, PromptConfig, User, UserRole
 from app.templates.admin_settings_template import SETTINGS_TEMPLATE
-from app.utils.decorators import admin_required
+from app.utils.decorators import admin_required, site_admin_required
 from app.utils.responses import api_created, api_error, api_ok
 from app.utils.tenancy import apply_scope, current_instance_id
+
+logger = structlog.get_logger()
 
 # Blueprint for admin HTML pages (no URL prefix)
 admin_pages_bp = Blueprint("admin_pages", __name__)
@@ -1218,3 +1221,67 @@ def update_account_settings(user):
     settings.update_account(name or None)
     db.session.commit()
     return api_ok(settings.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# Internal AI prompts (site admin only, global — not instance-scoped)
+# ---------------------------------------------------------------------------
+
+
+@admin_api_bp.route("/admin/internal-prompts", methods=["GET"])
+@site_admin_required
+def list_internal_prompts(user):
+    """List shared AI prompts with their effective bodies and sources."""
+    from app.models import SitePrompt
+    from app.services.internal_prompts import list_internal_prompts as _list
+
+    rows = _list()
+    overrides = {row.key: row for row in SitePrompt.query.all()}
+    for row in rows:
+        override = overrides.get(row["key"])
+        if override is not None:
+            row["updated_at"] = (
+                override.updated_at.isoformat() if override.updated_at else None
+            )
+    return api_ok({"prompts": rows})
+
+
+@admin_api_bp.route("/admin/internal-prompts/<key>", methods=["PUT"])
+@site_admin_required
+def save_internal_prompt(user, key):
+    """Create or replace a site-wide prompt override."""
+    from app.models import SitePrompt
+    from app.services.internal_prompts import validate_prompt_body
+
+    data = request.get_json(silent=True) or {}
+    try:
+        body = validate_prompt_body(key, data.get("body"))
+    except ValueError as exc:
+        return api_error(str(exc), status_code=400)
+
+    row = SitePrompt.query.filter_by(key=key).first()
+    if row is None:
+        row = SitePrompt(key=key, body=body, created_by_id=user.id)
+        db.session.add(row)
+    else:
+        row.body = body
+    db.session.commit()
+    logger.info("internal_prompt_saved", key=key, admin_id=str(user.id))
+    return api_ok(row.to_dict())
+
+
+@admin_api_bp.route("/admin/internal-prompts/<key>", methods=["DELETE"])
+@site_admin_required
+def reset_internal_prompt(user, key):
+    """Remove an override so the shipped template applies again."""
+    from app.models import SitePrompt
+    from app.services.internal_prompts import PROMPT_CATALOGUE
+
+    if key not in PROMPT_CATALOGUE:
+        return api_error("Unknown prompt key.", status_code=400)
+    row = SitePrompt.query.filter_by(key=key).first()
+    if row is not None:
+        db.session.delete(row)
+        db.session.commit()
+        logger.info("internal_prompt_reset", key=key, admin_id=str(user.id))
+    return api_ok({"key": key, "source": "default"})

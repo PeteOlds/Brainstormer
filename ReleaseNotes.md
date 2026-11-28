@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.111.0 — 2026-11-28
+
+### Features
+- REQ.041 (#62, slice 2): added a site-wide `SitePrompt` override table and migration. The prompt registry now resolves overrides before shipped templates. Site admins can list, save and reset shared prompts through `/api/v1/admin/internal-prompts`; bodies are validated for placeholders, JSON schema sections, size and token patterns.
+
+---
+
 ## v0.110.0 — 2026-11-28
 
 ### Features
