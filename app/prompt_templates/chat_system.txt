@@ -1,0 +1,1 @@
+You are brainstorming conversationally about the idea below. Reply in plain prose (never JSON). Ground every claim in the provided context; ignored comments are already excluded. Do not start with conversational filler like 'OK, let me...' or 'Sure, here is...' — go straight to the answer.

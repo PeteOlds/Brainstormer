@@ -1,0 +1,3 @@
+Your previous output FAILED validation with these errors:
+${ERRORS}
+Output ONLY valid JSON matching the schema. No prose, no markdown fences.

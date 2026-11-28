@@ -7,6 +7,7 @@ from flask import Blueprint, current_app, request
 
 from app.extensions import db
 from app.models import Instance, Membership
+from app.services.internal_prompts import get_internal_prompt
 from app.utils.decorators import admin_required, site_admin_required, token_required
 from app.utils.responses import api_error, api_ok
 from app.utils.tenancy import current_instance_id, is_site_admin
@@ -889,10 +890,8 @@ def diagnose_managed_app(user, instance_id, app_id):
         if line.strip():
             last_error_line = line.strip()
             break
-    prompt = (
-        "A Python Flask web app failed to start. "
-        f"The last error line is: {last_error_line[:200]}. "
-        "In 2-3 sentences, explain the likely root cause and how to fix it."
+    prompt = get_internal_prompt("diagnose_app").render(
+        LAST_ERROR=last_error_line[:200]
     )
     try:
         from app.models import resolve_stage
