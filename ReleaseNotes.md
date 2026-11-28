@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.112.3 — 2026-11-29
+
+### Bug fixes
+- BUG.077 (#70): Review Build is treated as a build artifact. It no longer appears in Secondary Analysis or the action list before a written build, and its results stay on the Build tab. Added a discovery test.
+
+---
+
 ## v0.112.2 — 2026-11-29
 
 ### Bug fixes

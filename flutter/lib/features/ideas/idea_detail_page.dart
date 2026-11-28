@@ -192,6 +192,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
       'PRD_DOC',
       'DESIGN_DOC',
       'BUILD_CODE',
+      'BUILD_REVIEW',
       'REFINE',
       'FULL_PIPELINE',
     };
@@ -1430,6 +1431,7 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
       'PRD_DOC',
       'DESIGN_DOC',
       'BUILD_CODE',
+      'BUILD_REVIEW',
       'REFINE',
       'FULL_PIPELINE',
     };
@@ -1488,7 +1490,12 @@ class _IdeaTabsWidgetState extends ConsumerState<_IdeaTabsWidget>
         if (actions.isEmpty) {
           return const Align(alignment: Alignment.centerLeft, child: Text('No actions available at this stage.'));
         }
-        final lifecycleKeys = {'PRD_DOC', 'DESIGN_DOC', 'BUILD_CODE'};
+        final lifecycleKeys = {
+          'PRD_DOC',
+          'DESIGN_DOC',
+          'BUILD_CODE',
+          'BUILD_REVIEW',
+        };
         final lifecycleActions = actions.where((a) => lifecycleKeys.contains(a['key'])).toList();
         final analysisActions = actions.where((a) => !lifecycleKeys.contains(a['key'])).toList();
         return Column(
