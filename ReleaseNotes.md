@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.110.0 — 2026-11-28
+
+### Features
+- REQ.041 (#62, slice 1): hardcoded AI prompt text for chat, strict JSON retry and both diagnosis paths now lives in `app/prompt_templates/`. A central registry (`internal_prompts.py`) resolves every shared prompt by key; rendering is unchanged. Per-instance `PromptConfig.prompt_body` is untouched.
+
+---
+
 ## v0.109.11 — 2026-11-28
 
 ### Bug fixes

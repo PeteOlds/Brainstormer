@@ -24,6 +24,7 @@ from app.services.build_runtime import (
     _rewrite_compose_host_port,
     _rewrite_source_port,
 )
+from app.services.internal_prompts import get_internal_prompt
 from app.services.ollama_client import OllamaClient, OllamaError
 from app.services.prompt_templates import get_base_prompt, get_prompt_template
 from app.tasks import BaseTask, celery, enqueue_generation
@@ -1260,9 +1261,8 @@ def run_secondary_action(
             )
             strict_prompt = (
                 user_prompt
-                + "\n\nYour previous output FAILED validation with these errors:\n"
-                + str(e)[:1500]
-                + "\nOutput ONLY valid JSON matching the schema. No prose, no markdown fences."
+                + "\n\n"
+                + get_internal_prompt("strict_retry").render(ERRORS=str(e)[:1500])
             )
             validated = _call_and_validate(strict_prompt)
 

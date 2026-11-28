@@ -15,6 +15,7 @@ from app.extensions import db
 from app.models import ChatSession, ChatTurn, IdeaEdit
 from app.models.chat import content_hash
 from app.services.action_context import build_idea_context
+from app.services.internal_prompts import get_internal_prompt
 from app.services.llm_backends import (
     BudgetExhausted,
     ProviderError,
@@ -158,13 +159,7 @@ def chat_turn(idea: Any, user: Any, message: str, model_override: Any = None) ->
     if route.provider != "ollama":
         require_entitlement(idea.instance_id, "hosted_ai")
     session = get_or_create_session(idea, user, route.model_name)
-    system = get_base_prompt() + (
-        "\nYou are brainstorming conversationally about the idea below. "
-        "Reply in plain prose (never JSON). Ground every claim in the "
-        "provided context; ignored comments are already excluded. "
-        "Do not start with conversational filler like 'OK, let me...' "
-        "or 'Sure, here is...' — go straight to the answer."
-    )
+    system = get_base_prompt() + "\n" + get_internal_prompt("chat_system").body
     supporting = build_idea_context(idea)
     history = _history_text(session)
     prompt_text = (

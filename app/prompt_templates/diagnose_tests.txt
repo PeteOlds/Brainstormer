@@ -1,0 +1,1 @@
+A generated app has failing tests. Failed tests: ${FAILED_TESTS}. Log tail: ${LOG_TAIL}. In 3-5 sentences, explain the likely root cause and concrete fix steps for a non-technical user.

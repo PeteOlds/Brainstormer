@@ -23,6 +23,7 @@ from app.models import (
     Vote,
 )
 from app.models.enums import IdeaStatus
+from app.services.internal_prompts import get_internal_prompt
 from app.utils.decorators import (
     _membership_allows_admin,
     admin_required,
@@ -2211,11 +2212,9 @@ def diagnose_idea_tests(user, idea_id):
             log_text = ""
 
     try:
-        prompt = (
-            "A generated app has failing tests. "
-            f"Failed tests: {', '.join(str(n) for n in failed_names) or 'none'}. "
-            "Log tail: " + (log_text or "n/a") + ". "
-            "In 3-5 sentences, explain the likely root cause and concrete fix steps for a non-technical user."
+        prompt = get_internal_prompt("diagnose_tests").render(
+            FAILED_TESTS=", ".join(str(n) for n in failed_names) or "none",
+            LOG_TAIL=log_text or "n/a",
         )
         from app.services.ollama_client import OllamaClient
 
