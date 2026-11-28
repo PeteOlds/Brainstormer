@@ -41,6 +41,16 @@ def test_placeholder_rendering_and_discovery():
     assert "test_x" in rendered and "traceback" in rendered
 
 
+def test_shared_engineering_contract_is_present():
+    base = get_internal_prompt("base").body
+    assert "ENGINEERING CONTRACT" in base
+    assert "150-300 lines" in base
+    assert "AGENTS.md" in base
+    review = get_internal_prompt("build_review").body
+    assert "engineering contract" in review.lower()
+    assert "typed boundaries" in review
+
+
 def test_unknown_key_rejected():
     with pytest.raises(ValueError):
         default_body("no-such-prompt")

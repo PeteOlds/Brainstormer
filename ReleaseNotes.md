@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.112.0 — 2026-11-28
+
+### Features
+- RM-073 (#66): the shared base prompt now carries a short engineering contract — small single-purpose files, typed boundaries, pure logic separated from I/O, thin runnable slices with fast checks, and plan/verify discipline. Build reviews now check generated apps against that contract. Site Administrators can tune the text through Admin → Internal AI Prompts.
+
+---
+
 ## v0.111.1 — 2026-11-28
 
 ### Features

@@ -157,6 +157,7 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **BUG.074** — HTML 200 responses are detected, refreshed once, then reported clearly; admin Activity no longer shows an opaque Unexpected response (200). Issue: #54 *(v0.109.9)*
 - **REQ.040** — Build tab now has Copy logs and Clear logs; the API truncates the log in place. Issue: #56 *(v0.109.10)*
 - **REQ.041** — Shared AI prompts are centrally listed and maintainable by Site Administrators under Admin / Internal AI Prompts; per-instance idea prompts stay per-instance. Issue: #62 *(v0.111.1)*
+- **RM-073** — Shared base prompt carries a short engineering contract; build reviews check generated apps against it. Issue: #66 *(v0.112.0)*
 - **REQ.001** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*
 - **REQ.002** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*
 - **REQ.003** — REQ.003-REQ.008: Product Manager role, password reset, Prompts visibility gating, test user. *(v0.96.3)*
