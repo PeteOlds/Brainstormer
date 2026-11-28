@@ -46,6 +46,7 @@ from .roles import (
     role_permissions,
 )
 from .secondary_action import ActionType, SecondaryActionResult
+from .site_prompt import SitePrompt
 from .slack import SlackEvent, SlackPost
 from .stage_config import STAGES, StageAIConfig, resolve_stage
 from .status_history import IdeaStatusHistory
@@ -64,6 +65,7 @@ __all__ = [
     "Vote",
     "Comment",
     "IdeaEdit",
+    "SitePrompt",
     "SlackPost",
     "SlackEvent",
     "Message",
