@@ -72,6 +72,13 @@ class AdminPage extends ConsumerWidget {
                     Navigator.of(context).pushNamed('/admin/activity'),
               ),
               ListTile(
+                leading: const Icon(Icons.data_object),
+                title: const Text('Internal AI Prompts'),
+                subtitle: const Text('Shared prompt templates (site admin)'),
+                onTap: () => Navigator.of(context)
+                    .pushNamed('/admin/internal-prompts'),
+              ),
+              ListTile(
                 leading: const Icon(Icons.settings),
                 title: const Text('Instance settings'),
                 onTap: () =>

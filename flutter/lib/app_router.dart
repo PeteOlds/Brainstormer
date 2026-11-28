@@ -5,6 +5,7 @@ import '../core/auth_helpers.dart';
 import '../core/providers.dart';
 import '../features/admin/activity_page.dart';
 import '../features/admin/admin_pages.dart';
+import '../features/admin/internal_prompts_page.dart';
 import '../features/dashboard/dashboard_page.dart';
 import '../features/admin/prompt_dashboard_page.dart';
 import '../features/admin/users_page.dart';
@@ -67,6 +68,8 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
           initialModel: activityMap['model']?.toString(),
         ),
       );
+    case '/admin/internal-prompts':
+      page = const _AdminGate(child: InternalPromptsPage());
     case '/admin/prompts/detail':
       page = _AdminGate(
         child: PromptDashboardPage(

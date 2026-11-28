@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.111.1 — 2026-11-28
+
+### Features
+- REQ.041 (#62): completed with a Flutter Admin → Internal AI Prompts page. Site Administrators can view all shared prompts, see their source and placeholders, save an override, or reset to the shipped default. Per-instance idea prompts remain per-instance.
+
+---
+
 ## v0.111.0 — 2026-11-28
 
 ### Features

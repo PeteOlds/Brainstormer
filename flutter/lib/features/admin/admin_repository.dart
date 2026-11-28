@@ -89,6 +89,23 @@ class AdminRepository {
     await api.put('/api/v1/instances/$instanceId/ai-configs', body: body);
   }
 
+  Future<List<Map<String, dynamic>>> internalPrompts() async {
+    final data = await api.get('/api/v1/admin/internal-prompts');
+    final list = ((data as Map<String, dynamic>)['prompts'] as List? ?? []);
+    return [
+      for (final e in list)
+        (e as Map).map((k, v) => MapEntry(k.toString(), v)),
+    ];
+  }
+
+  Future<void> saveInternalPrompt(String key, String body) async {
+    await api.put('/api/v1/admin/internal-prompts/$key', body: {'body': body});
+  }
+
+  Future<void> resetInternalPrompt(String key) async {
+    await api.delete('/api/v1/admin/internal-prompts/$key');
+  }
+
   /// Per-stage AI defaults. Stages without a row inherit provider settings.
   Future<List<Map<String, dynamic>>> stageConfigs(String instanceId) async {
     final data = await api.get(
