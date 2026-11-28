@@ -21,6 +21,7 @@ from app.services.llm_backends import (
     ProviderError,
     generate_for_prompt,
 )
+from app.services.ollama_client import OllamaError
 from app.services.prompt_templates import get_base_prompt
 
 logger = structlog.get_logger()
@@ -168,15 +169,36 @@ def chat_turn(idea: Any, user: Any, message: str, model_override: Any = None) ->
         + f"### USER\n{message}"
     )
     _record_turn(session, "user", "chat", message, route.model_name)
-    result = generate_for_prompt(
-        route,
-        prompt_text,
-        system=system,
-        options={"temperature": 0.7},
-        timeout=120.0,
-        user_id=user.id,
-        json_mode=False,
-    )
+
+    def _generate():
+        return generate_for_prompt(
+            route,
+            prompt_text,
+            system=system,
+            options={"temperature": 0.7},
+            timeout=120.0,
+            user_id=user.id,
+            json_mode=False,
+        )
+
+    try:
+        result = _generate()
+    except OllamaError as exc:
+        # A single model timeout should not lose the user's message or kill
+        # the gunicorn worker. Retry once, then fail as a friendly JSON error.
+        logger.warning(
+            "chat_generation_retry",
+            idea_id=str(idea.id),
+            model=route.model_name,
+            error=str(exc)[:200],
+        )
+        try:
+            result = _generate()
+        except OllamaError as exc2:
+            raise ChatError(
+                f"The AI model '{route.model_name}' did not respond. "
+                "Try again or choose another model."
+            ) from exc2
     reply = _record_turn(
         session, "assistant", "chat", result.text, route.model_name, result
     )

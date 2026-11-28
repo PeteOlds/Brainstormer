@@ -159,3 +159,9 @@ class OllamaClient:
                 status_code=e.response.status_code,
                 response_body=body,
             ) from e
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as e:
+            # Turn transport failures into a typed error so callers can retry
+            # and the API can return JSON instead of a dropped connection.
+            raise OllamaError(
+                f"Ollama did not respond for model '{model}': {type(e).__name__}"
+            ) from e

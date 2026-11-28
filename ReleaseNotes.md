@@ -13,6 +13,13 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.112.1 — 2026-11-28
+
+### Bug fixes
+- BUG.075 (#68): Ollama transport timeouts now become typed errors; chat retries once and then returns a friendly JSON error instead of dropping the connection and showing an HTML 500. Added unit tests for both paths.
+
+---
+
 ## v0.112.0 — 2026-11-28
 
 ### Features
