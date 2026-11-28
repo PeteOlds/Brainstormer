@@ -20,10 +20,11 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
     final user = ref.watch(currentUserProvider);
     final current = ref.watch(currentInstanceProvider);
     final label = ref.watch(currentInstanceLabelProvider);
-    final isAdmin = currentUserIsAdmin(user);
-    final isProductManager = user != null &&
-        user['product_manager_instance_ids'] is List &&
-        (user['product_manager_instance_ids'] as List).isNotEmpty;
+    final selectedInstance = current?.toString();
+    final canAdmin =
+        currentUserCanAdminInstance(user, selectedInstance);
+    final canViewPrompts =
+        currentUserCanViewPrompts(user, selectedInstance);
 
     Widget navLink(String label, String route) {
       final active =
@@ -73,9 +74,8 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
         if (MediaQuery.of(context).size.width >= 900) ...[
           navLink('Dashboard', '/dashboard'),
           navLink('Ideas', '/ideas'),
-          if (isAdmin || isProductManager)
-            navLink('Prompts', '/prompts'),
-          if (isAdmin) navLink('Admin', '/admin'),
+          if (canViewPrompts) navLink('Prompts', '/prompts'),
+          if (canAdmin) navLink('Admin', '/admin'),
         ],
         if (current != null || label != null)
           Padding(
@@ -157,8 +157,9 @@ class SiteHeader extends ConsumerWidget implements PreferredSizeWidget {
               ),
               const PopupMenuDivider(),
               const PopupMenuItem(value: '/ideas', child: Text('Ideas')),
-              const PopupMenuItem(value: '/prompts', child: Text('Prompts')),
-              if (isAdmin)
+              if (canViewPrompts)
+                const PopupMenuItem(value: '/prompts', child: Text('Prompts')),
+              if (canAdmin)
                 const PopupMenuItem(
                   value: '/admin',
                   child: Text('Admin Panel'),

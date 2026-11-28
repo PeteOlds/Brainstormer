@@ -13,6 +13,14 @@ Human-readable record of shipped releases for Brainstormer. **Update this file o
 
 ---
 
+## v0.112.2 — 2026-11-29
+
+### Bug fixes
+- BUG.076 (#69): the account menu now hides Prompts for standard users and shows it only to admins or product managers of the selected instance.
+- BUG.078 (#71): the Admin menu is hidden unless the user has admin rights in the selected instance. A site-wide grant alone no longer exposes another instance's data. Added auth payload and widget tests.
+
+---
+
 ## v0.112.1 — 2026-11-28
 
 ### Bug fixes

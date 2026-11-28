@@ -111,8 +111,9 @@ class _AdminGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    final instanceId = ref.watch(currentInstanceProvider)?.toString();
     if (user == null) return const LoginPage();
-    if (!currentUserIsAdmin(user)) {
+    if (!currentUserCanAdminInstance(user, instanceId)) {
       // IdeasPage already renders its own AppShell. Wrapping it again here
       // stacked two nav rails (the "menu appears twice" bug).
       return const IdeasPage();

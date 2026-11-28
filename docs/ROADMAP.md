@@ -59,9 +59,7 @@ Applies to two targets: apps **generated** by brainstormer, and the brainstormer
 | BUG.070  |                    | HOLD<br>On the Admin Panel, update the System settings tile to read "System Settings Platform, location, build location" (old BUG.001 was reused for a different fix)                                                                                                                 |
 | BUG.075  |                    | Logged in as user on Site 90<br>Ran a Chat session again an idea<br>Got an error message <br>**Chat failed: ApiException(500): Server returned an HTML page instead of JSON. Your session may have expired.**<br><br>After resolution, ensure there is a test to cover this in future Issue: #68 |
 | REQ.042  |                    | On the Idea Chat tab, show the IDEA-number: Title (the same as on the Idea tab).<br>All tabs within an Idea should show this same heading for co0nsistency and clarity Issue: #72 |
-| BUG.076  |                    | Logged in as user on Site 90<br><br>Users with stand User role should not see prompts on the Account Menu Issue: #69 |
 | BUG.077  |                    | Review Build is showing as a Secondary Action on Items is Status Spark Issue: #70 |
-| BUG.078  |                    | user Test Admin logging into Site 90 and clicking on the Admin menu is seeing<br>Failed to load: ApiException(403): Admin Access required Issue: #71 |
 
 ---
 
@@ -162,9 +160,9 @@ Cross-reference of every ID used in `ReleaseNotes.md` or this roadmap. Shipped I
 - **REQ.041** — Shared AI prompts are centrally listed and maintainable by Site Administrators under Admin / Internal AI Prompts; per-instance idea prompts stay per-instance. Issue: #62 *(v0.111.1)*
 - **RM-073** — Shared base prompt carries a short engineering contract; build reviews check generated apps against it. Issue: #66 *(v0.112.0)*
 - **BUG.075** — Ollama timeouts are typed errors; chat retries once then returns a friendly JSON error instead of an HTML 500. Issue: #68 *(v0.112.1)*
-- **BUG.076** — Account menu must hide Prompts for standard users. Issue: #69 *(outstanding)*
+- **BUG.076** — Account menu Prompts link is gated by permission for the selected instance. Issue: #69 *(v0.112.2)*
 - **BUG.077** — Review Build must not appear as a secondary action at Spark. Issue: #70 *(outstanding)*
-- **BUG.078** — Admin menu 403 for site admin without instance membership; hide the menu instead of granting cross-instance data access. Issue: #71 *(outstanding)*
+- **BUG.078** — Admin menu is hidden unless the user has admin rights in the selected instance; site-wide grants alone do not unlock instance data. Issue: #71 *(v0.112.2)*
 - **REQ.042** — Show `IDEA-number: Title` heading consistently on every idea tab. Issue: #72 *(outstanding)*
 - **REQ.001** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*
 - **REQ.002** — REQ.001/REQ.002: user avatars (URL-based) with upload and display on admin/users. *(v0.96.7)*
